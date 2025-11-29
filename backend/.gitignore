@@ -1,0 +1,4 @@
+docker/postgres-data/
+docker/postgres-data/*
+
+node_modules/
