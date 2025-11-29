@@ -16,8 +16,5 @@ clean:
 	docker system prune -f
 # restarting postgres data
 	rd /s /q "$(ROOT)\docker\postgres-data"
-
-check:
-	docker exec -it $(CONTAINER_NAME) psql -U admin -d fyp_db
-
+	
 restart: stop run
