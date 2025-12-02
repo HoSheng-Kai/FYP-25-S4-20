@@ -7,13 +7,15 @@ ROOT := $(shell cd)
 run:
 	docker-compose up --build -d
 # 	docker logs -f $(CONTAINER_NAME)
-	npx nodemon index.js
+# 	npx nodemon index.js
+	npm run dev
 
 stop:
 	docker-compose down
 
 clean:
 	docker system prune -f
+	rmdir /s /q docker\postgres-data
 # restarting postgres data
 	rd /s /q "$(ROOT)\docker\postgres-data"
 	
