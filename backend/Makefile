@@ -2,12 +2,11 @@ IMAGE_NAME = postgres:16
 CONTAINER_NAME = backend_postgres
 ROOT := $(shell cd)
 
-.PHONY: run stop clean
+.PHONY: run stop clean restart
 
 run:
 	docker-compose up --build -d
 # 	docker logs -f $(CONTAINER_NAME)
-# 	npx nodemon index.js
 	npm run dev
 
 stop:
@@ -15,8 +14,9 @@ stop:
 
 clean:
 	docker system prune -f
+	docker volume prune -f
 	rmdir /s /q docker\postgres-data
 # restarting postgres data
 	rd /s /q "$(ROOT)\docker\postgres-data"
 	
-restart: stop run
+restart: stop clean run

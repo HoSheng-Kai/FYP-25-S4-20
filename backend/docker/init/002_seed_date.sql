@@ -6,61 +6,61 @@ SET search_path TO fyp_25_s4_20;
 INSERT INTO users (username, password_hash, email, role_id)
 VALUES (
         'admin_user',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'admin123',
         'admin@example.com',
         'admin'
     ),
     (
         'nike_manufacturer',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'nike123',
         'nike@manufacturer.com',
         'manufacturer'
     ),
     (
         'adidas_manufacturer',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'adidas123',
         'adidas@manufacturer.com',
         'manufacturer'
     ),
     (
         'global_distributor',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'global123',
         'global@distributor.com',
         'distributor'
     ),
     (
         'asia_distributor',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'asia123',
         'asia@distributor.com',
         'distributor'
     ),
     (
         'sports_retailer',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'sports123',
         'sports@retailer.com',
         'retailer'
     ),
     (
         'fashion_retailer',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'fashion123',
         'fashion@retailer.com',
         'retailer'
     ),
     (
         'john_consumer',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'john123',
         'john@consumer.com',
         'consumer'
     ),
     (
         'sarah_consumer',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'sarah123',
         'sarah@consumer.com',
         'consumer'
     ),
     (
         'mike_consumer',
-        '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewY5GyYIr9O1em5K',
+        'mike123',
         'mike@consumer.com',
         'consumer'
     );
@@ -469,23 +469,3 @@ VALUES (
         'Product is okay, but expected better quality for the price. Still wearable.',
         '2024-03-10 11:45:00'
     );
-
--- ===========================
--- Insert Notifications
--- ===========================
-INSERT INTO notification (user_id, title, message, is_read, created_on)
-VALUES
-  (
-    8,
-    'Product Verified',
-    'Your product NIKE-AIR-001 has been verified as authentic.',
-    FALSE,
-    '2024-03-10 10:00:00'
-  ),
-  (
-    8,
-    'Ownership Updated',
-    'Ownership of product NIKE-AIR-001 was transferred to you.',
-    TRUE,
-    '2024-03-08 09:00:00'
-  );
