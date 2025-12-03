@@ -93,3 +93,15 @@ CREATE TABLE IF NOT EXISTS review (
         COMMENT TEXT,
         created_on TIMESTAMP DEFAULT NOW()
 );
+
+-- ===========================
+-- Notification Table
+-- ===========================
+CREATE TABLE IF NOT EXISTS notification (
+    notification_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_on TIMESTAMP DEFAULT NOW()
+);
