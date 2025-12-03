@@ -17,6 +17,6 @@ clean:
 	docker volume prune -f
 	rmdir /s /q docker\postgres-data
 # restarting postgres data
-	rd /s /q "$(ROOT)\docker\postgres-data"
+# 	rd /s /q "$(ROOT)\docker\postgres-data"
 	
 restart: stop clean run
