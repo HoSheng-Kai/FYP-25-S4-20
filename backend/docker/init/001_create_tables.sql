@@ -33,14 +33,18 @@ CREATE TABLE IF NOT EXISTS users (
 -- ===========================
 CREATE TABLE IF NOT EXISTS product (
     product_id SERIAL PRIMARY KEY,
-    registered_by INT REFERENCES users(user_id) ON DELETE
-    SET NULL,
-        serial_no TEXT NOT NULL UNIQUE,
-        qr_code BYTEA UNIQUE,
-        STATUS product_status NOT NULL,
-        model TEXT,
-        registered_on TIMESTAMP DEFAULT NOW()
+    registered_by INT REFERENCES users(user_id) ON DELETE SET NULL,
+    serial_no TEXT NOT NULL UNIQUE,
+    qr_code BYTEA UNIQUE,
+    status product_status NOT NULL,
+    model TEXT,
+    batch_no TEXT,
+    category TEXT,
+    manufacture_date DATE,
+    description TEXT,
+    registered_on TIMESTAMP DEFAULT NOW()
 );
+
 
 -- ===========================
 -- Product Listing Table

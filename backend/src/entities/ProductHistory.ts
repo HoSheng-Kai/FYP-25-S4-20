@@ -7,13 +7,17 @@ export type Availability = 'available' | 'reserved' | 'sold';
 export interface ProductHistoryEvent {
   type: 'registration' | 'ownership_transfer' | 'listing';
   eventDate: Date;
-  details: any; // you can strongly type this later
+  details: any; // you can refine types later
 }
 
 export interface ProductHistoryResult {
   product_id: number;
   serial_no: string;
   model: string | null;
+  batch_no: string | null;
+  category: string | null;
+  manufacture_date: Date | null;
+  description: string | null;
   status: ProductStatus;
   registered_on: Date;
   registered_by: {
@@ -26,20 +30,24 @@ export interface ProductHistoryResult {
 
 export class ProductHistory {
   static async getBySerial(serial: string): Promise<ProductHistoryResult | null> {
-    // 1) Find product + who registered it
+    // 1) Base product
     const productResult = await pool.query(
       `
       SELECT
         p.product_id,
         p.serial_no,
         p.model,
+        p.batch_no,
+        p.category,
+        p.manufacture_date,
+        p.description,
         p.status,
         p.registered_on,
         u.user_id   AS registered_by_id,
         u.username  AS registered_by_username,
         u.role_id   AS registered_by_role
-      FROM fyp_25_s4_20.product p
-      LEFT JOIN fyp_25_s4_20.users u
+      FROM product p
+      LEFT JOIN users u
         ON p.registered_by = u.user_id
       WHERE p.serial_no = $1;
       `,
@@ -52,7 +60,7 @@ export class ProductHistory {
 
     const p = productResult.rows[0];
 
-    // 2) Ownership history
+    // 2) Ownership chain
     const ownershipResult = await pool.query(
       `
       SELECT
@@ -66,10 +74,10 @@ export class ProductHistory {
         bn.tx_hash,
         bn.status AS tx_status,
         bn.created_on AS tx_created_on
-      FROM fyp_25_s4_20.ownership o
-      JOIN fyp_25_s4_20.users u
+      FROM ownership o
+      JOIN users u
         ON o.owner_id = u.user_id
-      LEFT JOIN fyp_25_s4_20.blockchain_node bn
+      LEFT JOIN blockchain_node bn
         ON o.onchain_tx_id = bn.onchain_tx_id
       WHERE o.product_id = $1
       ORDER BY o.start_on ASC;
@@ -89,8 +97,8 @@ export class ProductHistory {
         u.user_id,
         u.username,
         u.role_id
-      FROM fyp_25_s4_20.product_listing pl
-      JOIN fyp_25_s4_20.users u
+      FROM product_listing pl
+      JOIN users u
         ON pl.seller_id = u.user_id
       WHERE pl.product_id = $1
       ORDER BY pl.created_on ASC;
@@ -108,15 +116,19 @@ export class ProductHistory {
         details: {
           status: p.status,
           model: p.model,
+          batchNo: p.batch_no,
+          category: p.category,
+          manufactureDate: p.manufacture_date,
+          description: p.description,
           registeredOn: p.registered_on,
           registeredBy: p.registered_by_id
             ? {
                 user_id: p.registered_by_id,
                 username: p.registered_by_username,
-                role_id: p.registered_by_role
+                role_id: p.registered_by_role,
               }
-            : null
-        }
+            : null,
+        },
       });
     }
 
@@ -129,7 +141,7 @@ export class ProductHistory {
           owner: {
             user_id: row.user_id,
             username: row.username,
-            role_id: row.role_id
+            role_id: row.role_id,
           },
           startOn: row.start_on,
           endOn: row.end_on,
@@ -138,10 +150,10 @@ export class ProductHistory {
                 onchain_tx_id: row.onchain_tx_id,
                 tx_hash: row.tx_hash,
                 status: row.tx_status,
-                created_on: row.tx_created_on
+                created_on: row.tx_created_on,
               }
-            : null
-        }
+            : null,
+        },
       });
     }
 
@@ -155,33 +167,37 @@ export class ProductHistory {
           seller: {
             user_id: row.user_id,
             username: row.username,
-            role_id: row.role_id
+            role_id: row.role_id,
           },
           price: row.price,
           currency: row.currency,
           status: row.status,
-          created_on: row.created_on
-        }
+          created_on: row.created_on,
+        },
       });
     }
 
-    // Sort all events by time
+    // Sort timeline
     events.sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
 
     return {
       product_id: p.product_id,
       serial_no: p.serial_no,
       model: p.model,
+      batch_no: p.batch_no,
+      category: p.category,
+      manufacture_date: p.manufacture_date,
+      description: p.description,
       status: p.status,
       registered_on: p.registered_on,
       registered_by: p.registered_by_id
         ? {
             user_id: p.registered_by_id,
             username: p.registered_by_username,
-            role_id: p.registered_by_role
+            role_id: p.registered_by_role,
           }
         : null,
-      history: events
+      history: events,
     };
   }
 }
