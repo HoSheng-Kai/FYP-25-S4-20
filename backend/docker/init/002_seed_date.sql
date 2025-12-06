@@ -469,3 +469,24 @@ VALUES (
         'Product is okay, but expected better quality for the price. Still wearable.',
         '2024-03-10 11:45:00'
     );
+
+
+-- ===========================
+-- Insert Notifications
+-- ===========================
+INSERT INTO notification (user_id, title, message, is_read, created_on)
+VALUES
+  (
+    8,
+    'Product Verified',
+    'Your product NIKE-AIR-001 has been verified as authentic.',
+    FALSE,
+    '2024-03-10 10:00:00'
+  ),
+  (
+    8,
+    'Ownership Updated',
+    'Ownership of product NIKE-AIR-001 was transferred to you.',
+    TRUE,
+    '2024-03-08 09:00:00'
+  );

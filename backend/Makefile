@@ -19,4 +19,3 @@ clean:
 # restarting postgres data
 # 	rd /s /q "$(ROOT)\docker\postgres-data"
 	
-restart: stop clean run
