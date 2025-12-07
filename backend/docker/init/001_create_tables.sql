@@ -16,6 +16,10 @@ CREATE TYPE currency AS ENUM ('SGD', 'USD', 'EUR');
 
 CREATE TYPE product_status AS ENUM ('registered', 'verified', 'suspicious');
 
+CREATE TYPE transaction_action AS ENUM ('create', 'transfer', 'update');
+
+CREATE TYPE transaction_status AS ENUM('pending', 'confirmed', 'failed');
+
 -- ===========================
 -- Users Table
 -- ===========================
@@ -25,6 +29,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     role_id user_role NOT NULL,
+    private_key TEXT,
+    public_key TEXT,
     created_on TIMESTAMP DEFAULT NOW()
 );
 
@@ -33,18 +39,18 @@ CREATE TABLE IF NOT EXISTS users (
 -- ===========================
 CREATE TABLE IF NOT EXISTS product (
     product_id SERIAL PRIMARY KEY,
-    registered_by INT REFERENCES users(user_id) ON DELETE SET NULL,
-    serial_no TEXT NOT NULL UNIQUE,
-    qr_code BYTEA UNIQUE,
-    status product_status NOT NULL,
-    model TEXT,
-    batch_no TEXT,
-    category TEXT,
-    manufacture_date DATE,
-    description TEXT,
-    registered_on TIMESTAMP DEFAULT NOW()
+    registered_by INT REFERENCES users(user_id) ON DELETE
+    SET NULL,
+        serial_no TEXT NOT NULL UNIQUE,
+        qr_code BYTEA UNIQUE,
+        STATUS product_status NOT NULL,
+        model TEXT,
+        batch_no TEXT,
+        category TEXT,
+        manufacture_date DATE,
+        description TEXT,
+        registered_on TIMESTAMP DEFAULT NOW()
 );
-
 
 -- ===========================
 -- Product Listing Table
@@ -54,7 +60,7 @@ CREATE TABLE IF NOT EXISTS product_listing (
     product_id INT REFERENCES product(product_id) ON DELETE CASCADE,
     seller_id INT REFERENCES users(user_id) ON DELETE CASCADE,
     price NUMERIC(10, 2),
-    currency TEXT,
+    currency currency NOT NULL,
     STATUS availability NOT NULL,
     created_on TIMESTAMP DEFAULT NOW()
 );
@@ -64,10 +70,38 @@ CREATE TABLE IF NOT EXISTS product_listing (
 -- ===========================
 CREATE TABLE IF NOT EXISTS blockchain_node (
     onchain_tx_id SERIAL PRIMARY KEY,
-    prev_tx_hash TEXT,
-    tx_hash TEXT,
-    STATUS TEXT,
-    created_on TIMESTAMP DEFAULT NOW()
+    tx_hash TEXT NOT NULL,
+    -- prev_tx_hash TEXT, -- Need to find the previous transaction to put into the new one
+    -- Sender info
+    from_user_id INT REFERENCES users(user_id) ON DELETE
+    SET NULL,
+        from_public_key TEXT NOT NULL,
+        -- Receiver info
+        to_user_id INT REFERENCES users(user_id) ON DELETE
+    SET NULL,
+        to_public_key TEXT,
+        product_id INT REFERENCES product(product_id),
+        action_type transaction_action,
+        STATUS transaction_status,
+        block_slot BIGINT,
+        created_on TIMESTAMP DEFAULT NOW(),
+        -- Constraint: public_key must match user's public_key
+        CONSTRAINT check_from_key_matches CHECK (
+            from_user_id IS NULL
+            OR from_public_key = (
+                SELECT public_key
+                FROM users
+                WHERE user_id = from_user_id
+            )
+        ),
+        CONSTRAINT check_to_key_matches CHECK (
+            to_user_id IS NULL
+            OR to_public_key = (
+                SELECT public_key
+                FROM users
+                WHERE user_id = to_user_id
+            )
+        )
 );
 
 -- ===========================
@@ -76,13 +110,24 @@ CREATE TABLE IF NOT EXISTS blockchain_node (
 CREATE TABLE IF NOT EXISTS ownership (
     ownership_id SERIAL PRIMARY KEY,
     owner_id INT REFERENCES users(user_id) ON DELETE CASCADE,
+    owner_public_key TEXT,
     product_id INT REFERENCES product(product_id) ON DELETE CASCADE,
-    onchain_tx_id INT REFERENCES blockchain_node(onchain_tx_id) ON DELETE SET NULL,
     start_on TIMESTAMP DEFAULT NOW(),
     end_on TIMESTAMP NULL,
-    location TEXT
+    -- Constraint: public_key must match user's public_key
+    CONSTRAINT check_from_key_matches CHECK (
+        owner_id IS NULL
+        OR owner_public_key = (
+            SELECT public_key
+            FROM users
+            WHERE user_id = owner_id
+        )
+    )
 );
 
+-- Ensure only one current owner per product at each time period
+CREATE UNIQUE INDEX unique_current_owner ON ownership(product_id)
+WHERE end_on IS NULL;
 
 -- ===========================
 -- Review Table

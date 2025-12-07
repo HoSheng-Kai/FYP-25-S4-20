@@ -2,15 +2,33 @@ import User from '../entities/User';
 
 import { Request, Response } from "express";
 import {generate_OTP, sendOTP} from '../utils/email_service';
+import { generate_keys } from '../utils/generate_key';
 
 class UserController {
   async createAccount(req: Request, res: Response){
     try{
+      let keys = await generate_keys(req.body.username,
+        req.body.password,
+        req.body.email);
+
       await User.createAccount(
         req.body.username,
         req.body.password,
         req.body.email,
-        req.body.role_id);
+        req.body.role_id,
+        keys.privateKey,
+        keys.publicKey
+      );
+
+      console.log('Creating account:', {
+        username: req.body.username,
+        email: req.body.email,
+        role_id: req.body.role_id,
+        publicKey: keys.publicKey,
+        hasPrivateKey: keys.privateKey,
+        hasPassword: !!req.body.password
+      });
+
 
       res.json({
         success: true
