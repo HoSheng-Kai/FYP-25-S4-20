@@ -1,83 +1,97 @@
 // src/entity/ProductHistory.ts
 import pool from '../schema/database';
 
-export type ProductStatus = 'registered' | 'verified' | 'suspicious';
-export type Availability = 'available' | 'reserved' | 'sold';
+// One row in the ownership chain
+export interface OwnershipRow {
+  owner_id: number;
+  owner_username: string;
+  owner_role: string;
+  start_on: Date;
+  end_on: Date | null;
 
-export interface ProductHistoryEvent {
-  type: 'registration' | 'ownership_transfer' | 'listing';
-  eventDate: Date;
-  details: any; // you can refine types later
+  onchain_tx_id: number | null;
+  tx_hash: string | null;
+  tx_status: string | null;
+  tx_created_on: Date | null;
 }
 
+// One listing row for the product
+export interface ListingRow {
+  listing_id: number;
+  seller_id: number;
+  seller_username: string;
+  seller_role: string;
+  price: string | null;    // NUMERIC → string in node-postgres
+  currency: string | null;
+  status: string;
+  created_on: Date;
+}
+
+// Overall result returned by getBySerial
 export interface ProductHistoryResult {
   product_id: number;
   serial_no: string;
   model: string | null;
-  batch_no: string | null;
-  category: string | null;
-  manufacture_date: Date | null;
-  description: string | null;
-  status: ProductStatus;
+  status: string;
   registered_on: Date;
   registered_by: {
     user_id: number;
     username: string;
     role_id: string;
   } | null;
-  history: ProductHistoryEvent[];
+  ownership_chain: OwnershipRow[];
+  listings: ListingRow[];
 }
 
 export class ProductHistory {
+  /**
+   * Fetch product + full ownership chain + listings by serial number.
+   */
   static async getBySerial(serial: string): Promise<ProductHistoryResult | null> {
-    // 1) Base product
-    const productResult = await pool.query(
+    // 1) Base product + who registered it
+    const productRes = await pool.query(
       `
       SELECT
         p.product_id,
         p.serial_no,
         p.model,
-        p.batch_no,
-        p.category,
-        p.manufacture_date,
-        p.description,
         p.status,
         p.registered_on,
         u.user_id   AS registered_by_id,
         u.username  AS registered_by_username,
         u.role_id   AS registered_by_role
-      FROM product p
-      LEFT JOIN users u
+      FROM fyp_25_s4_20.product p
+      LEFT JOIN fyp_25_s4_20.users u
         ON p.registered_by = u.user_id
       WHERE p.serial_no = $1;
       `,
       [serial]
     );
 
-    if (productResult.rows.length === 0) {
+    if (productRes.rows.length === 0) {
       return null;
     }
 
-    const p = productResult.rows[0];
+    const p = productRes.rows[0];
 
-    // 2) Ownership chain
-    const ownershipResult = await pool.query(
+    // 2) Ownership chain in chronological order
+    const ownershipRes = await pool.query(
       `
       SELECT
-        o.ownership_id,
+        o.owner_id,
+        u.username          AS owner_username,
+        u.role_id           AS owner_role,
         o.start_on,
         o.end_on,
         o.onchain_tx_id,
-        u.user_id,
-        u.username,
-        u.role_id,
         bn.tx_hash,
-        bn.status AS tx_status,
-        bn.created_on AS tx_created_on
-      FROM ownership o
-      JOIN users u
+        bn.status           AS tx_status,
+        bn.created_on       AS tx_created_on,
+        o.location          
+      FROM fyp_25_s4_20.ownership o
+      JOIN fyp_25_s4_20.users u
         ON o.owner_id = u.user_id
-      LEFT JOIN blockchain_node bn
+      LEFT JOIN fyp_25_s4_20.blockchain_node bn
         ON o.onchain_tx_id = bn.onchain_tx_id
       WHERE o.product_id = $1
       ORDER BY o.start_on ASC;
@@ -85,20 +99,33 @@ export class ProductHistory {
       [p.product_id]
     );
 
-    // 3) Listing history
-    const listingResult = await pool.query(
+    const ownership_chain: OwnershipRow[] = ownershipRes.rows.map((row: any) => ({
+      owner_id: row.owner_id,
+      owner_username: row.owner_username,
+      owner_role: row.owner_role,
+      start_on: row.start_on,
+      end_on: row.end_on,
+      onchain_tx_id: row.onchain_tx_id,
+      tx_hash: row.tx_hash,
+      tx_status: row.tx_status,
+      tx_created_on: row.tx_created_on,
+    }));
+
+    // 3) Listings for this product (in chronological order)
+    const listingsRes = await pool.query(
       `
       SELECT
         pl.listing_id,
+        pl.product_id,
+        pl.seller_id,
+        u.username AS seller_username,
+        u.role_id  AS seller_role,
         pl.price,
         pl.currency,
         pl.status,
-        pl.created_on,
-        u.user_id,
-        u.username,
-        u.role_id
-      FROM product_listing pl
-      JOIN users u
+        pl.created_on
+      FROM fyp_25_s4_20.product_listing pl
+      JOIN fyp_25_s4_20.users u
         ON pl.seller_id = u.user_id
       WHERE pl.product_id = $1
       ORDER BY pl.created_on ASC;
@@ -106,88 +133,21 @@ export class ProductHistory {
       [p.product_id]
     );
 
-    const events: ProductHistoryEvent[] = [];
-
-    // Registration event
-    if (p.registered_on) {
-      events.push({
-        type: 'registration',
-        eventDate: p.registered_on,
-        details: {
-          status: p.status,
-          model: p.model,
-          batchNo: p.batch_no,
-          category: p.category,
-          manufactureDate: p.manufacture_date,
-          description: p.description,
-          registeredOn: p.registered_on,
-          registeredBy: p.registered_by_id
-            ? {
-                user_id: p.registered_by_id,
-                username: p.registered_by_username,
-                role_id: p.registered_by_role,
-              }
-            : null,
-        },
-      });
-    }
-
-    // Ownership events
-    for (const row of ownershipResult.rows) {
-      events.push({
-        type: 'ownership_transfer',
-        eventDate: row.start_on,
-        details: {
-          owner: {
-            user_id: row.user_id,
-            username: row.username,
-            role_id: row.role_id,
-          },
-          startOn: row.start_on,
-          endOn: row.end_on,
-          blockchain: row.onchain_tx_id
-            ? {
-                onchain_tx_id: row.onchain_tx_id,
-                tx_hash: row.tx_hash,
-                status: row.tx_status,
-                created_on: row.tx_created_on,
-              }
-            : null,
-        },
-      });
-    }
-
-    // Listing events
-    for (const row of listingResult.rows) {
-      events.push({
-        type: 'listing',
-        eventDate: row.created_on,
-        details: {
-          listing_id: row.listing_id,
-          seller: {
-            user_id: row.user_id,
-            username: row.username,
-            role_id: row.role_id,
-          },
-          price: row.price,
-          currency: row.currency,
-          status: row.status,
-          created_on: row.created_on,
-        },
-      });
-    }
-
-    // Sort timeline
-    events.sort((a, b) => a.eventDate.getTime() - b.eventDate.getTime());
+    const listings: ListingRow[] = listingsRes.rows.map((row: any) => ({
+      listing_id: row.listing_id,
+      seller_id: row.seller_id,
+      seller_username: row.seller_username,
+      seller_role: row.seller_role,
+      price: row.price,
+      currency: row.currency,
+      status: row.status,
+      created_on: row.created_on,
+    }));
 
     return {
       product_id: p.product_id,
       serial_no: p.serial_no,
       model: p.model,
-      batch_no: p.batch_no,
-      category: p.category,
-      manufacture_date: p.manufacture_date,
-      description: p.description,
       status: p.status,
       registered_on: p.registered_on,
       registered_by: p.registered_by_id
@@ -197,7 +157,8 @@ export class ProductHistory {
             role_id: p.registered_by_role,
           }
         : null,
-      history: events,
+      ownership_chain,
+      listings,
     };
   }
 }

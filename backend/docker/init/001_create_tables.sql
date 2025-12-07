@@ -77,11 +77,12 @@ CREATE TABLE IF NOT EXISTS ownership (
     ownership_id SERIAL PRIMARY KEY,
     owner_id INT REFERENCES users(user_id) ON DELETE CASCADE,
     product_id INT REFERENCES product(product_id) ON DELETE CASCADE,
-    onchain_tx_id INT REFERENCES blockchain_node(onchain_tx_id) ON DELETE
-    SET NULL,
-        start_on TIMESTAMP DEFAULT NOW(),
-        end_on TIMESTAMP NULL
+    onchain_tx_id INT REFERENCES blockchain_node(onchain_tx_id) ON DELETE SET NULL,
+    start_on TIMESTAMP DEFAULT NOW(),
+    end_on TIMESTAMP NULL,
+    location TEXT
 );
+
 
 -- ===========================
 -- Review Table
