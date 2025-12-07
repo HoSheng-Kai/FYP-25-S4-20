@@ -1,11 +1,11 @@
-// import express from "express";
-// import userController from '../controller/DistributorController';
+import express from "express";
+import DistributorController from '../controller/DistributorController';
 
-// const router = express.Router();
+const router = express.Router();
 
-// // Bind ensures `this` is correct if you ever use it in the controller
+// Bind ensures `this` is correct if you ever use it in the controller
 
-// // router.post('/create-account', userController.createAccount.bind(userController));
+router.post('/update-ownership', DistributorController.updateOwnership.bind(DistributorController));
 
 
-// export default router;
+export default router;
