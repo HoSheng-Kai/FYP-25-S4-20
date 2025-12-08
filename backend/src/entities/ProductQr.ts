@@ -1,4 +1,4 @@
-// src/entity/ProductQr.ts
+// src/entities/ProductQr.ts
 import pool from '../schema/database';
 
 export class ProductQr {

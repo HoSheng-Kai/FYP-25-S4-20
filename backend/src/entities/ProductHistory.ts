@@ -1,4 +1,4 @@
-// src/entity/ProductHistory.ts
+// src/entities/ProductHistory.ts
 import pool from '../schema/database';
 
 // One row in the ownership chain

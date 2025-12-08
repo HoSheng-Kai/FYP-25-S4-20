@@ -1,4 +1,4 @@
-// src/entity/ProductRegistration.ts
+// src/entities/ProductRegistration.ts
 import pool from '../schema/database';
 import crypto from 'crypto';
 import { QrCodeService } from '../service/QrCodeService';

@@ -6,7 +6,7 @@ import { ProductHistory, ProductHistoryResult } from '../entities/ProductHistory
 import { ProductDeletion } from '../entities/ProductDeletion';
 import { ProductQr } from '../entities/ProductQr';
 import { ProductUpdate } from '../entities/ProductUpdate';
-import { ManufacturerListing } from '../entities/ManufacturerListing';
+import { ManufacturerProductListing } from '../entities/ManufacturerProductListing';
 import pool from '../schema/database';
 
 type TransactionEventType = 'manufactured' | 'shipped' | 'transferred' | 'sold';
@@ -286,16 +286,16 @@ class ProductController {
   }
 
 
-  // GET /api/products/listings?manufacturerId=2
-  async getManufacturerListings(req: Request, res: Response): Promise<void> {
+  // GET /api/products/manufacturer/:manufacturerId/listings
+  async getManufacturerProductListings(req: Request, res: Response): Promise<void> {
     try {
-      const manufacturerIdParam = req.query.manufacturerId as string | undefined;
+      const manufacturerIdParam = req.params.manufacturerId;
 
       if (!manufacturerIdParam) {
         res.status(400).json({
           success: false,
-          error: "Missing 'manufacturerId' query parameter",
-          example: "/api/products/listings?manufacturerId=2"
+          error: "Missing 'manufacturerId' path parameter",
+          example: "/api/products/manufacturer/2/listings"
         });
         return;
       }
@@ -305,35 +305,36 @@ class ProductController {
       if (Number.isNaN(manufacturerId)) {
         res.status(400).json({
           success: false,
-          error: "'manufacturerId' must be a number"
+          error: "'manufacturerId' must be a number",
         });
         return;
       }
 
-      const rows = await ManufacturerListing.findByManufacturer(manufacturerId);
+      const rows = await ManufacturerProductListing.findByManufacturer(manufacturerId);
 
       res.json({
         success: true,
         data: rows.map(row => ({
-          listingId: row.listing_id,
           productId: row.product_id,
           serialNumber: row.serial_no,
           productName: row.model,
+          productStatus: row.product_status,       // registered / verified / suspicious
+          lifecycleStatus: row.lifecycle_status,   // active / transferred
+          blockchainStatus: row.blockchain_status, // on blockchain / pending
+          registeredOn: row.registered_on,
+
+          // latest listing (may be null if no listing)
           price: row.price,
           currency: row.currency,
           listingStatus: row.listing_status,
           listingCreatedOn: row.listing_created_on,
-
-          // new fields for your user story:
-          status: row.lifecycle_status,           // 'active' | 'transferred'
-          blockchainStatus: row.blockchain_status // 'on blockchain' | 'pending'
-        }))
+        })),
       });
     } catch (err) {
       res.status(500).json({
         success: false,
         error: 'Failed to fetch product listings for manufacturer',
-        details: err instanceof Error ? err.message : String(err)
+        details: err instanceof Error ? err.message : String(err),
       });
     }
   }

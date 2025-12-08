@@ -1,3 +1,4 @@
+// src/entities/Product.ts
 import pool from '../schema/database';
 
 export type ProductStatus = 'registered' | 'verified' | 'suspicious';
