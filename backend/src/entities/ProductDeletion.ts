@@ -1,4 +1,4 @@
-// src/entity/ProductDeletion.ts
+// src/entities/ProductDeletion.ts
 import pool from '../schema/database';
 
 export interface DeleteResult {

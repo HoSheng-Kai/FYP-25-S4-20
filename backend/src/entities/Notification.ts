@@ -1,4 +1,4 @@
-// src/entity/Notification.ts
+// src/entities/Notification.ts
 import pool from '../schema/database';
 
 export interface NotificationRow {

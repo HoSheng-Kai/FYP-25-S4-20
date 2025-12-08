@@ -32,8 +32,7 @@ router.get('/:productId/edit', productController.getProductForEdit.bind(productC
 // Update product + regenerate QR
 router.put('/:productId', productController.updateProduct.bind(productController));
 
-// Example:
-// GET /api/products/listings?manufacturerId=2
-router.get('/listings', productController.getManufacturerListings.bind(productController));
+// READ product listings for a manufacturer (includes products without listing)
+router.get('/manufacturer/:manufacturerId/listings', productController.getManufacturerProductListings.bind(productController));
 
 export default router;

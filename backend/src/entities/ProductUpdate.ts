@@ -1,3 +1,4 @@
+// src/entities/ProductUpdate.ts
 import pool from '../schema/database';
 import { QrCodeService } from '../service/QrCodeService';
 
