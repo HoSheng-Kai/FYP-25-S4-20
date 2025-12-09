@@ -7,6 +7,9 @@ import { ProductDeletion } from '../entities/ProductDeletion';
 import { ProductQr } from '../entities/ProductQr';
 import { ProductUpdate } from '../entities/ProductUpdate';
 import { ManufacturerProductListing } from '../entities/ManufacturerProductListing';
+import { MarketplaceListing } from '../entities/MarketplaceListing';
+import { ListingUpdate } from '../entities/ListingUpdate';
+
 import pool from '../schema/database';
 
 type TransactionEventType = 'manufactured' | 'shipped' | 'transferred' | 'sold';
@@ -424,6 +427,321 @@ class ProductController {
       res.status(500).json({
         success: false,
         error: 'Failed to load product for editing',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // GET /api/products/marketplace/listings
+  async getMarketplaceListings(req: Request, res: Response): Promise<void> {
+    try {
+      const rows = await MarketplaceListing.findAvailable();
+
+      res.json({
+        success: true,
+        data: rows.map(row => ({
+          listingId: row.listing_id,
+          productId: row.product_id,
+          serialNumber: row.serial_no,
+          productName: row.model,
+          productStatus: row.product_status,        // registered / verified / suspicious
+          registeredOn: row.registered_on,
+
+          price: row.price,
+          currency: row.currency,
+          listingStatus: row.listing_status,        // should be 'available'
+          listingCreatedOn: row.listing_created_on,
+
+          seller: {
+            userId: row.seller_id,
+            username: row.seller_username,
+            role: row.seller_role,                  // distributor / retailer / manufacturer
+          },
+
+          blockchainStatus: row.blockchain_status,  // 'on blockchain' | 'pending'
+          isAuthentic: row.product_status === 'verified',
+        })),
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch marketplace listings',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // GET /api/products/listings/:listingId/edit?userId=6
+  async getListingForEdit(req: Request, res: Response): Promise<void> {
+    try {
+      const listingId = Number(req.params.listingId);
+      const userIdParam = req.query.userId as string | undefined;
+
+      if (Number.isNaN(listingId)) {
+        res.status(400).json({
+          success: false,
+          error: 'listingId must be a number',
+        });
+        return;
+      }
+
+      if (!userIdParam) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'userId' query parameter",
+          example: `/api/products/listings/${listingId}/edit?userId=8`,
+        });
+        return;
+      }
+
+      const userId = Number(userIdParam);
+      if (Number.isNaN(userId)) {
+        res.status(400).json({
+          success: false,
+          error: "'userId' must be a number",
+        });
+        return;
+      }
+
+      try {
+        const listing = await ListingUpdate.getListingForUser(listingId, userId);
+
+        res.json({
+          success: true,
+          data: {
+            listingId: listing.listing_id,
+            productId: listing.product_id,
+            serialNumber: listing.serial_no,
+            productName: listing.model,
+            price: listing.price,
+            currency: listing.currency,
+            status: listing.status,
+            createdOn: listing.created_on,
+          },
+        });
+      } catch (err: any) {
+        res.status(403).json({
+          success: false,
+          error: 'Cannot load listing for edit',
+          details: err.message ?? String(err),
+        });
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Unexpected error while loading listing for edit',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // PUT /api/products/listings/:listingId (Save Changes Button)
+  async updateListing(req: Request, res: Response): Promise<void> {
+    try {
+      const listingId = Number(req.params.listingId);
+
+      if (Number.isNaN(listingId)) {
+        res.status(400).json({
+          success: false,
+          error: 'listingId must be a number',
+        });
+        return;
+      }
+
+      const { userId, price, currency, status } = req.body || {};
+
+      if (!userId) {
+        res.status(400).json({
+          success: false,
+          error: 'userId is required in request body',
+        });
+        return;
+      }
+
+      const userIdNum = Number(userId);
+      if (Number.isNaN(userIdNum)) {
+        res.status(400).json({
+          success: false,
+          error: 'userId must be a number',
+        });
+        return;
+      }
+
+      try {
+        const updated = await ListingUpdate.updateListingForUser({
+          listingId,
+          userId: userIdNum,
+          price,
+          currency,
+          status,
+        });
+
+        res.json({
+          success: true,
+          data: {
+            listingId: updated.listing_id,
+            productId: updated.product_id,
+            serialNumber: updated.serial_no,
+            productName: updated.model,
+            price: updated.price,
+            currency: updated.currency,
+            status: updated.status,
+            updatedOn: updated.created_on, // you can add separate updated_at later
+          },
+        });
+      } catch (err: any) {
+        res.status(403).json({
+          success: false,
+          error: 'Cannot update listing',
+          details: err.message ?? String(err),
+        });
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Unexpected error while updating listing',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // DELETE /api/products/listings/:listingId?userId=6
+  async deleteListing(req: Request, res: Response): Promise<void> {
+    try {
+      const listingId = Number(req.params.listingId);
+      const userIdParam = req.query.userId as string | undefined;
+
+      if (Number.isNaN(listingId)) {
+        res.status(400).json({
+          success: false,
+          error: 'listingId must be a number',
+        });
+        return;
+      }
+
+      if (!userIdParam) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'userId' query parameter",
+          example: `/api/products/listings/${listingId}?userId=8`,
+        });
+        return;
+      }
+
+      const userId = Number(userIdParam);
+      if (Number.isNaN(userId)) {
+        res.status(400).json({
+          success: false,
+          error: 'userId must be a number',
+        });
+        return;
+      }
+
+      try {
+        await ListingUpdate.deleteListingForUser(listingId, userId);
+
+        res.json({
+          success: true,
+          message: 'Listing deleted successfully',
+        });
+      } catch (err: any) {
+        const msg = err.message ?? String(err);
+
+        if (msg === 'Listing not found') {
+          res.status(404).json({
+            success: false,
+            error: 'Listing not found',
+          });
+        } else {
+          res.status(403).json({
+            success: false,
+            error: 'Cannot delete listing',
+            details: msg,
+          });
+        }
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Unexpected error while deleting listing',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // PATCH /api/products/listings/:listingId/availability
+  async updateListingAvailability(req: Request, res: Response): Promise<void> {
+    try {
+      const listingId = Number(req.params.listingId);
+
+      if (Number.isNaN(listingId)) {
+        res.status(400).json({
+          success: false,
+          error: 'listingId must be a number',
+        });
+        return;
+      }
+
+      const { userId, status } = req.body || {};
+
+      if (!userId) {
+        res.status(400).json({
+          success: false,
+          error: 'userId is required in request body',
+        });
+        return;
+      }
+
+      const userIdNum = Number(userId);
+      if (Number.isNaN(userIdNum)) {
+        res.status(400).json({
+          success: false,
+          error: 'userId must be a number',
+        });
+        return;
+      }
+
+      // Only allow valid listing statuses (you can restrict to 'available' | 'sold' if you want)
+      const allowedStatuses = ['available', 'reserved', 'sold'];
+      if (!status || !allowedStatuses.includes(status)) {
+        res.status(400).json({
+          success: false,
+          error: `Invalid status. Allowed: ${allowedStatuses.join(', ')}`,
+        });
+        return;
+      }
+
+      try {
+        const updated = await ListingUpdate.updateListingForUser({
+          listingId,
+          userId: userIdNum,
+          status,
+        });
+
+        res.json({
+          success: true,
+          data: {
+            listingId: updated.listing_id,
+            productId: updated.product_id,
+            serialNumber: updated.serial_no,
+            productName: updated.model,
+            price: updated.price,
+            currency: updated.currency,
+            status: updated.status,  // 👈 this is what the toggle changed
+            updatedOn: updated.created_on,
+          },
+        });
+      } catch (err: any) {
+        res.status(403).json({
+          success: false,
+          error: 'Cannot update availability for this listing',
+          details: err.message ?? String(err),
+        });
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Unexpected error while updating listing availability',
         details: err instanceof Error ? err.message : String(err),
       });
     }

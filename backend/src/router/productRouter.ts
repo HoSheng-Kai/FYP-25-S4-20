@@ -35,4 +35,22 @@ router.put('/:productId', productController.updateProduct.bind(productController
 // READ product listings for a manufacturer (includes products without listing)
 router.get('/manufacturer/:manufacturerId/listings', productController.getManufacturerProductListings.bind(productController));
 
+// Marketplace Page (Buyer View) – available products for sale
+router.get('/marketplace/listings', productController.getMarketplaceListings.bind(productController));
+
+// Edit Listing Page – pre-fill data
+// GET /api/products/listings/:listingId/edit?userId=6
+router.get('/listings/:listingId/edit',productController.getListingForEdit.bind(productController));
+
+// Save Changes – update listing
+// PUT /api/products/listings/:listingId
+router.put('/listings/:listingId',productController.updateListing.bind(productController));
+
+// DELETE listing (user must be seller & current owner)
+// DELETE /api/products/listings/:listingId?userId=6
+router.delete('/listings/:listingId',productController.deleteListing.bind(productController));
+
+// Toggle availability (My Listings switch/button)
+router.patch('/listings/:listingId/availability',productController.updateListingAvailability.bind(productController));
+
 export default router;
