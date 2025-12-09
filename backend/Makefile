@@ -21,4 +21,4 @@ clean:
 # 	rd /s /q "$(ROOT)\docker\postgres-data"
 
 check:
-	curl http://localhost:8899/health
+	docker exec -it backend_postgres psql -U admin -d fyp_db -c "\dt fyp_25_s4_20.*"

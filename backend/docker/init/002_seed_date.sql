@@ -3,6 +3,17 @@ SET search_path TO fyp_25_s4_20;
 -- ===========================
 -- Insert Users (base58 private keys, base58 public keys)
 -- ===========================
+-- User IDs will be:
+-- 1: admin_user
+-- 2: nike_manufacturer
+-- 3: adidas_manufacturer
+-- 4: global_distributor
+-- 5: asia_distributor
+-- 6: sports_retailer
+-- 7: fashion_retailer
+-- 8: john_consumer
+-- 9: sarah_consumer
+-- 10: mike_consumer
 INSERT INTO users (
         username,
         password_hash,
@@ -95,6 +106,7 @@ VALUES (
 -- ===========================
 -- Insert Products
 -- ===========================
+-- Product IDs will be 1-8
 INSERT INTO product (
         registered_by,
         serial_no,
@@ -110,7 +122,7 @@ INSERT INTO product (
 VALUES (
         2,
         'NIKE-AIR-001',
-        E'\x89504e470d0a1a0a',
+        E'\\x89504e470d0a1a0a',
         'verified',
         'Nike Air Max 270',
         'BATCH-2024-001',
@@ -122,7 +134,7 @@ VALUES (
     (
         2,
         'NIKE-ZOOM-002',
-        E'\x89504e470d0a1a0b',
+        E'\\x89504e470d0a1a0b',
         'verified',
         'Nike Zoom Pegasus',
         'BATCH-2024-002',
@@ -134,7 +146,7 @@ VALUES (
     (
         2,
         'NIKE-REACT-003',
-        E'\x89504e470d0a1a0c',
+        E'\\x89504e470d0a1a0c',
         'verified',
         'Nike React Infinity',
         'BATCH-2024-003',
@@ -146,7 +158,7 @@ VALUES (
     (
         3,
         'ADIDAS-ULTRA-001',
-        E'\x89504e470d0a1a0d',
+        E'\\x89504e470d0a1a0d',
         'verified',
         'Adidas Ultraboost',
         'BATCH-2024-004',
@@ -158,7 +170,7 @@ VALUES (
     (
         3,
         'ADIDAS-NMD-002',
-        E'\x89504e470d0a1a0e',
+        E'\\x89504e470d0a1a0e',
         'registered',
         'Adidas NMD R1',
         'BATCH-2024-005',
@@ -170,7 +182,7 @@ VALUES (
     (
         3,
         'ADIDAS-SUPER-003',
-        E'\x89504e470d0a1a0f',
+        E'\\x89504e470d0a1a0f',
         'verified',
         'Adidas Superstar',
         'BATCH-2024-006',
@@ -182,7 +194,7 @@ VALUES (
     (
         2,
         'NIKE-DUNK-004',
-        E'\x89504e470d0a1a10',
+        E'\\x89504e470d0a1a10',
         'verified',
         'Nike Dunk Low',
         'BATCH-2024-007',
@@ -194,7 +206,7 @@ VALUES (
     (
         3,
         'ADIDAS-STAN-004',
-        E'\x89504e470d0a1a11',
+        E'\\x89504e470d0a1a11',
         'suspicious',
         'Adidas Stan Smith',
         'BATCH-2024-008',
@@ -281,359 +293,268 @@ VALUES (
     );
 
 -- ===========================
--- Insert Blockchain Transactions
+-- Insert Blockchain Node Records
 -- ===========================
+-- Note: Each transaction represents a transfer FROM one user TO another
+-- The receiver (to_user_id) becomes the new owner via this transaction
 INSERT INTO blockchain_node (
-        tx_hash,
-        from_user_id,
-        from_public_key,
-        to_user_id,
-        to_public_key,
-        product_id,
-        action_type,
-        STATUS,
-        block_slot,
-        created_on
-    )
-VALUES -- Product 1: Nike Air Max 270 chain (manufacturer -> distributor -> retailer -> consumer)
-    (
-        '0x1a2b3c4d5e6f7g8h9i0j',
-        2,
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
-        4,
-        'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
-        1,
-        'create',
-        'confirmed',
-        1000001,
-        '2024-01-15 10:30:00'
-    ),
-    (
-        '0x2b3c4d5e6f7g8h9i0j1k',
-        4,
-        'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        1,
-        'transfer',
-        'confirmed',
-        1000102,
-        '2024-01-16 08:00:00'
-    ),
-    (
-        '0x3c4d5e6f7g8h9i0j1k2l',
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        8,
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
-        1,
-        'transfer',
-        'confirmed',
-        1000253,
-        '2024-01-18 14:00:00'
-    ),
-    (
-        '0x4d5e6f7g8h9i0j1k2l3m',
-        8,
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
-        8,
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
-        1,
-        'update',
-        'confirmed',
-        1000424,
-        '2024-01-22 10:00:00'
-    ),
-    -- Product 2: Nike Zoom Pegasus chain (manufacturer -> distributor -> consumer)
-    (
-        '0x5e6f7g8h9i0j1k2l3m4n',
-        2,
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
-        5,
-        'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg',
-        2,
-        'create',
-        'confirmed',
-        1000550,
-        '2024-01-20 14:20:00'
-    ),
-    (
-        '0x6f7g8h9i0j1k2l3m4n5o',
-        5,
-        'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg',
-        9,
-        'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U',
-        2,
-        'transfer',
-        'confirmed',
-        1000631,
-        '2024-01-21 09:30:00'
-    ),
-    (
-        '0x7g8h9i0j1k2l3m4n5o6p',
-        9,
-        'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U',
-        9,
-        'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U',
-        2,
-        'update',
-        'confirmed',
-        1000852,
-        '2024-01-25 11:00:00'
-    ),
-    -- Product 3: Nike React Infinity chain (manufacturer -> retailer)
-    (
-        '0x8h9i0j1k2l3m4n5o6p7q',
-        2,
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        3,
-        'create',
-        'confirmed',
-        1001120,
-        '2024-02-05 09:15:00'
-    ),
-    (
-        '0x9i0j1k2l3m4n5o6p7q8r',
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        3,
-        'update',
-        'confirmed',
-        1001221,
-        '2024-02-06 10:15:00'
-    ),
-    -- Product 4: Adidas Ultraboost chain (manufacturer -> distributor -> consumer)
-    (
-        '0xa0b1c2d3e4f5g6h7i8j9',
-        3,
-        'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc',
-        4,
-        'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
-        4,
-        'create',
-        'confirmed',
-        1000900,
-        '2024-01-25 11:00:00'
-    ),
-    (
-        '0xb1c2d3e4f5g6h7i8j9k0',
-        4,
-        'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
-        8,
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
-        4,
-        'transfer',
-        'confirmed',
-        1000991,
-        '2024-01-26 11:45:00'
-    ),
-    (
-        '0xc2d3e4f5g6h7i8j9k0l1',
-        8,
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
-        8,
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
-        4,
-        'update',
-        'confirmed',
-        1001142,
-        '2024-01-30 13:00:00'
-    ),
-    -- Product 7: Nike Dunk Low chain (manufacturer -> retailer -> consumer)
-    (
-        '0xd3e4f5g6h7i8j9k0l1m2',
-        2,
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        7,
-        'create',
-        'confirmed',
-        1001850,
-        '2024-03-01 10:00:00'
-    ),
-    (
-        '0xe4f5g6h7i8j9k0l1m2n3',
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        10,
-        '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid',
-        7,
-        'transfer',
-        'confirmed',
-        1001931,
-        '2024-03-02 09:00:00'
-    );
+    tx_hash,
+    prev_tx_hash,
+    from_user_id,
+    from_public_key,
+    to_user_id,
+    to_public_key,
+    product_id,
+    block_slot,
+    created_on
+)
+VALUES 
+-- Product 1: Nike Air Max 270 chain
+-- Manufacturer (2) -> Distributor (4)
+(
+    'tx_p1_mfr_to_dist',
+    NULL,
+    2,
+    '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
+    4,
+    'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
+    1,
+    1000001,
+    '2024-01-15 10:30:00'
+),
+-- Distributor (4) -> Retailer (6)
+(
+    'tx_p1_dist_to_ret',
+    'tx_p1_mfr_to_dist',
+    4,
+    'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
+    6,
+    '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
+    1,
+    1000102,
+    '2024-01-16 08:00:00'
+),
+-- Retailer (6) -> Consumer John (8)
+(
+    'tx_p1_ret_to_cons',
+    'tx_p1_dist_to_ret',
+    6,
+    '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
+    8,
+    'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
+    1,
+    1000253,
+    '2024-01-18 14:00:00'
+),
+
+-- Product 2: Nike Zoom Pegasus chain
+-- Manufacturer (2) -> Distributor (5)
+(
+    'tx_p2_mfr_to_dist',
+    NULL,
+    2,
+    '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
+    5,
+    'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg',
+    2,
+    1000550,
+    '2024-01-20 14:20:00'
+),
+-- Distributor (5) -> Consumer Sarah (9)
+(
+    'tx_p2_dist_to_cons',
+    'tx_p2_mfr_to_dist',
+    5,
+    'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg',
+    9,
+    'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U',
+    2,
+    1000631,
+    '2024-01-21 09:30:00'
+),
+
+-- Product 3: Nike React Infinity chain
+-- Manufacturer (2) -> Retailer (6)
+(
+    'tx_p3_mfr_to_ret',
+    NULL,
+    2,
+    '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
+    6,
+    '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
+    3,
+    1001120,
+    '2024-02-05 09:15:00'
+),
+
+-- Product 4: Adidas Ultraboost chain
+-- Manufacturer (3) -> Distributor (4)
+(
+    'tx_p4_mfr_to_dist',
+    NULL,
+    3,
+    'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc',
+    4,
+    'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
+    4,
+    1000900,
+    '2024-01-25 11:00:00'
+),
+-- Distributor (4) -> Consumer John (8)
+(
+    'tx_p4_dist_to_cons',
+    'tx_p4_mfr_to_dist',
+    4,
+    'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
+    8,
+    'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
+    4,
+    1000991,
+    '2024-01-26 11:45:00'
+),
+
+-- Product 7: Nike Dunk Low chain
+-- Manufacturer (2) -> Retailer (6)
+(
+    'tx_p7_mfr_to_ret',
+    NULL,
+    2,
+    '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
+    6,
+    '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
+    7,
+    1001850,
+    '2024-03-01 10:00:00'
+),
+-- Retailer (6) -> Consumer Mike (10)
+(
+    'tx_p7_ret_to_cons',
+    'tx_p7_mfr_to_ret',
+    6,
+    '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
+    10,
+    '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid',
+    7,
+    1001931,
+    '2024-03-02 09:00:00'
+);
 
 -- ===========================
--- Insert Ownership Records
+-- Insert Ownership Records (Derived from Blockchain)
 -- ===========================
+-- IMPORTANT: Ownership is tied to the RECEIVER of a transaction
+-- Each tx_hash should map to exactly one ownership record (the new owner)
+-- The owner_id and owner_public_key must match the to_user_id and to_public_key from blockchain_node
+
 INSERT INTO ownership (
-        owner_id,
-        owner_public_key,
-        product_id,
-        start_on,
-        end_on
-    )
-VALUES -- Product 1: Nike Air Max 270 ownership chain
-    (
-        2,
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
-        1,
-        '2024-01-15 10:30:00',
-        '2024-01-16 08:00:00'
-    ),
-    (
-        4,
-        'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
-        1,
-        '2024-01-16 08:00:00',
-        '2024-01-18 14:00:00'
-    ),
-    (
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        1,
-        '2024-01-18 14:00:00',
-        '2024-01-22 10:00:00'
-    ),
-    (
-        8,
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
-        1,
-        '2024-01-22 10:00:00',
-        NULL
-    ),
-    -- Product 2: Nike Zoom Pegasus ownership chain
-    (
-        2,
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
-        2,
-        '2024-01-20 14:20:00',
-        '2024-01-21 09:30:00'
-    ),
-    (
-        5,
-        'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg',
-        2,
-        '2024-01-21 09:30:00',
-        '2024-01-25 11:00:00'
-    ),
-    (
-        9,
-        'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U',
-        2,
-        '2024-01-25 11:00:00',
-        NULL
-    ),
-    -- Product 3: Nike React Infinity ownership chain (still with retailer)
-    (
-        2,
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
-        3,
-        '2024-02-05 09:15:00',
-        '2024-02-06 10:15:00'
-    ),
-    (
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        3,
-        '2024-02-06 10:15:00',
-        NULL
-    ),
-    -- Product 4: Adidas Ultraboost ownership chain
-    (
-        3,
-        'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc',
-        4,
-        '2024-01-25 11:00:00',
-        '2024-01-26 11:45:00'
-    ),
-    (
-        4,
-        'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
-        4,
-        '2024-01-26 11:45:00',
-        '2024-01-30 13:00:00'
-    ),
-    (
-        8,
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
-        4,
-        '2024-01-30 13:00:00',
-        NULL
-    ),
-    -- Product 5: Adidas NMD R1 ownership chain (reserved, no blockchain yet)
-    (
-        3,
-        'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc',
-        5,
-        '2024-02-10 16:45:00',
-        '2024-02-11 14:00:00'
-    ),
-    (
-        5,
-        'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg',
-        5,
-        '2024-02-11 14:00:00',
-        NULL
-    ),
-    -- Product 6: Adidas Superstar ownership chain (available at retailer, no blockchain yet)
-    (
-        3,
-        'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc',
-        6,
-        '2024-02-15 13:30:00',
-        '2024-02-16 12:30:00'
-    ),
-    (
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        6,
-        '2024-02-16 12:30:00',
-        NULL
-    ),
-    -- Product 7: Nike Dunk Low ownership chain
-    (
-        2,
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
-        7,
-        '2024-03-01 10:00:00',
-        '2024-03-02 09:00:00'
-    ),
-    (
-        6,
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
-        7,
-        '2024-03-02 09:00:00',
-        '2024-03-04 15:00:00'
-    ),
-    (
-        10,
-        '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid',
-        7,
-        '2024-03-04 15:00:00',
-        NULL
-    ),
-    -- Product 8: Adidas Stan Smith ownership chain (suspicious product, no blockchain yet)
-    (
-        3,
-        'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc',
-        8,
-        '2024-03-05 15:20:00',
-        '2024-03-06 16:00:00'
-    ),
-    (
-        5,
-        'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg',
-        8,
-        '2024-03-06 16:00:00',
-        NULL
-    );
+    owner_id,
+    owner_public_key,
+    product_id,
+    start_on,
+    end_on,
+    tx_hash
+)
+VALUES 
+-- Product 1: Nike Air Max 270 ownership chain
+-- Distributor (4) receives from manufacturer
+(
+    4,
+    'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
+    1,
+    '2024-01-15 10:30:00',
+    '2024-01-16 08:00:00',
+    'tx_p1_mfr_to_dist'
+),
+-- Retailer (6) receives from distributor
+(
+    6,
+    '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
+    1,
+    '2024-01-16 08:00:00',
+    '2024-01-18 14:00:00',
+    'tx_p1_dist_to_ret'
+),
+-- Consumer John (8) receives from retailer - CURRENT OWNER
+(
+    8,
+    'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
+    1,
+    '2024-01-18 14:00:00',
+    NULL,
+    'tx_p1_ret_to_cons'
+),
+
+-- Product 2: Nike Zoom Pegasus ownership chain
+-- Distributor (5) receives from manufacturer
+(
+    5,
+    'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg',
+    2,
+    '2024-01-20 14:20:00',
+    '2024-01-21 09:30:00',
+    'tx_p2_mfr_to_dist'
+),
+-- Consumer Sarah (9) receives from distributor - CURRENT OWNER
+(
+    9,
+    'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U',
+    2,
+    '2024-01-21 09:30:00',
+    NULL,
+    'tx_p2_dist_to_cons'
+),
+
+-- Product 3: Nike React Infinity ownership chain
+-- Retailer (6) receives from manufacturer - CURRENT OWNER
+(
+    6,
+    '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
+    3,
+    '2024-02-05 09:15:00',
+    NULL,
+    'tx_p3_mfr_to_ret'
+),
+
+-- Product 4: Adidas Ultraboost ownership chain
+-- Distributor (4) receives from manufacturer
+(
+    4,
+    'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
+    4,
+    '2024-01-25 11:00:00',
+    '2024-01-26 11:45:00',
+    'tx_p4_mfr_to_dist'
+),
+-- Consumer John (8) receives from distributor - CURRENT OWNER
+(
+    8,
+    'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
+    4,
+    '2024-01-26 11:45:00',
+    NULL,
+    'tx_p4_dist_to_cons'
+),
+
+-- Product 7: Nike Dunk Low ownership chain
+-- Retailer (6) receives from manufacturer
+(
+    6,
+    '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
+    7,
+    '2024-03-01 10:00:00',
+    '2024-03-02 09:00:00',
+    'tx_p7_mfr_to_ret'
+),
+-- Consumer Mike (10) receives from retailer - CURRENT OWNER
+(
+    10,
+    '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid',
+    7,
+    '2024-03-02 09:00:00',
+    NULL,
+    'tx_p7_ret_to_cons'
+);
+
 
 -- ===========================
 -- Insert Reviews

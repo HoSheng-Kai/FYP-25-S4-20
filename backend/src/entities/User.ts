@@ -1,14 +1,7 @@
 // Adjust the path if your database file is elsewhere
 import pool from '../schema/database';
 
-interface User{
-    user_id: number;
-    username: string;
-    password_hash: string;
-    email: string;
-    role_id: string;
-    created_on: Date;
-}
+// import User from '../db/table'
 
 class UserEntity {
     //  Create new account
