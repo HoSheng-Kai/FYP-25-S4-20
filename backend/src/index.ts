@@ -1,6 +1,8 @@
 import express from 'express';
 
 import userRouter from './router/userRouter';
+import distributorRouter from './router/distributorRouter';
+import validationRouter from './router/validationRouter';
 import productRouter from './router/productRouter';
 import notificationRouter from './router/notificationRouter';
 
@@ -10,6 +12,10 @@ app.use(express.json());
 app.use('/api/users', userRouter);
 app.use('/api/products', productRouter);
 app.use('/api/notifications', notificationRouter);
+
+// Testing blockchain here
+app.use('/api/distributor', distributorRouter);
+app.use('/api/validate', validationRouter)
 
 app.listen(3000, () => {
   console.log('Server running on port 3000');

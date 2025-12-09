@@ -14,9 +14,15 @@ const pool = new Pool({
 });
 
 // Test connection
-pool.on('connect', () => {
-  console.log('Database connected');
+pool.on('connect', async (client: any) => {
+  try {
+    await client.query('SET search_path TO fyp_25_s4_20, public');
+    console.log('Client connected with schema: fyp_25_s4_20');
+  } catch (err) {
+    console.error('Failed to set search_path:', err);
+  }
 });
+
 
 pool.on('error', (err: any) => {
   console.error('Database connection error:', err);

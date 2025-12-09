@@ -1,23 +1,16 @@
 // Adjust the path if your database file is elsewhere
 import pool from '../schema/database';
 
-interface User{
-    user_id: number;
-    username: string;
-    password_hash: string;
-    email: string;
-    role_id: string;
-    created_on: Date;
-}
+// import User from '../db/table'
 
 class UserEntity {
     //  Create new account
-    static async createAccount(username: string, password: string, email: string, role_id: string)
+    static async createAccount(username: string, password: string, email: string, role_id: string, privateKey: string, publicKey: string)
     : Promise<void>{
         const result = await pool.query(`
-            INSERT INTO users (username, password_hash, email, role_id)
-            VALUES ($1, $2, $3, $4)
-            `, [username, password, email, role_id]);
+            INSERT INTO users (username, password_hash, email, role_id, private_key, public_key)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            `, [username, password, email, role_id, privateKey, publicKey]);
     }
 
     // Login
