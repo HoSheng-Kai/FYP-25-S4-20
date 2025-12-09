@@ -1,5 +1,14 @@
 SET search_path TO fyp_25_s4_20;
 
+-- UPDATE product
+-- SET qr_code = NULL;
+
+-- SELECT 
+--     product_id, 
+--     serial_no, 
+--     qr_code IS NOT NULL AS has_qr
+-- FROM product;
+
 -- ===========================
 -- Insert Users (base58 private keys, base58 public keys)
 -- ===========================

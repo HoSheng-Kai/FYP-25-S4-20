@@ -21,7 +21,7 @@ router.delete('/:productId', productController.deleteProduct.bind(productControl
 
 // Example:
 // GET /api/products/9/qrcode
-router.get('/:productId/qrcode', productController.getQrCode.bind(productController));
+router.get('/:productId/qrcode',productController.getProductQrCode.bind(productController));
 
 // Example:
 // GET /api/products/9/edit?manufacturerId=2

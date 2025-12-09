@@ -9,96 +9,97 @@ import { ProductUpdate } from '../entities/ProductUpdate';
 import { ManufacturerProductListing } from '../entities/ManufacturerProductListing';
 import { MarketplaceListing } from '../entities/MarketplaceListing';
 import { ListingUpdate, ListingStatus } from '../entities/ListingUpdate';
+import { QrCodeService } from '../service/QrCodeService';
 
 import pool from '../schema/database';
 
-type TransactionEventType = 'manufactured' | 'shipped' | 'transferred' | 'sold';
+// type TransactionEventType = 'manufactured' | 'shipped' | 'transferred' | 'sold';
 
-interface TransactionParty {
-  userId: number | null;
-  name: string | null;
-  role: string | null;
-}
+// interface TransactionParty {
+//   userId: number | null;
+//   name: string | null;
+//   role: string | null;
+// }
 
-interface TransactionEvent {
-  type: TransactionEventType;
-  from: TransactionParty | null;
-  to: TransactionParty | null;
-  dateTime: string;    // ISO string
-  location: string | null; // placeholder – your schema has no location yet
-}
+// interface TransactionEvent {
+//   type: TransactionEventType;
+//   from: TransactionParty | null;
+//   to: TransactionParty | null;
+//   dateTime: string;    // ISO string
+//   location: string | null; // placeholder – your schema has no location yet
+// }
 
-function buildTransactionEvents(result: ProductHistoryResult): TransactionEvent[] {
-  const events: TransactionEvent[] = [];
+// function buildTransactionEvents(result: ProductHistoryResult): TransactionEvent[] {
+//   const events: TransactionEvent[] = [];
 
-  // 1) manufactured event from registered_on + registered_by
-  if (result.registered_by && result.registered_on) {
-    events.push({
-      type: 'manufactured',
-      from: null,
-      to: {
-        userId: result.registered_by.user_id,
-        name: result.registered_by.username,
-        role: result.registered_by.role_id,
-      },
-      dateTime: result.registered_on.toISOString(),
-      location: null,
-    });
-  }
+//   // 1) manufactured event from registered_on + registered_by
+//   if (result.registered_by && result.registered_on) {
+//     events.push({
+//       type: 'manufactured',
+//       from: null,
+//       to: {
+//         userId: result.registered_by.user_id,
+//         name: result.registered_by.username,
+//         role: result.registered_by.role_id,
+//       },
+//       dateTime: result.registered_on.toISOString(),
+//       location: null,
+//     });
+//   }
 
-  const chain = result.ownership_chain;
+//   const chain = result.ownership_chain;
 
-  for (let i = 0; i < chain.length; i++) {
-    const curr = chain[i];
-    const prev = i === 0 ? null : chain[i - 1];
+//   for (let i = 0; i < chain.length; i++) {
+//     const curr = chain[i];
+//     const prev = i === 0 ? null : chain[i - 1];
 
-    const fromUser: TransactionParty | null =
-      prev != null
-        ? {
-            userId: prev.owner_id,
-            name: prev.owner_username,
-            role: prev.owner_role,
-          }
-        : result.registered_by
-        ? {
-            userId: result.registered_by.user_id,
-            name: result.registered_by.username,
-            role: result.registered_by.role_id,
-          }
-        : null;
+//     const fromUser: TransactionParty | null =
+//       prev != null
+//         ? {
+//             userId: prev.owner_id,
+//             name: prev.owner_username,
+//             role: prev.owner_role,
+//           }
+//         : result.registered_by
+//         ? {
+//             userId: result.registered_by.user_id,
+//             name: result.registered_by.username,
+//             role: result.registered_by.role_id,
+//           }
+//         : null;
 
-    const toUser: TransactionParty = {
-      userId: curr.owner_id,
-      name: curr.owner_username,
-      role: curr.owner_role,
-    };
+//     const toUser: TransactionParty = {
+//       userId: curr.owner_id,
+//       name: curr.owner_username,
+//       role: curr.owner_role,
+//     };
 
-    let type: TransactionEventType;
+//     let type: TransactionEventType;
 
-    if (!fromUser) {
-      type = 'manufactured';
-    } else if (fromUser.role === 'manufacturer' && toUser.role === 'distributor') {
-      type = 'shipped';
-    } else if (toUser.role === 'consumer') {
-      type = 'sold';
-    } else {
-      type = 'transferred';
-    }
+//     if (!fromUser) {
+//       type = 'manufactured';
+//     } else if (fromUser.role === 'manufacturer' && toUser.role === 'distributor') {
+//       type = 'shipped';
+//     } else if (toUser.role === 'consumer') {
+//       type = 'sold';
+//     } else {
+//       type = 'transferred';
+//     }
 
-    events.push({
-      type,
-      from: fromUser,
-      to: toUser,
-      dateTime: curr.start_on.toISOString(),
-      location: null, // fill later if you add location to schema
-    });
-  }
+//     events.push({
+//       type,
+//       from: fromUser,
+//       to: toUser,
+//       dateTime: curr.start_on.toISOString(),
+//       location: null, // fill later if you add location to schema
+//     });
+//   }
 
-  // they should already be in order, but just in case:
-  events.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
+//   // they should already be in order, but just in case:
+//   events.sort((a, b) => a.dateTime.localeCompare(b.dateTime));
 
-  return events;
-}
+//   return events;
+// }
 
 
 class ProductController {
@@ -175,10 +176,10 @@ class ProductController {
   }
 
   // GET /api/products/:productId/qrcode
-  async getQrCode(req: Request, res: Response): Promise<void> {
+  async getProductQrCode(req: Request, res: Response): Promise<void> {
+    console.log('GET /api/products/:productId/qrcode called with', req.params);
     try {
-      const productIdParam = req.params.productId;
-      const productId = Number(productIdParam);
+      const productId = Number(req.params.productId);
 
       if (Number.isNaN(productId)) {
         res.status(400).json({
@@ -188,22 +189,66 @@ class ProductController {
         return;
       }
 
-      const buffer = await ProductQr.getQrCodeById(productId);
+      // 1) Load product (including qr_code if already stored)
+      const productRes = await pool.query(
+        `
+        SELECT
+          product_id,
+          serial_no,
+          registered_by,
+          qr_code
+        FROM fyp_25_s4_20.product
+        WHERE product_id = $1;
+        `,
+        [productId]
+      );
 
-      if (!buffer) {
+      if (productRes.rows.length === 0) {
         res.status(404).json({
           success: false,
-          error: 'QR code not found for this product',
+          error: 'Product not found',
         });
         return;
       }
 
+      const product = productRes.rows[0];
+
+      let qrBuffer: Buffer;
+
+      if (product.qr_code) {
+        // 2A) We already have QR bytes in DB
+        qrBuffer = product.qr_code;
+      } else {
+        // 2B) No QR in DB yet – generate one now, store it, then return it
+
+        // Build a payload – same logic as in ProductRegistration
+        const payload = QrCodeService.buildPayload(
+          product.product_id,
+          product.serial_no,
+          product.registered_by
+        );
+
+        qrBuffer = await QrCodeService.generatePngBuffer(payload);
+
+        // Save into DB for future reuse
+        await pool.query(
+          `
+          UPDATE fyp_25_s4_20.product
+          SET qr_code = $1
+          WHERE product_id = $2;
+          `,
+          [qrBuffer, product.product_id]
+        );
+      }
+
+      // 3) Return as image/png
       res.setHeader('Content-Type', 'image/png');
-      res.send(buffer);
+      res.setHeader('Content-Length', qrBuffer.length.toString());
+      res.send(qrBuffer);
     } catch (err) {
       res.status(500).json({
         success: false,
-        error: 'Failed to fetch QR code',
+        error: 'Failed to generate QR code',
         details: err instanceof Error ? err.message : String(err),
       });
     }
