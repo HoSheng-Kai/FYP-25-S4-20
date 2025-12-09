@@ -5,7 +5,7 @@ const router = Router();
 
 // Example:
 // GET /api/products/verify?serial=NIKE-AIR-001
-router.get('/verify', productController.verifyBySerial.bind(productController));
+router.get('/verify', productController.verifyProductBySerial.bind(productController));
 
 // Example:
 // GET /api/products/history?serial=NIKE-AIR-001

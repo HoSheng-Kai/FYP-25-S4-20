@@ -1,4 +1,3 @@
-// src/entity/ListingUpdate.ts
 import pool from '../schema/database';
 
 export type ListingStatus = 'available' | 'reserved' | 'sold';
@@ -8,15 +7,15 @@ export interface ListingForEdit {
   product_id: number;
   serial_no: string;
   model: string | null;
-  price: string | null;     // NUMERIC as string
-  currency: string | null;
+  price: string | null;     // NUMERIC(10,2) comes back as string
+  currency: string | null;  // enum 'SGD' | 'USD' | 'EUR'
   status: ListingStatus;
   created_on: Date;
 }
 
 export interface UpdateListingInput {
   listingId: number;
-  userId: number;           // user who is editing
+  userId: number;
   price?: number;
   currency?: string;
   status?: ListingStatus;
@@ -24,17 +23,17 @@ export interface UpdateListingInput {
 
 export class ListingUpdate {
   /**
-   * Get listing + product info for a user, enforcing:
-   *  - user must be the seller of the listing
-   *  - AND must currently own the product (latest ownership)
+   * Load a listing for editing, enforcing:
+   *  - user is the seller
+   *  - user is CURRENT owner (ownership.end_on IS NULL)
    */
   static async getListingForUser(
-    listingId: number,
-    userId: number
+  listingId: number,
+  userId: number
   ): Promise<ListingForEdit> {
     const client = await pool.connect();
     try {
-      // 1) Get listing + product
+      // 1) Listing + product
       const listingRes = await client.query(
         `
         SELECT
@@ -61,27 +60,31 @@ export class ListingUpdate {
 
       const row = listingRes.rows[0];
 
-      // 2) Check seller
+      // 2) Check seller is the same user
       if (row.seller_id !== userId) {
         throw new Error('You are not the seller of this listing');
       }
 
-      // 3) Check current ownership (user must still own this product)
+      // 3) Check current ownership IF ownership data exists
       const ownershipRes = await client.query(
         `
-        SELECT 1
+        SELECT owner_id
         FROM fyp_25_s4_20.ownership o
         WHERE o.product_id = $1
-          AND o.owner_id = $2
           AND o.end_on IS NULL
         LIMIT 1;
         `,
-        [row.product_id, userId]
+        [row.product_id]
       );
 
-      if (ownershipRes.rows.length === 0) {
-        throw new Error('You no longer own this product and cannot edit its listing');
+      // If there IS an active owner recorded, enforce that it's this user
+      if (ownershipRes.rows.length > 0) {
+        const currentOwnerId = ownershipRes.rows[0].owner_id;
+        if (currentOwnerId !== userId) {
+          throw new Error('You no longer own this product and cannot modify its listing');
+        }
       }
+      // If there is NO ownership record yet, we allow the seller to manage the listing
 
       return {
         listing_id: row.listing_id,
@@ -98,29 +101,28 @@ export class ListingUpdate {
     }
   }
 
+
   /**
-   * Update listing fields (price/currency/status) for a user,
-   * enforcing same permissions as getListingForUser.
+   * Update listing fields (price / currency / status) for a user.
    */
   static async updateListingForUser(
     input: UpdateListingInput
   ): Promise<ListingForEdit> {
     const client = await pool.connect();
-
     try {
       await client.query('BEGIN');
 
-      // 1) Fetch existing listing with permission checks
+      // 1) Ensure user is allowed
       const existing = await this.getListingForUser(input.listingId, input.userId);
 
-      // 2) Decide new values
+      // 2) Resolve new values
       const newPrice =
         typeof input.price === 'number' ? input.price : existing.price;
       const newCurrency =
         typeof input.currency === 'string' ? input.currency : existing.currency;
       const newStatus = input.status ?? existing.status;
 
-      // 3) Update listing row
+      // 3) Update listing
       const updatedRes = await client.query(
         `
         UPDATE fyp_25_s4_20.product_listing
@@ -141,8 +143,8 @@ export class ListingUpdate {
 
       const updated = updatedRes.rows[0];
 
-      // 4) Return with product info (serial/model) for UI
-      const productRes = await client.query(
+      // 4) Fetch product info for UI
+      const prodRes = await client.query(
         `
         SELECT serial_no, model
         FROM fyp_25_s4_20.product
@@ -151,7 +153,7 @@ export class ListingUpdate {
         [updated.product_id]
       );
 
-      const prod = productRes.rows[0];
+      const prod = prodRes.rows[0];
 
       await client.query('COMMIT');
 
@@ -172,40 +174,39 @@ export class ListingUpdate {
       client.release();
     }
   }
+
+  /**
+   * Delete a listing for the user, with permission checks.
+   */
   static async deleteListingForUser(
-  listingId: number,
-  userId: number
-): Promise<void> {
-  const client = await pool.connect();
+    listingId: number,
+    userId: number
+  ): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-  try {
-    await client.query('BEGIN');
+      const existing = await this.getListingForUser(listingId, userId);
 
-    // 1) Reuse existing permission checks
-    const existing = await this.getListingForUser(listingId, userId);
-    // existing.status is available/reserved/sold
+      // optional: block deleting sold listings
+      if (existing.status === 'sold') {
+        throw new Error('Cannot delete a listing that has already been sold');
+      }
 
-    // Optional rule: prevent deleting sold listings
-    if (existing.status === 'sold') {
-      throw new Error('Cannot delete a listing that has already been sold');
+      await client.query(
+        `
+        DELETE FROM fyp_25_s4_20.product_listing
+        WHERE listing_id = $1;
+        `,
+        [listingId]
+      );
+
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
-
-    // 2) Actually delete the listing
-    await client.query(
-      `
-      DELETE FROM fyp_25_s4_20.product_listing
-      WHERE listing_id = $1;
-      `,
-      [listingId]
-    );
-
-    await client.query('COMMIT');
-  } catch (err) {
-    await client.query('ROLLBACK');
-    throw err;
-  } finally {
-    client.release();
   }
-}
-
 }

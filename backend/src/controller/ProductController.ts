@@ -1,6 +1,6 @@
 // src/controller/ProductController.ts
 import { Request, Response } from 'express';
-import { Product } from '../entities/Product';
+import { ProductScan } from '../entities/Product';
 import { ProductRegistration } from '../entities/ProductRegistration';
 import { ProductHistory, ProductHistoryResult } from '../entities/ProductHistory';
 import { ProductDeletion } from '../entities/ProductDeletion';
@@ -8,7 +8,7 @@ import { ProductQr } from '../entities/ProductQr';
 import { ProductUpdate } from '../entities/ProductUpdate';
 import { ManufacturerProductListing } from '../entities/ManufacturerProductListing';
 import { MarketplaceListing } from '../entities/MarketplaceListing';
-import { ListingUpdate } from '../entities/ListingUpdate';
+import { ListingUpdate, ListingStatus } from '../entities/ListingUpdate';
 
 import pool from '../schema/database';
 
@@ -288,7 +288,6 @@ class ProductController {
     }
   }
 
-
   // GET /api/products/manufacturer/:manufacturerId/listings
   async getManufacturerProductListings(req: Request, res: Response): Promise<void> {
     try {
@@ -471,99 +470,81 @@ class ProductController {
     }
   }
 
-  // GET /api/products/listings/:listingId/edit?userId=6
-  async getListingForEdit(req: Request, res: Response): Promise<void> {
-    try {
-      const listingId = Number(req.params.listingId);
-      const userIdParam = req.query.userId as string | undefined;
+  // GET /api/products/listings/:listingId/edit?userId=8
+async getListingForEdit(req: Request, res: Response): Promise<void> {
+  try {
+    const listingId = Number(req.params.listingId);
+    const userIdParam = req.query.userId as string | undefined;
 
-      if (Number.isNaN(listingId)) {
-        res.status(400).json({
-          success: false,
-          error: 'listingId must be a number',
-        });
-        return;
-      }
-
-      if (!userIdParam) {
-        res.status(400).json({
-          success: false,
-          error: "Missing 'userId' query parameter",
-          example: `/api/products/listings/${listingId}/edit?userId=8`,
-        });
-        return;
-      }
-
-      const userId = Number(userIdParam);
-      if (Number.isNaN(userId)) {
-        res.status(400).json({
-          success: false,
-          error: "'userId' must be a number",
-        });
-        return;
-      }
-
-      try {
-        const listing = await ListingUpdate.getListingForUser(listingId, userId);
-
-        res.json({
-          success: true,
-          data: {
-            listingId: listing.listing_id,
-            productId: listing.product_id,
-            serialNumber: listing.serial_no,
-            productName: listing.model,
-            price: listing.price,
-            currency: listing.currency,
-            status: listing.status,
-            createdOn: listing.created_on,
-          },
-        });
-      } catch (err: any) {
-        res.status(403).json({
-          success: false,
-          error: 'Cannot load listing for edit',
-          details: err.message ?? String(err),
-        });
-      }
-    } catch (err) {
-      res.status(500).json({
+    if (Number.isNaN(listingId)) {
+      res.status(400).json({ success: false, error: 'listingId must be a number' });
+      return;
+    }
+    if (!userIdParam) {
+      res.status(400).json({
         success: false,
-        error: 'Unexpected error while loading listing for edit',
-        details: err instanceof Error ? err.message : String(err),
+        error: "Missing 'userId' query parameter",
+        example: `/api/products/listings/${listingId}/edit?userId=8`,
+      });
+      return;
+    }
+
+    const userId = Number(userIdParam);
+    if (Number.isNaN(userId)) {
+      res.status(400).json({ success: false, error: 'userId must be a number' });
+      return;
+    }
+
+    try {
+      const listing = await ListingUpdate.getListingForUser(listingId, userId);
+
+      res.json({
+        success: true,
+        data: {
+          listingId: listing.listing_id,
+          productId: listing.product_id,
+          serialNumber: listing.serial_no,
+          productName: listing.model,
+          price: listing.price,
+          currency: listing.currency,
+          status: listing.status,
+          createdOn: listing.created_on,
+        },
+      });
+    } catch (err: any) {
+      res.status(403).json({
+        success: false,
+        error: 'Cannot load listing for edit',
+        details: err.message ?? String(err),
       });
     }
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: 'Unexpected error while loading listing for edit',
+      details: err instanceof Error ? err.message : String(err),
+    });
   }
+}
 
-  // PUT /api/products/listings/:listingId (Save Changes Button)
+  // PUT /api/products/listings/:listingId
   async updateListing(req: Request, res: Response): Promise<void> {
     try {
       const listingId = Number(req.params.listingId);
-
       if (Number.isNaN(listingId)) {
-        res.status(400).json({
-          success: false,
-          error: 'listingId must be a number',
-        });
+        res.status(400).json({ success: false, error: 'listingId must be a number' });
         return;
       }
 
       const { userId, price, currency, status } = req.body || {};
-
       if (!userId) {
-        res.status(400).json({
-          success: false,
-          error: 'userId is required in request body',
-        });
+        res.status(400).json({ success: false, error: 'userId is required in request body' });
         return;
       }
 
       const userIdNum = Number(userId);
       if (Number.isNaN(userIdNum)) {
-        res.status(400).json({
-          success: false,
-          error: 'userId must be a number',
-        });
+        res.status(400).json({ success: false, error: 'userId must be a number' });
         return;
       }
 
@@ -586,7 +567,7 @@ class ProductController {
             price: updated.price,
             currency: updated.currency,
             status: updated.status,
-            updatedOn: updated.created_on, // you can add separate updated_at later
+            updatedOn: updated.created_on,
           },
         });
       } catch (err: any) {
@@ -605,20 +586,16 @@ class ProductController {
     }
   }
 
-  // DELETE /api/products/listings/:listingId?userId=6
+  // DELETE /api/products/listings/:listingId?userId=8
   async deleteListing(req: Request, res: Response): Promise<void> {
     try {
       const listingId = Number(req.params.listingId);
       const userIdParam = req.query.userId as string | undefined;
 
       if (Number.isNaN(listingId)) {
-        res.status(400).json({
-          success: false,
-          error: 'listingId must be a number',
-        });
+        res.status(400).json({ success: false, error: 'listingId must be a number' });
         return;
       }
-
       if (!userIdParam) {
         res.status(400).json({
           success: false,
@@ -630,28 +607,17 @@ class ProductController {
 
       const userId = Number(userIdParam);
       if (Number.isNaN(userId)) {
-        res.status(400).json({
-          success: false,
-          error: 'userId must be a number',
-        });
+        res.status(400).json({ success: false, error: 'userId must be a number' });
         return;
       }
 
       try {
         await ListingUpdate.deleteListingForUser(listingId, userId);
-
-        res.json({
-          success: true,
-          message: 'Listing deleted successfully',
-        });
+        res.json({ success: true, message: 'Listing deleted successfully' });
       } catch (err: any) {
         const msg = err.message ?? String(err);
-
         if (msg === 'Listing not found') {
-          res.status(404).json({
-            success: false,
-            error: 'Listing not found',
-          });
+          res.status(404).json({ success: false, error: 'Listing not found' });
         } else {
           res.status(403).json({
             success: false,
@@ -673,36 +639,24 @@ class ProductController {
   async updateListingAvailability(req: Request, res: Response): Promise<void> {
     try {
       const listingId = Number(req.params.listingId);
-
       if (Number.isNaN(listingId)) {
-        res.status(400).json({
-          success: false,
-          error: 'listingId must be a number',
-        });
+        res.status(400).json({ success: false, error: 'listingId must be a number' });
         return;
       }
 
       const { userId, status } = req.body || {};
-
       if (!userId) {
-        res.status(400).json({
-          success: false,
-          error: 'userId is required in request body',
-        });
+        res.status(400).json({ success: false, error: 'userId is required in request body' });
         return;
       }
 
       const userIdNum = Number(userId);
       if (Number.isNaN(userIdNum)) {
-        res.status(400).json({
-          success: false,
-          error: 'userId must be a number',
-        });
+        res.status(400).json({ success: false, error: 'userId must be a number' });
         return;
       }
 
-      // Only allow valid listing statuses (you can restrict to 'available' | 'sold' if you want)
-      const allowedStatuses = ['available', 'reserved', 'sold'];
+      const allowedStatuses: ListingStatus[] = ['available', 'reserved', 'sold'];
       if (!status || !allowedStatuses.includes(status)) {
         res.status(400).json({
           success: false,
@@ -727,7 +681,7 @@ class ProductController {
             productName: updated.model,
             price: updated.price,
             currency: updated.currency,
-            status: updated.status,  // 👈 this is what the toggle changed
+            status: updated.status,
             updatedOn: updated.created_on,
           },
         });
@@ -748,7 +702,7 @@ class ProductController {
   }
 
   // GET /api/products/verify?serial=NIKE-AIR-001
-  async verifyBySerial(req: Request, res: Response): Promise<void> {
+  async verifyProductBySerial(req: Request, res: Response): Promise<void> {
     try {
       const serial = req.query.serial as string | undefined;
 
@@ -761,41 +715,34 @@ class ProductController {
         return;
       }
 
-      const product = await Product.findBySerialNo(serial);
+      const result = await ProductScan.findBySerial(serial);
 
-      if (!product) {
+      if (!result) {
         res.status(404).json({
           success: false,
           error: 'Product not found',
-          details: 'No product registered with this serial number',
         });
         return;
       }
 
-      const isAuthentic =
-        product.status === 'verified'
-          ? true
-          : product.status === 'suspicious'
-          ? false
-          : null;
-
       res.json({
         success: true,
         data: {
-          productId: product.product_id,
-          productName: product.model,
-          serialNumber: product.serial_no,
-          batchNumber: product.batch_no,
-          category: product.category,
-          manufactureDate: product.manufacture_date,
-          productDescription: product.description,
-          status: product.status,
-          registeredOn: product.registered_on,
-          registeredBy: product.registered_by,
-          currentOwner: product.current_owner,
-          price: product.latest_listing?.price ?? null,
-          currency: product.latest_listing?.currency ?? null,
-          isAuthentic,
+          productId: result.productId,
+          productName: result.productName,
+          serialNumber: result.serialNumber,
+          batchNumber: result.batchNumber,
+          category: result.category,
+          manufactureDate: result.manufactureDate,
+          productDescription: result.productDescription,
+          status: result.status,
+          registeredOn: result.registeredOn,
+
+          manufacturer: result.manufacturer,
+          currentOwner: result.currentOwner,
+
+          blockchainStatus: result.blockchainStatus,
+          isAuthentic: result.isAuthentic,
         },
       });
     } catch (err) {
@@ -807,8 +754,8 @@ class ProductController {
     }
   }
 
-  // GET /api/products/history?serial=NIKE-AIR-001
-  async getTransactionHistory(req: Request, res: Response): Promise<void> {
+    // GET /api/products/history?serial=NIKE-AIR-001
+    async getTransactionHistory(req: Request, res: Response) {
     try {
       const serial = req.query.serial as string | undefined;
 
@@ -816,36 +763,23 @@ class ProductController {
         res.status(400).json({
           success: false,
           error: "Missing 'serial' query parameter",
-          example: "/api/products/history?serial=NIKE-AIR-001",
         });
         return;
       }
 
-      const result = await ProductHistory.getBySerial(serial);
+      const history = await ProductHistory.getBySerial(serial);
 
-      if (!result) {
+      if (!history) {
         res.status(404).json({
           success: false,
           error: 'Product not found',
-          details: 'No product registered with this serial number',
         });
         return;
       }
 
-      const events = buildTransactionEvents(result);
-
       res.json({
         success: true,
-        data: {
-          productId: result.product_id,
-          serialNumber: result.serial_no,
-          productName: result.model,
-          status: result.status,
-          registeredOn: result.registered_on,
-          // you can include registeredBy if needed in UI
-          registeredBy: result.registered_by,
-          events, // 👈 this is what your Transaction History Page will use
-        },
+        data: history,
       });
     } catch (err) {
       res.status(500).json({
@@ -921,7 +855,5 @@ class ProductController {
     }
   }
 }
-
-
 
 export default new ProductController();

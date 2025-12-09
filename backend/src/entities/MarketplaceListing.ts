@@ -51,9 +51,8 @@ export class MarketplaceListing {
         CASE
           WHEN EXISTS (
             SELECT 1
-            FROM fyp_25_s4_20.ownership o
-            WHERE o.product_id = p.product_id
-              AND o.onchain_tx_id IS NOT NULL
+            FROM fyp_25_s4_20.blockchain_node bn
+            WHERE bn.product_id = p.product_id
           ) THEN 'on blockchain'
           ELSE 'pending'
         END AS blockchain_status

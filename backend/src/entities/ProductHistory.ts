@@ -1,33 +1,47 @@
 // src/entities/ProductHistory.ts
 import pool from '../schema/database';
 
-// One row in the ownership chain
 export interface OwnershipRow {
   owner_id: number;
   owner_username: string;
   owner_role: string;
+  owner_public_key: string;
   start_on: Date;
   end_on: Date | null;
-
-  onchain_tx_id: number | null;
   tx_hash: string | null;
-  tx_status: string | null;
+  block_slot: number | null;
   tx_created_on: Date | null;
 }
 
-// One listing row for the product
 export interface ListingRow {
   listing_id: number;
   seller_id: number;
   seller_username: string;
   seller_role: string;
-  price: string | null;    // NUMERIC → string in node-postgres
+  price: string | null;
   currency: string | null;
   status: string;
   created_on: Date;
 }
 
-// Overall result returned by getBySerial
+export interface TransactionEvent {
+  type: 'manufactured' | 'shipped' | 'transferred' | 'sold';
+  from: {
+    user_id: number | null;
+    username: string | null;
+    role: string | null;
+  } | null;
+  to: {
+    user_id: number;
+    username: string;
+    role: string;
+  };
+  dateTime: string;   // ISO string
+  location: string | null; // still null for now
+  txHash: string | null;
+  blockSlot: number | null;
+}
+
 export interface ProductHistoryResult {
   product_id: number;
   serial_no: string;
@@ -41,14 +55,12 @@ export interface ProductHistoryResult {
   } | null;
   ownership_chain: OwnershipRow[];
   listings: ListingRow[];
+  events: TransactionEvent[];
 }
 
 export class ProductHistory {
-  /**
-   * Fetch product + full ownership chain + listings by serial number.
-   */
   static async getBySerial(serial: string): Promise<ProductHistoryResult | null> {
-    // 1) Base product + who registered it
+    // 1) Product + registered_by user
     const productRes = await pool.query(
       `
       SELECT
@@ -68,31 +80,28 @@ export class ProductHistory {
       [serial]
     );
 
-    if (productRes.rows.length === 0) {
-      return null;
-    }
+    if (productRes.rows.length === 0) return null;
 
     const p = productRes.rows[0];
 
-    // 2) Ownership chain in chronological order
+    // 2) Ownership chain, joined via tx_hash -> blockchain_node
     const ownershipRes = await pool.query(
       `
       SELECT
         o.owner_id,
-        u.username          AS owner_username,
-        u.role_id           AS owner_role,
+        u.username             AS owner_username,
+        u.role_id              AS owner_role,
+        o.owner_public_key,
         o.start_on,
         o.end_on,
-        o.onchain_tx_id,
-        bn.tx_hash,
-        bn.status           AS tx_status,
-        bn.created_on       AS tx_created_on,
-        o.location          
+        o.tx_hash,
+        bn.block_slot,
+        bn.created_on          AS tx_created_on
       FROM fyp_25_s4_20.ownership o
       JOIN fyp_25_s4_20.users u
         ON o.owner_id = u.user_id
       LEFT JOIN fyp_25_s4_20.blockchain_node bn
-        ON o.onchain_tx_id = bn.onchain_tx_id
+        ON o.tx_hash = bn.tx_hash
       WHERE o.product_id = $1
       ORDER BY o.start_on ASC;
       `,
@@ -103,15 +112,15 @@ export class ProductHistory {
       owner_id: row.owner_id,
       owner_username: row.owner_username,
       owner_role: row.owner_role,
+      owner_public_key: row.owner_public_key,
       start_on: row.start_on,
       end_on: row.end_on,
-      onchain_tx_id: row.onchain_tx_id,
       tx_hash: row.tx_hash,
-      tx_status: row.tx_status,
+      block_slot: row.block_slot,
       tx_created_on: row.tx_created_on,
     }));
 
-    // 3) Listings for this product (in chronological order)
+    // 3) Listings (for listing history context)
     const listingsRes = await pool.query(
       `
       SELECT
@@ -144,6 +153,12 @@ export class ProductHistory {
       created_on: row.created_on,
     }));
 
+    // 4) Build timeline events (manufactured, shipped, transferred, sold)
+    const events: TransactionEvent[] = this.buildEventsFromOwnership(
+      ownership_chain,
+      p.registered_by_id ?? null
+    );
+
     return {
       product_id: p.product_id,
       serial_no: p.serial_no,
@@ -159,6 +174,81 @@ export class ProductHistory {
         : null,
       ownership_chain,
       listings,
+      events,
     };
+  }
+
+  private static buildEventsFromOwnership(
+    ownership: OwnershipRow[],
+    registeredById: number | null
+  ): TransactionEvent[] {
+    const events: TransactionEvent[] = [];
+
+    if (ownership.length === 0) {
+      return events;
+    }
+
+    // We treat each ownership segment as a "to" side
+    for (let i = 0; i < ownership.length; i++) {
+      const current = ownership[i];
+      const previous = i > 0 ? ownership[i - 1] : null;
+
+      const toUser = {
+        user_id: current.owner_id,
+        username: current.owner_username,
+        role: current.owner_role,
+      };
+
+      const fromUser = previous
+        ? {
+            user_id: previous.owner_id,
+            username: previous.owner_username,
+            role: previous.owner_role,
+          }
+        : null;
+
+      // Determine event type
+      let type: TransactionEvent['type'] = 'transferred';
+
+      if (!previous) {
+        // First ownership: treat as manufactured / registered
+        type = 'manufactured';
+      } else if (previous.owner_role !== current.owner_role) {
+        // Simple heuristic based on roles
+        if (
+          (previous.owner_role === 'manufacturer' ||
+            previous.owner_role === 'distributor') &&
+          current.owner_role === 'retailer'
+        ) {
+          type = 'shipped';
+        } else if (current.owner_role === 'consumer') {
+          type = 'sold';
+        } else {
+          type = 'transferred';
+        }
+      }
+
+      events.push({
+        type,
+        from: fromUser
+          ? {
+              user_id: fromUser.user_id,
+              username: fromUser.username,
+              role: fromUser.role,
+            }
+          : null,
+        to: {
+          user_id: toUser.user_id,
+          username: toUser.username,
+          role: toUser.role,
+        },
+        dateTime: current.start_on.toISOString(),
+        location: null, // no location columns yet
+        txHash: current.tx_hash,
+        blockSlot: current.block_slot,
+      });
+    }
+
+    return events;
   }
 }

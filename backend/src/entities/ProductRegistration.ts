@@ -12,7 +12,7 @@ export interface RegisterProductInput {
   manufactureDate?: string; // 'YYYY-MM-DD'
   description?: string;
   price?: number;
-  currency?: string;
+  currency?: string; // 'SGD' | 'USD' | 'EUR'
 }
 
 export interface RegisteredProductResult {
@@ -26,20 +26,24 @@ export interface RegisteredProductResult {
     description: string | null;
     status: string;
     registered_on: Date;
-    qr_payload: string; 
+    qr_payload: string;
   };
   blockchain: {
-    onchain_tx_id: number;
     tx_hash: string;
-    status: string;
+    prev_tx_hash: string | null;
+    from_user_id: number | null;
+    to_user_id: number | null;
+    block_slot: number;
     created_on: Date;
   };
   ownership: {
     ownership_id: number;
     owner_id: number;
+    owner_public_key: string;
     product_id: number;
     start_on: Date;
     end_on: Date | null;
+    tx_hash: string;
   };
   initial_listing?: {
     listing_id: number;
@@ -111,45 +115,92 @@ export class ProductRegistration {
         [qrBuffer, product.product_id]
       );
 
-      // 5) Insert blockchain node
+      // 5) Look up manufacturer public key (needed for blockchain + ownership)
+      const userRes = await client.query(
+        `
+        SELECT public_key
+        FROM fyp_25_s4_20.users
+        WHERE user_id = $1;
+        `,
+        [input.manufacturerId]
+      );
+
+      if (userRes.rows.length === 0) {
+        throw new Error('Manufacturer not found');
+      }
+
+      const manufacturerPublicKey = userRes.rows[0].public_key as string;
+
+      // 6) Insert blockchain node (initial mint: from manufacturer to manufacturer)
       const txHash =
         typeof crypto.randomUUID === 'function'
           ? `tx_${crypto.randomUUID()}`
-          : `tx_${Date.now()}`;
+          : `tx_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+      const blockSlot = Date.now(); // simple BIGINT value for demo
 
       const blockchainResult = await client.query(
         `
         INSERT INTO fyp_25_s4_20.blockchain_node (
-          prev_tx_hash,
           tx_hash,
-          status,
-          created_on
+          prev_tx_hash,
+          from_user_id,
+          from_public_key,
+          to_user_id,
+          to_public_key,
+          product_id,
+          block_slot
         )
-        VALUES (NULL, $1, 'confirmed', NOW())
-        RETURNING onchain_tx_id, tx_hash, status, created_on;
+        VALUES ($1, NULL, $2, $3, $2, $3, $4, $5)
+        RETURNING tx_hash,
+                  prev_tx_hash,
+                  from_user_id,
+                  to_user_id,
+                  block_slot,
+                  created_on;
         `,
-        [txHash]
+        [
+          txHash,
+          input.manufacturerId,
+          manufacturerPublicKey,
+          product.product_id,
+          blockSlot,
+        ]
       );
+
       const blockchain = blockchainResult.rows[0];
 
-      // 6) Ownership (manufacturer)
+      // 7) Ownership (manufacturer is initial owner)
       const ownershipResult = await client.query(
         `
         INSERT INTO fyp_25_s4_20.ownership (
           owner_id,
+          owner_public_key,
           product_id,
-          onchain_tx_id,
           start_on,
-          end_on
+          end_on,
+          tx_hash
         )
-        VALUES ($1, $2, $3, NOW(), NULL)
-        RETURNING ownership_id, owner_id, product_id, start_on, end_on;
+        VALUES ($1, $2, $3, NOW(), NULL, $4)
+        RETURNING ownership_id,
+                  owner_id,
+                  owner_public_key,
+                  product_id,
+                  start_on,
+                  end_on,
+                  tx_hash;
         `,
-        [input.manufacturerId, product.product_id, blockchain.onchain_tx_id]
+        [
+          input.manufacturerId,
+          manufacturerPublicKey,
+          product.product_id,
+          blockchain.tx_hash,
+        ]
       );
+
       const ownership = ownershipResult.rows[0];
 
-      // 7) Optional listing
+      // 8) Optional initial listing by manufacturer
       let initialListing: RegisteredProductResult['initial_listing'] = null;
       if (typeof input.price === 'number') {
         const listingResult = await client.query(
@@ -162,7 +213,7 @@ export class ProductRegistration {
             status,
             created_on
           )
-          VALUES ($1, $2, $3, $4, 'available', NOW())
+          VALUES ($1, $2, $3, $4::fyp_25_s4_20.currency, 'available', NOW())
           RETURNING listing_id, price, currency, status, created_on;
           `,
           [

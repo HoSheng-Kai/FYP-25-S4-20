@@ -1,4 +1,3 @@
-// src/entities/ManufacturerProductListing.ts
 import pool from '../schema/database';
 
 export type LifecycleStatus = 'active' | 'transferred';
@@ -14,8 +13,7 @@ export interface ManufacturerProductListingRow {
   lifecycle_status: LifecycleStatus;
   blockchain_status: BlockchainStatus;
 
-  // latest listing (if any)
-  price: string | null;          // NUMERIC -> string from pg
+  price: string | null;           // latest listing price, if any
   currency: string | null;
   listing_status: string | null;
   listing_created_on: Date | null;
@@ -53,13 +51,12 @@ export class ManufacturerProductListing {
           ELSE 'transferred'
         END AS lifecycle_status,
 
-        -- blockchain status: any ownership record with onchain_tx_id?
+        -- blockchain status: any blockchain_node rows for this product?
         CASE
           WHEN EXISTS (
             SELECT 1
-            FROM fyp_25_s4_20.ownership o2
-            WHERE o2.product_id = p.product_id
-              AND o2.onchain_tx_id IS NOT NULL
+            FROM fyp_25_s4_20.blockchain_node bn
+            WHERE bn.product_id = p.product_id
           ) THEN 'on blockchain'
           ELSE 'pending'
         END AS blockchain_status,
@@ -72,7 +69,6 @@ export class ManufacturerProductListing {
 
       FROM fyp_25_s4_20.product p
 
-      -- left join to latest listing per product
       LEFT JOIN (
         SELECT DISTINCT ON (product_id)
           product_id,
@@ -94,4 +90,3 @@ export class ManufacturerProductListing {
     return result.rows as ManufacturerProductListingRow[];
   }
 }
-
