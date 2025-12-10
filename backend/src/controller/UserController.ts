@@ -58,7 +58,8 @@ class UserController {
 
       res.json({
         success: true,
-        otp: otp
+        otp: otp,
+        role: user.role
       });
     }catch(error: any){
       res.status(500).json({
