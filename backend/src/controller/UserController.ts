@@ -22,16 +22,6 @@ class UserController {
         public_key
       );
 
-      console.log('Creating account:', {
-        username: req.body.username,
-        email: req.body.email,
-        role_id: req.body.role_id,
-        publicKey: public_key,
-        privateKey: private_key,
-        hasPassword: !!req.body.password
-      });
-
-
       res.json({
         success: true
       });
@@ -52,15 +42,25 @@ class UserController {
         req.body.password
       );
 
-      // Send otp here
-      let otp: number = generate_OTP();
-      await sendOTP(user.email, otp);
+      // If verified, send otp?
+      if(user.verified){
+        // Send otp here
+        let otp: number = generate_OTP();
+        await sendOTP(user.email, otp);
 
+        res.json({
+          success: true,
+          otp: otp,
+          role: user.role,
+          verified: user.verified
+        });
+      }
+      
       res.json({
-        success: true,
-        otp: otp,
-        role: user.role
+        success: false,
+        verified: user.verified
       });
+      
     }catch(error: any){
       res.status(500).json({
         success: false,

@@ -8,15 +8,15 @@ class UserEntity {
     static async createAccount(username: string, password: string, email: string, role_id: string, privateKey: string, publicKey: string)
     : Promise<void>{
         const result = await pool.query(`
-            INSERT INTO users (username, password_hash, email, role_id, private_key, public_key)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            `, [username, password, email, role_id, privateKey, publicKey]);
+            INSERT INTO users (username, password_hash, email, role_id, private_key, public_key, verified)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
+            `, [username, password, email, role_id, privateKey, publicKey, false]);
     }
 
     // Login
     // Check username, password
     static async loginAccount(username: string, password: string)
-    : Promise<{email: string; role: string}>{
+    : Promise<{email: string; role: string, verified: boolean}>{
         const result = await pool.query(`
             SELECT *
             FROM users
@@ -27,7 +27,7 @@ class UserEntity {
             throw new Error("User does not exist.");
         } 
 
-        return {email: result.rows[0].email, role: result.rows[0].role_id};
+        return {email: result.rows[0].email, role: result.rows[0].role_id, verified: result.rows[0].verified};
     }
 
     // Logout

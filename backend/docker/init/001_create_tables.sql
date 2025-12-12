@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS users (
     role_id user_role NOT NULL,
     private_key TEXT,
     public_key TEXT,
+    verified BOOLEAN,
     created_on TIMESTAMP DEFAULT NOW()
 );
 

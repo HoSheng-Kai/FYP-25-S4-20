@@ -29,7 +29,8 @@ INSERT INTO users (
         email,
         role_id,
         private_key,
-        public_key
+        public_key,
+        verified
     )
 VALUES (
         'admin_user',
@@ -37,7 +38,8 @@ VALUES (
         'admin@example.com',
         'admin',
         '5Jn1PsY9FYjYtpjfLaivRW5dSdkCsDxDnmkCn8MXkGFmnPA3NqFSoEww45mm4ukeFwvGFwG9akagGF2cLCofGsnp',
-        'pR9HgGJrxkFTVebFhYAoq4URkLti4tph9f7Sxvgrpzc'
+        'pR9HgGJrxkFTVebFhYAoq4URkLti4tph9f7Sxvgrpzc',
+        TRUE
     ),
     (
         'nike_manufacturer',
@@ -45,7 +47,8 @@ VALUES (
         'nike@manufacturer.com',
         'manufacturer',
         '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so'
+        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so',
+        FALSE
     ),
     (
         'adidas_manufacturer',
@@ -53,7 +56,8 @@ VALUES (
         'adidas@manufacturer.com',
         'manufacturer',
         '2aW6cVrGAGsTv9UXFMpcDRhb9iiPcfxgR1jHoBcYKKTFoFcZYjazQSsQtQEfHhar3MukdKz7jUaWCNVKQaYbgKbp',
-        'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc'
+        'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc',
+        FALSE
     ),
     (
         'global_distributor',
@@ -61,7 +65,8 @@ VALUES (
         'global@distributor.com',
         'distributor',
         '66X4Fdd7XwpbBrYSRYda3dpQsmaWhcbV9qTu9aD12fcdKa7zkHs5nrzHebWspuzBgDMGL75Rwu4QBqieULwAtvvb',
-        'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh'
+        'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh',
+        TRUE
     ),
     (
         'asia_distributor',
@@ -69,7 +74,8 @@ VALUES (
         'asia@distributor.com',
         'distributor',
         '4oSPuV9peRKqVQJ9zd8s2p8Mj3TPznGtBEjTZwSHM4gLuwojDGbTb3v7FiPpisfXWf6Bdv4AQhLSVMpKP4EwL3zz',
-        'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg'
+        'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg',
+        TRUE
     ),
     (
         'sports_retailer',
@@ -77,7 +83,8 @@ VALUES (
         'sports@retailer.com',
         'retailer',
         '5VKwRzTi4ou39Rf9xASUFHfvXhdXZgdiQyXod84BFrmGsEe86qK7bpc5TcwajKaxsLXMdu6HcxzGzpzW7SZfPnDx',
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ'
+        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ',
+        TRUE
     ),
     (
         'fashion_retailer',
@@ -85,7 +92,8 @@ VALUES (
         'fashion@retailer.com',
         'retailer',
         '2KFueTrHAsahgPPRApK6Ci8grXY1Nae6ZBUcmD3X9LWke31yjLUkdyHKvs4BUBPvmjn78ehy29gC1yJyhrD2DeoP',
-        '3NdBsPtC3cXjo16jsTuJxbBXhRFWFiWT9kz9wWXHokYd'
+        '3NdBsPtC3cXjo16jsTuJxbBXhRFWFiWT9kz9wWXHokYd',
+        TRUE
     ),
     (
         'john_consumer',
@@ -93,7 +101,8 @@ VALUES (
         'john@consumer.com',
         'consumer',
         '4ucS3Vh1ZYEJxsfzjpJ8uxY6w7dxjptGVCrJpuQv4azCX8xrYjqNHB8gBweFzmCKY4388DamUqnH63KshsHKdFcr',
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6'
+        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6',
+        TRUE
     ),
     (
         'sarah_consumer',
@@ -101,7 +110,8 @@ VALUES (
         'sarah@consumer.com',
         'consumer',
         'g9VEqeoDDGCkSVfq9q89zBu6smRGUzxzh9b8HTEvmehQacsokv76DSFWhk33WvoR4yqookTTGE1rSzxPop5mJv2',
-        'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U'
+        'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U',
+        TRUE
     ),
     (
         'mike_consumer',
@@ -109,7 +119,8 @@ VALUES (
         'mike@consumer.com',
         'consumer',
         '4NcvkwnkyFBN79bJ643dBSJQ3oqTrpQ98hHqbn1RGoKoFVmdCcqdf1pKnTTApYdf5QmzohQ9phAwaf4RztzfBq25',
-        '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid'
+        '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid',
+        TRUE
     );
 
 -- ===========================
