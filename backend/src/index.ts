@@ -1,4 +1,5 @@
 import express from 'express';
+import cors from 'cors';
 
 import userRouter from './router/userRouter';
 import distributorRouter from './router/distributorRouter';
@@ -8,6 +9,8 @@ import productRouter from './router/productRouter';
 import notificationRouter from './router/notificationRouter';
 
 const app = express();
+
+app.use(cors());
 app.use(express.json());
 
 app.use('/api/users', userRouter);
