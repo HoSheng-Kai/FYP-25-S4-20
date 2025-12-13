@@ -7,6 +7,7 @@ export interface ManufacturerProductListingRow {
   product_id: number;
   serial_no: string;
   model: string | null;
+  category: string | null;
   product_status: string;
   registered_on: Date;
 
@@ -36,6 +37,7 @@ export class ManufacturerProductListing {
         p.product_id,
         p.serial_no,
         p.model,
+        p.category             AS category,
         p.status               AS product_status,
         p.registered_on,
 
