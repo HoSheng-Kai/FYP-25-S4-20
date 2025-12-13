@@ -365,6 +365,7 @@ class ProductController {
           productId: row.product_id,
           serialNumber: row.serial_no,
           productName: row.model,
+          category: row.category,
           productStatus: row.product_status,       // registered / verified / suspicious
           lifecycleStatus: row.lifecycle_status,   // active / transferred
           blockchainStatus: row.blockchain_status, // on blockchain / pending
