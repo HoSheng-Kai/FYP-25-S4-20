@@ -52,6 +52,7 @@ class UserController {
           success: true,
           otp: otp,
           role: user.role,
+          userId: user.userId,
           verified: user.verified
         });
       }
