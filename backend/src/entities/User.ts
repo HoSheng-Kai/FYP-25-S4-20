@@ -16,7 +16,7 @@ class UserEntity {
     // Login
     // Check username, password
     static async loginAccount(username: string, password: string)
-    : Promise<{email: string; role: string, verified: boolean}>{
+    : Promise<{email: string; userId: number; role: string, verified: boolean}>{
         const result = await pool.query(`
             SELECT *
             FROM users
@@ -27,7 +27,7 @@ class UserEntity {
             throw new Error("User does not exist.");
         } 
 
-        return {email: result.rows[0].email, role: result.rows[0].role_id, verified: result.rows[0].verified};
+        return {email: result.rows[0].email, userId: result.rows[0].user_id, role: result.rows[0].role_id, verified: result.rows[0].verified};
     }
 
     // Logout
