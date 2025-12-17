@@ -137,7 +137,8 @@ INSERT INTO product (
         category,
         manufacture_date,
         description,
-        registered_on
+        registered_on,
+        tx_hash
     )
 VALUES (
         2,
@@ -149,7 +150,8 @@ VALUES (
         'Footwear',
         '2024-01-10',
         'Premium running shoes with Air cushioning technology',
-        '2024-01-15 10:30:00'
+        '2024-01-15 10:30:00',
+        ''
     ),
     (
         2,
@@ -161,7 +163,8 @@ VALUES (
         'Footwear',
         '2024-01-15',
         'Lightweight running shoes for daily training',
-        '2024-01-20 14:20:00'
+        '2024-01-20 14:20:00',
+        ''
     ),
     (
         2,
@@ -173,7 +176,8 @@ VALUES (
         'Footwear',
         '2024-02-01',
         'High-performance running shoes with React foam',
-        '2024-02-05 09:15:00'
+        '2024-02-05 09:15:00',
+        ''
     ),
     (
         3,
@@ -185,7 +189,8 @@ VALUES (
         'Footwear',
         '2024-01-20',
         'Energy-returning running shoes with Boost technology',
-        '2024-01-25 11:00:00'
+        '2024-01-25 11:00:00',
+        ''
     ),
     (
         3,
@@ -197,7 +202,8 @@ VALUES (
         'Footwear',
         '2024-02-05',
         'Lifestyle sneakers with modern design',
-        '2024-02-10 16:45:00'
+        '2024-02-10 16:45:00',
+        ''
     ),
     (
         3,
@@ -209,7 +215,8 @@ VALUES (
         'Footwear',
         '2024-02-10',
         'Classic shell-toe sneakers',
-        '2024-02-15 13:30:00'
+        '2024-02-15 13:30:00',
+        ''
     ),
     (
         2,
@@ -221,7 +228,8 @@ VALUES (
         'Footwear',
         '2024-02-25',
         'Iconic basketball-inspired sneakers',
-        '2024-03-01 10:00:00'
+        '2024-03-01 10:00:00',
+        ''
     ),
     (
         3,
@@ -233,7 +241,8 @@ VALUES (
         'Footwear',
         '2024-03-01',
         'Timeless tennis-inspired sneakers',
-        '2024-03-05 15:20:00'
+        '2024-03-05 15:20:00',
+        ''
     );
 
 -- ===========================

@@ -102,6 +102,13 @@ import pool from '../schema/database';
 // }
 
 
+// temp, move this to top later
+import {connection, airdropSol, MEMO_PROGRAM_ID} from "../schema/solana";
+const {Transaction, LAMPORTS_PER_SOL, TransactionInstruction, Keypair, PublicKey } = require('@solana/web3.js');
+
+import bs58 from 'bs58';
+import { blockchain_node, ownership } from "../db/table";
+
 class ProductController {
   // POST /api/products/register
   async registerProduct(req: Request, res: Response): Promise<void> {
@@ -116,6 +123,7 @@ class ProductController {
         description,
         price,
         currency,
+        private_key
       } = (req.body || {}) as any;
 
       if (!manufacturerId || !serialNo) {
@@ -139,7 +147,19 @@ class ProductController {
       }
 
       try {
-        const result = await ProductRegistration.registerProduct({
+        // blockchain part, needs user private key TODO: add to the request
+        const keypair = Keypair.fromSecretKey(bs58.decode(private_key));
+
+        const balance = await connection.getBalance(keypair.publicKey);
+        const needAmount = 0.01 * LAMPORTS_PER_SOL;
+
+        if (balance < needAmount) {
+            await airdropSol(private_key, needAmount);
+        }
+
+        const memoData = JSON.stringify({
+          type: 'PRODUCT_REGISTRATION',
+          timestamp: new Date().toISOString(),
           manufacturerId,
           serialNo,
           productName,
@@ -151,9 +171,44 @@ class ProductController {
           currency,
         });
 
+        const transaction = new Transaction();
+
+        const memoInstruction = new TransactionInstruction({
+          keys: [{ pubkey: keypair.publicKey, isSigner: true, isWritable: true }],
+          programId: MEMO_PROGRAM_ID,
+          data: Buffer.from(memoData, 'utf-8')
+        });
+
+        transaction.add(memoInstruction);
+
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+        transaction.recentBlockhash = blockhash;
+        transaction.feePayer = keypair.publicKey;
+
+        const fromPublicKey = new PublicKey(keypair.publicKey);
+
+        transaction.sign(keypair);
+        
+        const tx_hash = await connection.sendRawTransaction(transaction.serialize());
+        // blockchain end
+
+        const result = await ProductRegistration.registerProduct({
+          manufacturerId,
+          serialNo,
+          productName,
+          batchNo,
+          category,
+          manufactureDate,
+          description,
+          price,
+          currency,
+          tx_hash
+        });
+
         res.status(201).json({
           success: true,
           data: result,
+          tx_hash: tx_hash,
         });
       } catch (err: any) {
         if (err?.code === '23505') {

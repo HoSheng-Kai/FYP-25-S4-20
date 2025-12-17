@@ -13,6 +13,7 @@ export interface RegisterProductInput {
   description?: string;
   price?: number;
   currency?: string; // 'SGD' | 'USD' | 'EUR'
+  tx_hash?: string;
 }
 
 export interface RegisteredProductResult {
@@ -76,9 +77,10 @@ export class ProductRegistration {
           category,
           manufacture_date,
           description,
-          registered_on
+          registered_on,
+          tx_hash
         )
-        VALUES ($1, $2, NULL, 'registered', $3, $4, $5, $6, $7, NOW())
+        VALUES ($1, $2, NULL, 'registered', $3, $4, $5, $6, $7, NOW(), $8)
         RETURNING product_id, serial_no, model, batch_no, category,
                   manufacture_date, description, status, registered_on;
         `,
@@ -90,6 +92,7 @@ export class ProductRegistration {
           input.category ?? null,
           input.manufactureDate ?? null,
           input.description ?? null,
+          input.tx_hash ?? ''
         ]
       );
 

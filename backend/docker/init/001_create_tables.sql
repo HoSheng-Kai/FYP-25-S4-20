@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS product (
     category TEXT,
     manufacture_date DATE,
     description TEXT,
-    registered_on TIMESTAMP DEFAULT NOW()
+    registered_on TIMESTAMP DEFAULT NOW(),
+    tx_hash TEXT
 );
 
 -- ===========================

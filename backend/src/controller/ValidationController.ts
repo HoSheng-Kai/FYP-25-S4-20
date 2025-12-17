@@ -177,6 +177,47 @@ class ValidationController {
             });
         }
     }
+
+    /**
+     * POST /api/validate/product-registration
+     * Validate a product registration transaction on the blockchain
+     * Body: { tx_hash: string, manufacturerId?: number, serialNo?: string, productName?: string }
+     */
+    async validateProductRegistration(req: Request, res: Response) {
+        try {
+            const { tx_hash, manufacturerId, serialNo, productName } = req.body;
+
+            if (!tx_hash) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'tx_hash is required'
+                });
+            }
+
+            const expectedData = {
+                ...(manufacturerId !== undefined && { manufacturerId }),
+                ...(serialNo !== undefined && { serialNo }),
+                ...(productName !== undefined && { productName })
+            };
+
+            const result = await BlockchainValidator.validateProductRegistration(
+                tx_hash,
+                Object.keys(expectedData).length > 0 ? expectedData : undefined
+            );
+
+            res.json({
+                success: true,
+                validation: result
+            });
+
+        } catch (error: any) {
+            res.status(500).json({
+                success: false,
+                error: 'Product registration validation failed',
+                details: error.message
+            });
+        }
+    }
 }
 
 export default new ValidationController();
