@@ -57,7 +57,7 @@ class ProductController {
       }
 
       try {
-        // blockchain part, needs user private key TODO: add to the request
+        // blockchain part
         const keypair = Keypair.fromSecretKey(bs58.decode(private_key));
 
         const balance = await connection.getBalance(keypair.publicKey);
