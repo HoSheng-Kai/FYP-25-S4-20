@@ -18,10 +18,6 @@ router.post('/register', productController.registerProduct.bind(productControlle
 // POST /api/products/:productId/confirm
 router.post('/:productId/confirm', productController.confirmProduct.bind(productController));
 
-router.post('/debug-body', (req, res) => {
-  res.json({ body: req.body, headers: req.headers });
-});
-
 // Example:
 // DELETE /api/products/:productId?manufacturerId=2
 router.delete('/:productId', productController.deleteProduct.bind(productController));
