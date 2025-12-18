@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { ProductScan } from '../entities/Product';
 import { ProductRegistration } from '../entities/ProductRegistration';
+import { ProductConfirmation } from '../entities/ProductConfirmation';
 import { ProductHistory, ProductHistoryResult } from '../entities/ProductHistory';
 import { ProductDeletion } from '../entities/ProductDeletion';
 import { ProductQr } from '../entities/ProductQr';
@@ -19,9 +20,130 @@ const {Transaction, LAMPORTS_PER_SOL, TransactionInstruction, Keypair, PublicKey
 import bs58 from 'bs58';
 import { blockchain_node, ownership } from "../db/table";
 
+
+
 class ProductController {
   // POST /api/products/register
-  async registerProduct(req: Request, res: Response): Promise<void> {
+  // async registerProduct(req: Request, res: Response): Promise<void> {
+  //   try {
+  //     const {
+  //       manufacturerId,
+  //       serialNo,
+  //       productName,
+  //       batchNo,
+  //       category,
+  //       manufactureDate,
+  //       description,
+  //       price,
+  //       currency,
+  //       private_key
+  //     } = (req.body || {}) as any;
+
+  //     if (!manufacturerId || !serialNo) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: 'Missing required fields',
+  //         details: {
+  //           required: ['manufacturerId', 'serialNo'],
+  //           receivedBody: req.body ?? null,
+  //         },
+  //       });
+  //       return;
+  //     }
+
+  //     if (typeof manufacturerId !== 'number') {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: 'manufacturerId must be a number',
+  //       });
+  //       return;
+  //     }
+
+  //     try {
+  //       // blockchain part, needs user private key TODO: add to the request
+  //       const keypair = Keypair.fromSecretKey(bs58.decode(private_key));
+
+  //       const balance = await connection.getBalance(keypair.publicKey);
+  //       const needAmount = 0.01 * LAMPORTS_PER_SOL;
+
+  //       if (balance < needAmount) {
+  //           await airdropSol(private_key, needAmount);
+  //       }
+
+  //       const memoData = JSON.stringify({
+  //         type: 'PRODUCT_REGISTRATION',
+  //         timestamp: new Date().toISOString(),
+  //         manufacturerId,
+  //         serialNo,
+  //         productName,
+  //         batchNo,
+  //         category,
+  //         manufactureDate,
+  //         description,
+  //         price,
+  //         currency,
+  //       });
+
+  //       const transaction = new Transaction();
+
+  //       const memoInstruction = new TransactionInstruction({
+  //         keys: [{ pubkey: keypair.publicKey, isSigner: true, isWritable: true }],
+  //         programId: MEMO_PROGRAM_ID,
+  //         data: Buffer.from(memoData, 'utf-8')
+  //       });
+
+  //       transaction.add(memoInstruction);
+
+  //       const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+  //       transaction.recentBlockhash = blockhash;
+  //       transaction.feePayer = keypair.publicKey;
+
+  //       const fromPublicKey = new PublicKey(keypair.publicKey);
+
+  //       transaction.sign(keypair);
+        
+  //       const tx_hash = await connection.sendRawTransaction(transaction.serialize());
+  //       // blockchain end
+
+  //       const result = await ProductRegistration.registerProduct({
+  //         manufacturerId,
+  //         serialNo,
+  //         productName,
+  //         batchNo,
+  //         category,
+  //         manufactureDate,
+  //         description,
+  //         price,
+  //         currency,
+  //         tx_hash
+  //       });
+
+  //       res.status(201).json({
+  //         success: true,
+  //         data: result,
+  //         tx_hash: tx_hash,
+  //       });
+  //     } catch (err: any) {
+  //       if (err?.code === '23505') {
+  //         res.status(409).json({
+  //           success: false,
+  //           error: 'Serial number already exists',
+  //           details: 'Choose a unique serial_no',
+  //         });
+  //         return;
+  //       }
+  //       throw err;
+  //     }
+  //   } catch (err) {
+  //     res.status(500).json({
+  //       success: false,
+  //       error: 'Failed to register product',
+  //       details: err instanceof Error ? err.message : String(err),
+  //     });
+  //   }
+  // }
+
+    async registerProduct(req: Request, res: Response): Promise<void> {
     try {
       const {
         manufacturerId,
@@ -32,8 +154,7 @@ class ProductController {
         manufactureDate,
         description,
         price,
-        currency,
-        private_key
+        currency
       } = (req.body || {}) as any;
 
       if (!manufacturerId || !serialNo) {
@@ -57,51 +178,7 @@ class ProductController {
       }
 
       try {
-        // blockchain part, needs user private key TODO: add to the request
-        const keypair = Keypair.fromSecretKey(bs58.decode(private_key));
-
-        const balance = await connection.getBalance(keypair.publicKey);
-        const needAmount = 0.01 * LAMPORTS_PER_SOL;
-
-        if (balance < needAmount) {
-            await airdropSol(private_key, needAmount);
-        }
-
-        const memoData = JSON.stringify({
-          type: 'PRODUCT_REGISTRATION',
-          timestamp: new Date().toISOString(),
-          manufacturerId,
-          serialNo,
-          productName,
-          batchNo,
-          category,
-          manufactureDate,
-          description,
-          price,
-          currency,
-        });
-
-        const transaction = new Transaction();
-
-        const memoInstruction = new TransactionInstruction({
-          keys: [{ pubkey: keypair.publicKey, isSigner: true, isWritable: true }],
-          programId: MEMO_PROGRAM_ID,
-          data: Buffer.from(memoData, 'utf-8')
-        });
-
-        transaction.add(memoInstruction);
-
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-        transaction.recentBlockhash = blockhash;
-        transaction.feePayer = keypair.publicKey;
-
-        const fromPublicKey = new PublicKey(keypair.publicKey);
-
-        transaction.sign(keypair);
-        
-        const tx_hash = await connection.sendRawTransaction(transaction.serialize());
-        // blockchain end
-
+        // ✅ DB-only registration (pending)
         const result = await ProductRegistration.registerProduct({
           manufacturerId,
           serialNo,
@@ -111,14 +188,13 @@ class ProductController {
           manufactureDate,
           description,
           price,
-          currency,
-          tx_hash
+          currency
         });
 
         res.status(201).json({
           success: true,
           data: result,
-          tx_hash: tx_hash,
+          blockchainStatus: 'pending'
         });
       } catch (err: any) {
         if (err?.code === '23505') {
@@ -139,6 +215,100 @@ class ProductController {
       });
     }
   }
+
+  async confirmProduct(req: Request, res: Response): Promise<void> {
+  try {
+    const productId = Number(req.params.productId);
+    const { manufacturerId, private_key } = req.body ?? {};
+
+    // ✅ validate productId separately
+    if (Number.isNaN(productId) || productId <= 0) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid productId in URL',
+        details: { received: req.params.productId },
+      });
+      return;
+    }
+
+    // ✅ validate body fields (do NOT include productId here)
+    if (!manufacturerId || !private_key) {
+      res.status(400).json({
+        success: false,
+        error: 'Missing required fields',
+        details: ['manufacturerId', 'private_key'],
+        receivedBody: req.body ?? null,
+      });
+      return;
+    }
+
+    // ===== Build keypair =====
+    const keypair = Keypair.fromSecretKey(bs58.decode(private_key));
+
+    // ===== Ensure SOL balance =====
+    const balance = await connection.getBalance(keypair.publicKey);
+    const needAmount = 0.01 * LAMPORTS_PER_SOL;
+
+    if (balance < needAmount) {
+      await airdropSol(private_key, needAmount);
+    }
+
+    // ===== Solana memo =====
+    const memoData = JSON.stringify({
+      type: 'PRODUCT_CONFIRM',
+      productId,
+      manufacturerId,
+      timestamp: new Date().toISOString(),
+    });
+
+    const transaction = new Transaction();
+
+    const memoInstruction = new TransactionInstruction({
+      keys: [
+        {
+          pubkey: keypair.publicKey,
+          isSigner: true,
+          isWritable: true,
+        },
+      ],
+      programId: MEMO_PROGRAM_ID,
+      data: Buffer.from(memoData, 'utf-8'),
+    });
+
+    transaction.add(memoInstruction);
+
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = keypair.publicKey;
+
+    transaction.sign(keypair);
+
+    const txHash = await connection.sendRawTransaction(
+      transaction.serialize()
+    );
+
+    // ===== Persist confirmation =====
+    const result = await ProductConfirmation.confirmProduct({
+      productId,
+      manufacturerId,
+      txHash,
+      fromPublicKey: keypair.publicKey.toBase58(),
+    });
+
+    res.json({
+      success: true,
+      message: 'Product confirmed on blockchain',
+      data: result,
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: 'Failed to confirm product',
+      details: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
 
   // GET /api/products/:productId/qrcode
   async getProductQrCode(req: Request, res: Response): Promise<void> {

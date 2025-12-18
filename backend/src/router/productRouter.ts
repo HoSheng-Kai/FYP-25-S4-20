@@ -15,6 +15,13 @@ router.get('/history', productController.getTransactionHistory.bind(productContr
 // POST /api/products/register
 router.post('/register', productController.registerProduct.bind(productController));
 
+// POST /api/products/:productId/confirm
+router.post('/:productId/confirm', productController.confirmProduct.bind(productController));
+
+router.post('/debug-body', (req, res) => {
+  res.json({ body: req.body, headers: req.headers });
+});
+
 // Example:
 // DELETE /api/products/:productId?manufacturerId=2
 router.delete('/:productId', productController.deleteProduct.bind(productController));
