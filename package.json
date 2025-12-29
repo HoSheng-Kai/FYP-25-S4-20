@@ -1,0 +1,16 @@
+{
+  "name": "fyp-root",
+  "private": true,
+  "workspaces": [
+    "./FYP-25-S4-20-Front-and-Back/frontend",
+    "./FYP-25-S4-20-Front-and-Back/backend"
+  ],
+  "overrides": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "@types/react": "^19.2.7"
+  }
+}
