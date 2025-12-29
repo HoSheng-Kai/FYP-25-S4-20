@@ -1,7 +1,6 @@
 // src/entities/ProductRegistration.ts
-import pool from '../schema/database';
-import crypto from 'crypto';
-import { QrCodeService } from '../service/QrCodeService';
+import pool from "../schema/database";
+import { QrCodeService } from "../service/QrCodeService";
 
 export interface RegisterProductInput {
   manufacturerId: number;
@@ -12,7 +11,7 @@ export interface RegisterProductInput {
   manufactureDate?: string; // 'YYYY-MM-DD'
   description?: string;
   price?: number;
-  currency?: string;
+  currency?: string; // 'SGD' | 'USD' | 'EUR'
 }
 
 export interface RegisteredProductResult {
@@ -26,20 +25,9 @@ export interface RegisteredProductResult {
     description: string | null;
     status: string;
     registered_on: Date;
-    qr_payload: string; 
-  };
-  blockchain: {
-    onchain_tx_id: number;
-    tx_hash: string;
-    status: string;
-    created_on: Date;
-  };
-  ownership: {
-    ownership_id: number;
-    owner_id: number;
-    product_id: number;
-    start_on: Date;
-    end_on: Date | null;
+    qr_payload: string;
+    tx_hash: string | null;
+    product_pda: string | null;
   };
   initial_listing?: {
     listing_id: number;
@@ -57,9 +45,16 @@ export class ProductRegistration {
     const client = await pool.connect();
 
     try {
-      await client.query('BEGIN');
+      await client.query("BEGIN");
 
-      // 1) Insert product WITHOUT qr_code first
+      /**
+       * 1) Insert pending product OR reuse existing pending product (same manufacturer, tx_hash IS NULL)
+       *
+       * - First time: inserts.
+       * - If user cancels Phantom tx: product remains pending (tx_hash NULL).
+       * - Retry same serial: we UPDATE (no duplicate error) and RETURN the same row.
+       * - If serial belongs to different manufacturer OR already confirmed (tx_hash not null): RETURNING gives 0 rows.
+       */
       const productResult = await client.query(
         `
         INSERT INTO fyp_25_s4_20.product (
@@ -72,11 +67,34 @@ export class ProductRegistration {
           category,
           manufacture_date,
           description,
-          registered_on
+          registered_on,
+          tx_hash,
+          product_pda
         )
-        VALUES ($1, $2, NULL, 'registered', $3, $4, $5, $6, $7, NOW())
-        RETURNING product_id, serial_no, model, batch_no, category,
-                  manufacture_date, description, status, registered_on;
+        VALUES ($1, $2, NULL, 'registered', $3, $4, $5, $6, $7, NOW(), NULL, NULL)
+        ON CONFLICT (serial_no) DO UPDATE
+        SET
+          model = EXCLUDED.model,
+          batch_no = EXCLUDED.batch_no,
+          category = EXCLUDED.category,
+          manufacture_date = EXCLUDED.manufacture_date,
+          description = EXCLUDED.description
+        WHERE
+          fyp_25_s4_20.product.registered_by = EXCLUDED.registered_by
+          AND fyp_25_s4_20.product.tx_hash IS NULL
+        RETURNING
+          product_id,
+          serial_no,
+          model,
+          batch_no,
+          category,
+          manufacture_date,
+          description,
+          status,
+          registered_on,
+          tx_hash,
+          product_pda,
+          qr_code;
         `,
         [
           input.manufacturerId,
@@ -89,105 +107,102 @@ export class ProductRegistration {
         ]
       );
 
-      let product = productResult.rows[0];
+      if (productResult.rows.length === 0) {
+        // Serial exists but can't be reused:
+        // - different manufacturer OR already confirmed on-chain
+        throw new Error(
+          "Serial number already exists (belongs to another manufacturer or already confirmed on-chain)"
+        );
+      }
 
-      // 2) Build unique QR payload based on product details
+      const productRow = productResult.rows[0];
+
+      // 2) Always compute qr_payload for response
       const qrPayload = QrCodeService.buildPayload(
-        product.product_id,
-        product.serial_no,
+        productRow.product_id,
+        productRow.serial_no,
         input.manufacturerId
       );
 
-      // 3) Generate PNG image buffer
-      const qrBuffer = await QrCodeService.generatePngBuffer(qrPayload);
+      // 3) Only generate/store QR bytes if qr_code is NULL
+      if (!productRow.qr_code) {
+        const qrBuffer = await QrCodeService.generatePngBuffer(qrPayload);
 
-      // 4) Update product with qr_code bytes
-      await client.query(
-        `
-        UPDATE fyp_25_s4_20.product
-        SET qr_code = $1
-        WHERE product_id = $2;
-        `,
-        [qrBuffer, product.product_id]
-      );
-
-      // 5) Insert blockchain node
-      const txHash =
-        typeof crypto.randomUUID === 'function'
-          ? `tx_${crypto.randomUUID()}`
-          : `tx_${Date.now()}`;
-
-      const blockchainResult = await client.query(
-        `
-        INSERT INTO fyp_25_s4_20.blockchain_node (
-          prev_tx_hash,
-          tx_hash,
-          status,
-          created_on
-        )
-        VALUES (NULL, $1, 'confirmed', NOW())
-        RETURNING onchain_tx_id, tx_hash, status, created_on;
-        `,
-        [txHash]
-      );
-      const blockchain = blockchainResult.rows[0];
-
-      // 6) Ownership (manufacturer)
-      const ownershipResult = await client.query(
-        `
-        INSERT INTO fyp_25_s4_20.ownership (
-          owner_id,
-          product_id,
-          onchain_tx_id,
-          start_on,
-          end_on
-        )
-        VALUES ($1, $2, $3, NOW(), NULL)
-        RETURNING ownership_id, owner_id, product_id, start_on, end_on;
-        `,
-        [input.manufacturerId, product.product_id, blockchain.onchain_tx_id]
-      );
-      const ownership = ownershipResult.rows[0];
-
-      // 7) Optional listing
-      let initialListing: RegisteredProductResult['initial_listing'] = null;
-      if (typeof input.price === 'number') {
-        const listingResult = await client.query(
+        await client.query(
           `
-          INSERT INTO fyp_25_s4_20.product_listing (
-            product_id,
-            seller_id,
-            price,
-            currency,
-            status,
-            created_on
-          )
-          VALUES ($1, $2, $3, $4, 'available', NOW())
-          RETURNING listing_id, price, currency, status, created_on;
+          UPDATE fyp_25_s4_20.product
+          SET qr_code = $1
+          WHERE product_id = $2;
           `,
-          [
-            product.product_id,
-            input.manufacturerId,
-            input.price,
-            input.currency ?? 'SGD',
-          ]
+          [qrBuffer, productRow.product_id]
         );
-        initialListing = listingResult.rows[0];
       }
 
-      await client.query('COMMIT');
+      // 4) Optional initial listing (ONLY create once for this product)
+      let initialListing: RegisteredProductResult["initial_listing"] = null;
+
+      if (typeof input.price === "number") {
+        // if listing already exists, don't create another
+        const existingListing = await client.query(
+          `
+          SELECT listing_id, price, currency, status, created_on
+          FROM fyp_25_s4_20.product_listing
+          WHERE product_id = $1
+          ORDER BY created_on ASC
+          LIMIT 1;
+          `,
+          [productRow.product_id]
+        );
+
+        if (existingListing.rows.length > 0) {
+          initialListing = existingListing.rows[0];
+        } else {
+          const listingResult = await client.query(
+            `
+            INSERT INTO fyp_25_s4_20.product_listing (
+              product_id,
+              seller_id,
+              price,
+              currency,
+              status,
+              created_on
+            )
+            VALUES ($1, $2, $3, $4::fyp_25_s4_20.currency, 'available', NOW())
+            RETURNING listing_id, price, currency, status, created_on;
+            `,
+            [
+              productRow.product_id,
+              input.manufacturerId,
+              input.price,
+              input.currency ?? "SGD",
+            ]
+          );
+
+          initialListing = listingResult.rows[0];
+        }
+      }
+
+      await client.query("COMMIT");
 
       return {
         product: {
-          ...product,
+          product_id: productRow.product_id,
+          serial_no: productRow.serial_no,
+          model: productRow.model ?? null,
+          batch_no: productRow.batch_no ?? null,
+          category: productRow.category ?? null,
+          manufacture_date: productRow.manufacture_date ?? null,
+          description: productRow.description ?? null,
+          status: productRow.status,
+          registered_on: productRow.registered_on,
           qr_payload: qrPayload,
+          tx_hash: productRow.tx_hash ?? null,
+          product_pda: productRow.product_pda ?? null,
         },
-        blockchain,
-        ownership,
         initial_listing: initialListing,
       };
     } catch (err) {
-      await client.query('ROLLBACK');
+      await client.query("ROLLBACK");
       throw err;
     } finally {
       client.release();

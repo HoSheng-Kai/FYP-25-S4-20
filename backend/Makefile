@@ -7,6 +7,8 @@ ROOT := $(shell cd)
 run:
 	docker-compose up --build -d
 # 	docker logs -f $(CONTAINER_NAME)
+	npm install --save-dev ts-node
+# 	npm run regen:qrcodes
 	npm run dev
 	
 

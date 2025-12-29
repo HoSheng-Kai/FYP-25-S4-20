@@ -1,149 +1,97 @@
-// src/entities/Product.ts
 import pool from '../schema/database';
 
-export type ProductStatus = 'registered' | 'verified' | 'suspicious';
-export type Availability = 'available' | 'reserved' | 'sold';
+export type BlockchainStatus = "pending" | "on blockchain";
+export type LifecycleStatus = "active" | "transferred";
 
-export interface ProductDetails {
-  product_id: number;
-  serial_no: string;
-  model: string | null;               // product name
-  batch_no: string | null;
+export interface ProductScanResult {
+  productId: number;
+  productName: string | null;
+  serialNumber: string;
+  batchNumber: string | null;
   category: string | null;
-  manufacture_date: Date | null;
-  description: string | null;
-  status: ProductStatus;
-  registered_on: Date | null;
+  manufactureDate: Date | null;
+  productDescription: string | null;
+  status: string; // registered / verified / suspicious
+  registeredOn: Date;
 
-  registered_by: {
-    user_id: number;
-    username: string;
-    role_id: string;
-  } | null;
+  manufacturer: {
+    userId: number | null;
+    username: string | null;
+    publicKey: string | null;
+    verified: boolean | null;
+  };
 
-  current_owner: {
-    user_id: number;
-    username: string;
-    role_id: string;
-    start_on: Date;
-  } | null;
+  currentOwner: {
+    userId: number | null;
+    username: string | null;
+    publicKey: string | null;
+  };
 
-  latest_listing: {
-    listing_id: number;
-    price: string | null;             // NUMERIC comes back as string
-    currency: string | null;
-    status: string;                   // availability enum
-    created_on: Date;
-  } | null;
+  lifecycleStatus: LifecycleStatus;
+  blockchainStatus: BlockchainStatus;
+
+  // optional: on-chain linkage
+  productPda: string | null;
+  txHash: string | null;
+
+  // your API wants this
+  isAuthentic: boolean;
 }
 
-export class Product {
-  static async findBySerialNo(serialNo: string): Promise<ProductDetails | null> {
-    // 1) Base product + who registered it
-    const productResult = await pool.query(
+export class ProductScan {
+  static async findBySerial(serialNo: string): Promise<ProductScanResult | null> {
+    const r = await pool.query(
       `
-      SELECT
-        p.product_id,
-        p.serial_no,
-        p.model,
-        p.batch_no,
-        p.category,
-        p.manufacture_date,
-        p.description,
-        p.status,
-        p.registered_on,
-        u.user_id   AS registered_by_id,
-        u.username  AS registered_by_username,
-        u.role_id   AS registered_by_role
-      FROM product p
-      LEFT JOIN users u
-        ON p.registered_by = u.user_id
-      WHERE p.serial_no = $1;
+      SELECT *
+      FROM fyp_25_s4_20.v_product_read
+      WHERE serial_no = $1
+      LIMIT 1;
       `,
       [serialNo]
     );
 
-    if (productResult.rows.length === 0) {
-      return null;
-    }
+    if (r.rows.length === 0) return null;
+    const row = r.rows[0];
 
-    const p = productResult.rows[0];
-
-    // 2) Current owner (ownership where end_on IS NULL)
-    const ownerResult = await pool.query(
-      `
-      SELECT
-        u.user_id,
-        u.username,
-        u.role_id,
-        o.start_on
-      FROM ownership o
-      JOIN users u
-        ON o.owner_id = u.user_id
-      WHERE o.product_id = $1
-        AND o.end_on IS NULL
-      ORDER BY o.start_on DESC
-      LIMIT 1;
-      `,
-      [p.product_id]
-    );
-    const ownerRow = ownerResult.rows[0] || null;
-
-    // 3) Latest listing (for price)
-    const listingResult = await pool.query(
-      `
-      SELECT
-        listing_id,
-        price,
-        currency,
-        status,
-        created_on
-      FROM product_listing
-      WHERE product_id = $1
-      ORDER BY created_on DESC
-      LIMIT 1;
-      `,
-      [p.product_id]
-    );
-    const listingRow = listingResult.rows[0] || null;
+    // simple authenticity rule (adjust if you want):
+    // - must exist
+    // - must not be suspicious
+    // - AND must have on-chain tx (or you can allow pending as "not yet confirmed")
+    const isAuthentic =
+      row.product_status !== "suspicious" &&
+      row.blockchain_status === "on blockchain";
 
     return {
-      product_id: p.product_id,
-      serial_no: p.serial_no,
-      model: p.model,
-      batch_no: p.batch_no,
-      category: p.category,
-      manufacture_date: p.manufacture_date,
-      description: p.description,
-      status: p.status,
-      registered_on: p.registered_on,
+      productId: row.product_id,
+      productName: row.product_name ?? null,
+      serialNumber: row.serial_no,
+      batchNumber: row.batch_no ?? null,
+      category: row.category ?? null,
+      manufactureDate: row.manufacture_date ?? null,
+      productDescription: row.description ?? null,
+      status: row.product_status,
+      registeredOn: row.registered_on,
 
-      registered_by: p.registered_by_id
-        ? {
-            user_id: p.registered_by_id,
-            username: p.registered_by_username,
-            role_id: p.registered_by_role,
-          }
-        : null,
+      manufacturer: {
+        userId: row.manufacturer_id ?? null,
+        username: row.manufacturer_username ?? null,
+        publicKey: row.manufacturer_public_key ?? null,
+        verified: row.manufacturer_verified ?? null,
+      },
 
-      current_owner: ownerRow
-        ? {
-            user_id: ownerRow.user_id,
-            username: ownerRow.username,
-            role_id: ownerRow.role_id,
-            start_on: ownerRow.start_on,
-          }
-        : null,
+      currentOwner: {
+        userId: row.current_owner_id ?? null,
+        username: row.current_owner_username ?? null,
+        publicKey: row.current_owner_public_key ?? null,
+      },
 
-      latest_listing: listingRow
-        ? {
-            listing_id: listingRow.listing_id,
-            price: listingRow.price,
-            currency: listingRow.currency,
-            status: listingRow.status,
-            created_on: listingRow.created_on,
-          }
-        : null,
+      lifecycleStatus: row.lifecycle_status as LifecycleStatus,
+      blockchainStatus: row.blockchain_status as BlockchainStatus,
+
+      productPda: row.product_pda ?? null,
+      txHash: row.tx_hash ?? null,
+
+      isAuthentic,
     };
   }
 }
