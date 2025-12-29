@@ -21,7 +21,7 @@ app.use('/api/notifications', notificationRouter);
 
 // Testing blockchain here
 app.use('/api/distributors', distributorRouter);
-app.use('/api/validate', validationRouter)
+app.use('/api/validate', validationRouter);
 
 app.listen(3000, () => {
   console.log('Server running on port 3000');
