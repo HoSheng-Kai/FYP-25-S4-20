@@ -1,6 +1,7 @@
 import pool from '../schema/database';
 
-export type BlockchainStatus = 'on blockchain' | 'pending';
+export type BlockchainStatus = "pending" | "on blockchain";
+export type LifecycleStatus = "active" | "transferred";
 
 export interface ProductScanResult {
   productId: number;
@@ -10,138 +11,87 @@ export interface ProductScanResult {
   category: string | null;
   manufactureDate: Date | null;
   productDescription: string | null;
-  status: string;                 // registered / verified / suspicious
+  status: string; // registered / verified / suspicious
   registeredOn: Date;
 
   manufacturer: {
-    userId: number;
-    username: string;
-    roleId: string;
-  } | null;
+    userId: number | null;
+    username: string | null;
+    publicKey: string | null;
+    verified: boolean | null;
+  };
 
   currentOwner: {
-    userId: number;
-    username: string;
-    roleId: string;
-    startOn: Date;
-  } | null;
+    userId: number | null;
+    username: string | null;
+    publicKey: string | null;
+  };
 
+  lifecycleStatus: LifecycleStatus;
   blockchainStatus: BlockchainStatus;
+
+  // optional: on-chain linkage
+  productPda: string | null;
+  txHash: string | null;
+
+  // your API wants this
   isAuthentic: boolean;
 }
 
 export class ProductScan {
-  static async findBySerial(serial: string): Promise<ProductScanResult | null> {
-    const client = await pool.connect();
-    try {
-      // 1) Get product + manufacturer
-      const productRes = await client.query(
-        `
-        SELECT
-          p.product_id,
-          p.serial_no,
-          p.model,
-          p.batch_no,
-          p.category,
-          p.manufacture_date,
-          p.description,
-          p.status        AS product_status,
-          p.registered_on,
-          u.user_id       AS manufacturer_id,
-          u.username      AS manufacturer_username,
-          u.role_id       AS manufacturer_role
-        FROM fyp_25_s4_20.product p
-        LEFT JOIN fyp_25_s4_20.users u
-          ON p.registered_by = u.user_id
-        WHERE p.serial_no = $1;
-        `,
-        [serial]
-      );
+  static async findBySerial(serialNo: string): Promise<ProductScanResult | null> {
+    const r = await pool.query(
+      `
+      SELECT *
+      FROM fyp_25_s4_20.v_product_read
+      WHERE serial_no = $1
+      LIMIT 1;
+      `,
+      [serialNo]
+    );
 
-      if (productRes.rows.length === 0) {
-        return null;
-      }
+    if (r.rows.length === 0) return null;
+    const row = r.rows[0];
 
-      const p = productRes.rows[0];
+    // simple authenticity rule (adjust if you want):
+    // - must exist
+    // - must not be suspicious
+    // - AND must have on-chain tx (or you can allow pending as "not yet confirmed")
+    const isAuthentic =
+      row.product_status !== "suspicious" &&
+      row.blockchain_status === "on blockchain";
 
-      // 2) Check blockchain presence for this product
-      const blockchainRes = await client.query(
-        `
-        SELECT 1
-        FROM fyp_25_s4_20.blockchain_node bn
-        WHERE bn.product_id = $1
-        LIMIT 1;
-        `,
-        [p.product_id]
-      );
+    return {
+      productId: row.product_id,
+      productName: row.product_name ?? null,
+      serialNumber: row.serial_no,
+      batchNumber: row.batch_no ?? null,
+      category: row.category ?? null,
+      manufactureDate: row.manufacture_date ?? null,
+      productDescription: row.description ?? null,
+      status: row.product_status,
+      registeredOn: row.registered_on,
 
-      const blockchainStatus: BlockchainStatus =
-        blockchainRes.rows.length > 0 ? 'on blockchain' : 'pending';
+      manufacturer: {
+        userId: row.manufacturer_id ?? null,
+        username: row.manufacturer_username ?? null,
+        publicKey: row.manufacturer_public_key ?? null,
+        verified: row.manufacturer_verified ?? null,
+      },
 
-      // 3) Find current owner (if any)
-      const ownerRes = await client.query(
-        `
-        SELECT
-          o.owner_id,
-          u.username AS owner_username,
-          u.role_id  AS owner_role,
-          o.start_on
-        FROM fyp_25_s4_20.ownership o
-        JOIN fyp_25_s4_20.users u
-          ON o.owner_id = u.user_id
-        WHERE o.product_id = $1
-          AND o.end_on IS NULL
-        ORDER BY o.start_on DESC
-        LIMIT 1;
-        `,
-        [p.product_id]
-      );
+      currentOwner: {
+        userId: row.current_owner_id ?? null,
+        username: row.current_owner_username ?? null,
+        publicKey: row.current_owner_public_key ?? null,
+      },
 
-      let currentOwner: ProductScanResult['currentOwner'] = null;
-      if (ownerRes.rows.length > 0) {
-        const o = ownerRes.rows[0];
-        currentOwner = {
-          userId: o.owner_id,
-          username: o.owner_username,
-          roleId: o.owner_role,
-          startOn: o.start_on,
-        };
-      }
+      lifecycleStatus: row.lifecycle_status as LifecycleStatus,
+      blockchainStatus: row.blockchain_status as BlockchainStatus,
 
-      // 4) Manufacturer mapping
-      const manufacturer = p.manufacturer_id
-        ? {
-            userId: p.manufacturer_id,
-            username: p.manufacturer_username,
-            roleId: p.manufacturer_role,
-          }
-        : null;
+      productPda: row.product_pda ?? null,
+      txHash: row.tx_hash ?? null,
 
-      // 5) Decide authenticity rule:
-      //    - must be on blockchain
-      //    - product status must be 'verified'
-      //    - and not suspicious
-      const isAuthentic =
-        blockchainStatus === 'on blockchain' &&
-        p.product_status === 'verified';
-
-      return {
-        productId: p.product_id,
-        productName: p.model,
-        serialNumber: p.serial_no,
-        batchNumber: p.batch_no,
-        category: p.category,
-        manufactureDate: p.manufacture_date,
-        productDescription: p.description,
-        status: p.product_status,
-        registeredOn: p.registered_on,
-        manufacturer,
-        currentOwner,
-        blockchainStatus,
-        isAuthentic,
-      };
-    } finally {
-      client.release();
-    }
+      isAuthentic,
+    };
   }
 }

@@ -16,6 +16,8 @@ CREATE TYPE currency AS ENUM ('SGD', 'USD', 'EUR');
 
 CREATE TYPE product_status AS ENUM ('registered', 'verified', 'suspicious');
 
+CREATE TYPE tx_event AS ENUM ('REGISTER', 'TRANSFER', 'SELL');
+
 -- ===========================
 -- Users Table
 -- ===========================
@@ -39,15 +41,23 @@ CREATE TABLE IF NOT EXISTS product (
     registered_by INT REFERENCES users(user_id) ON DELETE SET NULL,
     serial_no TEXT NOT NULL UNIQUE,
     qr_code BYTEA UNIQUE,
-    STATUS product_status NOT NULL,
+    status product_status NOT NULL,
     model TEXT,
     batch_no TEXT,
     category TEXT,
     manufacture_date DATE,
     description TEXT,
     registered_on TIMESTAMP DEFAULT NOW(),
-    tx_hash TEXT
+
+    -- on-chain references
+    product_pda TEXT,
+    tx_hash TEXT,
+    blockchain_tx TEXT
 );
+
+CREATE INDEX IF NOT EXISTS idx_product_tx_hash
+ON product (tx_hash);
+
 
 -- ===========================
 -- Product Listing Table
@@ -68,21 +78,19 @@ CREATE TABLE IF NOT EXISTS product_listing (
 CREATE TABLE IF NOT EXISTS blockchain_node (
     tx_hash TEXT PRIMARY KEY,
     prev_tx_hash TEXT,
-    
-    -- Sender info
+
     from_user_id INT REFERENCES users(user_id) ON DELETE SET NULL,
     from_public_key TEXT NOT NULL,
-    
-    -- Receiver info
+
     to_user_id INT REFERENCES users(user_id) ON DELETE SET NULL,
     to_public_key TEXT NOT NULL,
-    
-    -- Product
+
     product_id INT NOT NULL REFERENCES product(product_id) ON DELETE CASCADE,
-    
-    -- Blockchain data
-    block_slot BIGINT NOT NULL, 
-    created_on TIMESTAMP DEFAULT NOW()
+
+    block_slot BIGINT NOT NULL,
+    created_on TIMESTAMP DEFAULT NOW(),
+
+    event tx_event NOT NULL DEFAULT 'TRANSFER'
 );
 
 -- ===========================
@@ -194,3 +202,142 @@ CREATE TRIGGER validate_ownership_key_trigger
 BEFORE INSERT OR UPDATE ON ownership
 FOR EACH ROW
 EXECUTE FUNCTION validate_ownership_key();
+
+-- ============================================================
+-- VIEW: Centralized "read model" for product cards / verify page
+-- ============================================================
+CREATE OR REPLACE VIEW fyp_25_s4_20.v_product_read AS
+SELECT
+  p.product_id,
+  p.serial_no,
+  p.model                 AS product_name,
+  p.category,
+  p.batch_no,
+  p.manufacture_date,
+  p.description,
+  p.status                AS product_status,
+  p.registered_on,
+
+  -- Manufacturer info
+  p.registered_by         AS manufacturer_id,
+  m.username              AS manufacturer_username,
+  m.public_key            AS manufacturer_public_key,
+  m.verified              AS manufacturer_verified,
+
+  -- On-chain linkage (from your product table)
+  p.product_pda,
+  p.tx_hash,
+
+  -- Latest listing (if any)
+  pl_latest.listing_id,
+  pl_latest.price,
+  pl_latest.currency,
+  pl_latest.status        AS listing_status,
+  pl_latest.created_on    AS listing_created_on,
+
+  -- Blockchain status:
+  CASE
+    WHEN p.tx_hash IS NULL OR p.tx_hash = '' THEN 'pending'
+    ELSE 'on blockchain'
+  END AS blockchain_status,
+
+  -- Lifecycle status:
+  -- Default should be ACTIVE unless we can prove it was transferred.
+  CASE
+    WHEN EXISTS (
+      SELECT 1
+      FROM fyp_25_s4_20.ownership o
+      WHERE o.product_id = p.product_id
+        AND o.end_on IS NOT NULL
+    )
+    THEN 'transferred'
+    ELSE 'active'
+  END AS lifecycle_status,
+
+  -- Current owner (falls back to manufacturer if no ownership rows yet)
+  COALESCE(o_active.owner_id, p.registered_by) AS current_owner_id,
+  COALESCE(u_owner.username, m.username)       AS current_owner_username,
+  COALESCE(o_active.owner_public_key, m.public_key) AS current_owner_public_key
+
+FROM fyp_25_s4_20.product p
+LEFT JOIN fyp_25_s4_20.users m
+  ON m.user_id = p.registered_by
+
+-- Latest listing per product
+LEFT JOIN LATERAL (
+  SELECT *
+  FROM fyp_25_s4_20.product_listing pl
+  WHERE pl.product_id = p.product_id
+  ORDER BY pl.created_on DESC
+  LIMIT 1
+) pl_latest ON TRUE
+
+-- Active ownership (end_on IS NULL)
+LEFT JOIN LATERAL (
+  SELECT *
+  FROM fyp_25_s4_20.ownership o
+  WHERE o.product_id = p.product_id
+    AND o.end_on IS NULL
+  LIMIT 1
+) o_active ON TRUE
+
+LEFT JOIN fyp_25_s4_20.users u_owner
+  ON u_owner.user_id = o_active.owner_id;
+
+-- ===========================
+-- Product Metadata (for on-chain metadataUri)
+-- ===========================
+CREATE TABLE IF NOT EXISTS product_metadata (
+  product_id INT PRIMARY KEY
+    REFERENCES fyp_25_s4_20.product(product_id)
+    ON DELETE CASCADE,
+
+  metadata_json JSONB NOT NULL,
+  metadata_sha256_hex TEXT NOT NULL,
+
+  created_on TIMESTAMP DEFAULT NOW(),
+  updated_on TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_metadata_sha
+ON product_metadata (metadata_sha256_hex);
+
+CREATE OR REPLACE FUNCTION fyp_25_s4_20.set_updated_on()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_on = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_product_metadata_updated ON fyp_25_s4_20.product_metadata;
+
+CREATE TRIGGER trg_product_metadata_updated
+BEFORE UPDATE ON fyp_25_s4_20.product_metadata
+FOR EACH ROW
+EXECUTE FUNCTION fyp_25_s4_20.set_updated_on();
+
+-- Only 1 REGISTER event per product
+CREATE UNIQUE INDEX IF NOT EXISTS ux_blockchain_node_register_once
+ON fyp_25_s4_20.blockchain_node (product_id)
+WHERE event = 'REGISTER';
+
+-- CREATE UNIQUE INDEX IF NOT EXISTS ux_product_product_pda
+-- ON fyp_25_s4_20.product (product_pda)
+-- WHERE product_pda IS NOT NULL AND product_pda <> '';
+
+CREATE UNIQUE INDEX IF NOT EXISTS ux_product_tx_hash
+ON fyp_25_s4_20.product (tx_hash)
+WHERE tx_hash IS NOT NULL AND tx_hash <> '';
+
+-- product_pda should be unique when present
+CREATE UNIQUE INDEX IF NOT EXISTS ux_product_product_pda
+ON fyp_25_s4_20.product (product_pda)
+WHERE product_pda IS NOT NULL;
+
+ALTER TABLE fyp_25_s4_20.product
+ADD CONSTRAINT product_product_pda_unique UNIQUE (product_pda);
+
+
+
+

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import productController from '../controller/ProductController';
+import pool from '../schema/database';
 
 const router = Router();
 
@@ -19,21 +20,37 @@ router.post('/register', productController.registerProduct.bind(productControlle
 router.post('/:productId/confirm', productController.confirmProduct.bind(productController));
 
 // Example:
+// DELETE /api/products/cancel-by-serial
+router.delete("/cancel-by-serial", productController.cancelBySerial.bind(productController));
+
+// GET /api/products/resume?serial=TEST-META-001
+router.get("/resume", productController.resumeRegistration.bind(productController));
+
+// (optional, but recommended) if user cancels Phantom, cleanup pending record:
+router.delete("/:productId/cancel", productController.cancelPendingById.bind(productController));
+
+// Example:
+// POST /api/products/:productId/confirm
+router.post("/:productId/confirm", productController.confirmProductOnChain.bind(productController));
+
+router.post("/metadata", productController.storeMetadata.bind(productController));
+
+// Example:
 // DELETE /api/products/:productId?manufacturerId=2
 router.delete('/:productId', productController.deleteProduct.bind(productController));
 
-// Example:
-// GET /api/products/9/qrcode
-router.get('/:productId/qrcode',productController.getProductQrCode.bind(productController));
+// // Example:
+// // GET /api/products/9/qrcode
+// router.get('/:productId/qrcode',productController.getProductQrCode.bind(productController));
 
-// Example:
-// GET /api/products/9/edit?manufacturerId=2
-router.get('/:productId/edit', productController.getProductForEdit.bind(productController));
+// // Example:
+// // GET /api/products/9/edit?manufacturerId=2
+// router.get('/:productId/edit', productController.getProductForEdit.bind(productController));
 
-// Example:
-// PUT /api/products/9
-// Update product + regenerate QR
-router.put('/:productId', productController.updateProduct.bind(productController));
+// // Example:
+// // PUT /api/products/9
+// // Update product + regenerate QR
+// router.put('/:productId', productController.updateProduct.bind(productController));
 
 // READ product listings for a manufacturer (includes products without listing)
 router.get('/manufacturer/:manufacturerId/listings', productController.getManufacturerProductListings.bind(productController));

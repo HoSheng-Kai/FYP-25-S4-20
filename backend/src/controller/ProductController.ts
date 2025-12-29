@@ -13,14 +13,9 @@ import { ListingUpdate, ListingStatus } from '../entities/ListingUpdate';
 import { QrCodeService } from '../service/QrCodeService';
 
 import pool from '../schema/database';
-
-import {connection, airdropSol, MEMO_PROGRAM_ID} from "../schema/solana";
-const {Transaction, LAMPORTS_PER_SOL, TransactionInstruction, Keypair, PublicKey } = require('@solana/web3.js');
-
-import bs58 from 'bs58';
-import { blockchain_node, ownership } from "../db/table";
-
-
+import fs from "fs";
+import path from "path";
+import crypto from "crypto";
 
 class ProductController {
     async registerProduct(req: Request, res: Response): Promise<void> {
@@ -96,257 +91,561 @@ class ProductController {
     }
   }
 
-  async confirmProduct(req: Request, res: Response): Promise<void> {
-  try {
-    const productId = Number(req.params.productId);
-    const { manufacturerId, private_key } = req.body ?? {};
+  // GET /api/products/resume?serial=TEST-META-001
+  async resumeRegistration(req: Request, res: Response): Promise<void> {
+    try {
+      const serial = req.query.serial as string | undefined;
+      if (!serial?.trim()) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'serial' query parameter",
+          example: "/api/products/resume?serial=TEST-META-001",
+        });
+        return;
+      }
 
-    // ✅ validate productId separately
-    if (Number.isNaN(productId) || productId <= 0) {
-      res.status(400).json({
-        success: false,
-        error: 'Invalid productId in URL',
-        details: { received: req.params.productId },
+      // Find the product record (registered/pending or already on-chain)
+      const p = await pool.query(
+        `
+        SELECT
+          p.product_id,
+          p.serial_no,
+          p.model,
+          p.batch_no,
+          p.category,
+          p.manufacture_date,
+          p.description,
+          p.status,
+          p.registered_on,
+          p.registered_by,
+          p.product_pda,
+          p.tx_hash,
+          u.public_key AS manufacturer_public_key
+        FROM fyp_25_s4_20.product p
+        LEFT JOIN fyp_25_s4_20.users u ON u.user_id = p.registered_by
+        WHERE p.serial_no = $1
+        LIMIT 1;
+        `,
+        [serial.trim()]
+      );
+
+      if (p.rows.length === 0) {
+        res.status(404).json({ success: false, error: "Product not found in DB" });
+        return;
+      }
+
+      const row = p.rows[0];
+
+      res.status(200).json({
+        success: true,
+        data: {
+          productId: row.product_id,
+          serialNo: row.serial_no,
+          productName: row.model,
+          batchNo: row.batch_no,
+          category: row.category,
+          manufactureDate: row.manufacture_date,
+          description: row.description,
+          status: row.status,
+          registeredOn: row.registered_on,
+
+          manufacturerId: row.registered_by,
+          manufacturerPublicKey: row.manufacturer_public_key,
+
+          productPda: row.product_pda,
+          txHash: row.tx_hash,
+
+          blockchainStatus: row.tx_hash ? "on blockchain" : "pending",
+        },
       });
-      return;
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to resume registration",
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // DELETE /api/products/:productId/cancel   body: { manufacturerId }
+  async cancelPendingById(req: Request, res: Response): Promise<void> {
+    const client = await pool.connect();
+    try {
+      const productId = Number(req.params.productId);
+      const { manufacturerId } = (req.body || {}) as any;
+
+      if (!productId || !manufacturerId) {
+        res.status(400).json({
+          success: false,
+          error: "Missing required fields",
+          details: ["productId", "manufacturerId"],
+          receivedBody: req.body ?? null,
+        });
+        return;
+      }
+
+      await client.query("BEGIN");
+
+      // Lock row
+      const check = await client.query(
+        `
+        SELECT product_id, registered_by, tx_hash
+        FROM fyp_25_s4_20.product
+        WHERE product_id = $1
+        FOR UPDATE;
+        `,
+        [productId]
+      );
+
+      if (check.rows.length === 0) {
+        await client.query("ROLLBACK");
+        res.status(404).json({ success: false, error: "Product not found" });
+        return;
+      }
+
+      const prod = check.rows[0];
+
+      // Must be the same manufacturer who created it
+      if (prod.registered_by !== manufacturerId) {
+        await client.query("ROLLBACK");
+        res.status(403).json({
+          success: false,
+          error: "Not allowed",
+          details: "You are not the manufacturer who registered this product",
+        });
+        return;
+      }
+
+      // If already confirmed, do NOT delete
+      if (prod.tx_hash) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          success: false,
+          error: "Cannot cancel",
+          details: "Product already has tx_hash (already on-chain / confirmed)",
+        });
+        return;
+      }
+
+      // Delete metadata first (FK cascade exists in your schema, but safe anyway)
+      await client.query(
+        `DELETE FROM fyp_25_s4_20.product_metadata WHERE product_id = $1;`,
+        [productId]
+      );
+
+      // Delete product (will cascade delete listing/ownership if any)
+      await client.query(
+        `DELETE FROM fyp_25_s4_20.product WHERE product_id = $1;`,
+        [productId]
+      );
+
+      await client.query("COMMIT");
+
+      res.status(200).json({
+        success: true,
+        data: { cancelled: true, productId },
+      });
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {}
+      res.status(500).json({
+        success: false,
+        error: "Failed to cancel pending product",
+        details: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      client.release();
+    }
+  }
+
+  // DELETE /api/products/cancel-by-serial
+  async cancelBySerial(req: Request, res: Response) {
+    const { manufacturerId, serialNo } = req.body ?? {};
+    if (!manufacturerId || !serialNo) {
+      return res.status(400).json({ success:false, error:"Missing fields" });
     }
 
-    // ✅ validate body fields (do NOT include productId here)
-    if (!manufacturerId || !private_key) {
+    await pool.query(`DELETE FROM fyp_25_s4_20.product_listing WHERE product_id IN (
+      SELECT product_id FROM fyp_25_s4_20.product WHERE serial_no=$1 AND registered_by=$2 AND tx_hash IS NULL
+    )`, [serialNo, manufacturerId]);
+
+    const del = await pool.query(`
+      DELETE FROM fyp_25_s4_20.product
+      WHERE serial_no = $1 AND registered_by = $2 AND tx_hash IS NULL
+      RETURNING product_id, serial_no;
+    `, [serialNo, manufacturerId]);
+
+    if (del.rows.length === 0) {
+      return res.status(409).json({ success:false, error:"Nothing to cancel (maybe already confirmed)" });
+    }
+
+    return res.json({ success:true, data: del.rows[0] });
+  }
+  
+  // POST /api/products/:productId/confirm
+  async confirmProductOnChain(req: Request, res: Response): Promise<void> {
+  const client = await pool.connect();
+  try {
+    const productId = Number(req.params.productId);
+    const { manufacturerId, txHash, productPda, blockSlot } = (req.body || {}) as any;
+
+    // ✅ Require txHash for confirm
+    if (!productId || !manufacturerId || !txHash) {
       res.status(400).json({
         success: false,
-        error: 'Missing required fields',
-        details: ['manufacturerId', 'private_key'],
+        error: "Missing required fields",
+        details: ["productId", "manufacturerId", "txHash"],
         receivedBody: req.body ?? null,
       });
       return;
     }
 
-    // ===== Build keypair =====
-    const keypair = Keypair.fromSecretKey(bs58.decode(private_key));
-
-    // ===== Ensure SOL balance =====
-    const balance = await connection.getBalance(keypair.publicKey);
-    const needAmount = 0.01 * LAMPORTS_PER_SOL;
-
-    if (balance < needAmount) {
-      await airdropSol(private_key, needAmount);
+    if (typeof manufacturerId !== "number") {
+      res.status(400).json({ success: false, error: "manufacturerId must be a number" });
+      return;
     }
 
-    // ===== Solana memo =====
-    const memoData = JSON.stringify({
-      type: 'PRODUCT_CONFIRM',
-      productId,
-      manufacturerId,
-      timestamp: new Date().toISOString(),
-    });
+    await client.query("BEGIN");
 
-    const transaction = new Transaction();
-
-    const memoInstruction = new TransactionInstruction({
-      keys: [
-        {
-          pubkey: keypair.publicKey,
-          isSigner: true,
-          isWritable: true,
-        },
-      ],
-      programId: MEMO_PROGRAM_ID,
-      data: Buffer.from(memoData, 'utf-8'),
-    });
-
-    transaction.add(memoInstruction);
-
-    const { blockhash } = await connection.getLatestBlockhash();
-    transaction.recentBlockhash = blockhash;
-    transaction.feePayer = keypair.publicKey;
-
-    transaction.sign(keypair);
-
-    const txHash = await connection.sendRawTransaction(
-      transaction.serialize()
+    // 1) Lock product row
+    const check = await client.query(
+      `
+      SELECT product_id, registered_by, tx_hash, product_pda
+      FROM fyp_25_s4_20.product
+      WHERE product_id = $1
+      FOR UPDATE;
+      `,
+      [productId]
     );
 
-    // ===== Persist confirmation =====
-    const result = await ProductConfirmation.confirmProduct({
-      productId,
-      manufacturerId,
-      txHash,
-      fromPublicKey: keypair.publicKey.toBase58(),
-    });
+    if (check.rows.length === 0) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ success: false, error: "Product not found" });
+      return;
+    }
 
-    res.json({
+    const prod = check.rows[0];
+
+    if (prod.registered_by !== manufacturerId) {
+      await client.query("ROLLBACK");
+      res.status(403).json({
+        success: false,
+        error: "Not allowed",
+        details: "You are not the manufacturer who registered this product",
+      });
+      return;
+    }
+
+    // ✅ 2) Idempotency behavior
+    // If already confirmed:
+    if (prod.tx_hash) {
+      // same tx? -> success (resume-friendly)
+      if (prod.tx_hash === txHash) {
+        await client.query("COMMIT");
+        res.status(200).json({
+          success: true,
+          data: {
+            product: {
+              product_id: prod.product_id,
+              tx_hash: prod.tx_hash,
+              product_pda: prod.product_pda,
+            },
+            alreadyConfirmed: true,
+          },
+        });
+        return;
+      }
+
+      // different tx? -> conflict
+      await client.query("ROLLBACK");
+      res.status(409).json({
+        success: false,
+        error: "Already on blockchain",
+        details: `Existing tx_hash differs. existing=${prod.tx_hash} incoming=${txHash}`,
+      });
+      return;
+    }
+
+    // 3) Update product row
+    const updated = await client.query(
+      `
+      UPDATE fyp_25_s4_20.product
+      SET tx_hash = $1,
+          product_pda = COALESCE($2, product_pda)
+      WHERE product_id = $3
+      RETURNING product_id, serial_no, tx_hash, product_pda;
+      `,
+      [txHash, productPda ?? null, productId]
+    );
+
+    // 4) Insert blockchain_node event safely (optional, non-blocking)
+    // If your blockchain_node table schema is unstable, do NOT let it break confirm.
+    try {
+      const userRes = await client.query(
+        `SELECT public_key FROM fyp_25_s4_20.users WHERE user_id = $1;`,
+        [manufacturerId]
+      );
+
+      const manufacturerPublicKey: string | null = userRes.rows[0]?.public_key ?? null;
+
+      const slot: number = typeof blockSlot === "number" ? blockSlot : Date.now();
+
+      // ✅ If public_key missing, skip logging instead of failing confirm
+      if (manufacturerPublicKey) {
+        await client.query(
+          `
+          INSERT INTO fyp_25_s4_20.blockchain_node (
+            tx_hash,
+            prev_tx_hash,
+            from_user_id,
+            from_public_key,
+            to_user_id,
+            to_public_key,
+            product_id,
+            block_slot,
+            event,
+            created_on
+          )
+          VALUES ($1, NULL, $2, $3, $2, $3, $4, $5, 'REGISTER', NOW())
+          ON CONFLICT (tx_hash) DO NOTHING;
+          `,
+          [txHash, manufacturerId, manufacturerPublicKey, productId, slot]
+        );
+      }
+    } catch (logErr) {
+      // ✅ Never fail confirm because of blockchain_node logging
+      console.warn("blockchain_node insert skipped:", logErr);
+    }
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
       success: true,
-      message: 'Product confirmed on blockchain',
-      data: result,
+      data: {
+        product: updated.rows[0],
+        confirmed: true,
+      },
     });
   } catch (err) {
+    try {
+      await client.query("ROLLBACK"); // ✅ must be client
+    } catch {}
     res.status(500).json({
       success: false,
-      error: 'Failed to confirm product',
+      error: "Failed to confirm product on blockchain",
       details: err instanceof Error ? err.message : String(err),
+    });
+  } finally {
+    client.release();
+  }
+}
+
+async storeMetadata(req: Request, res: Response) {
+  try {
+    const { productId, metadata } = req.body;
+
+    if (!productId || !metadata) {
+      return res.status(400).json({
+        success: false,
+        error: "Missing productId or metadata",
+      });
+    }
+
+    // 1) Write JSON file to disk (EXACT bytes we hash)
+    const dir = path.join(process.cwd(), "metadata");
+    fs.mkdirSync(dir, { recursive: true });
+
+    const filePath = path.join(dir, `${productId}.json`);
+    const jsonText = JSON.stringify(metadata); // ✅ no pretty printing
+    fs.writeFileSync(filePath, jsonText, "utf8");
+
+    // 2) Hash metadata (sha256)
+    const hashHex = crypto.createHash("sha256").update(jsonText, "utf8").digest("hex");
+
+    // 3) Store metadata in DB (store the SAME jsonText)
+    await pool.query(
+      `
+      INSERT INTO fyp_25_s4_20.product_metadata
+        (product_id, metadata_json, metadata_sha256_hex)
+      VALUES ($1, $2::jsonb, $3)
+      ON CONFLICT (product_id)
+      DO UPDATE SET
+        metadata_json = EXCLUDED.metadata_json,
+        metadata_sha256_hex = EXCLUDED.metadata_sha256_hex;
+      `,
+      [productId, jsonText, hashHex]
+    );
+
+    // 4) Return URI + hash (frontend will pass hash to chain)
+    const metadataUri = `http://localhost:3000/metadata/${productId}.json`;
+    return res.json({ metadataUri, metadataSha256Hex: hashHex });
+  } catch (e: any) {
+    console.error("storeMetadata error:", e);
+    return res.status(500).json({
+      success: false,
+      error: e.message ?? "Failed to store metadata",
     });
   }
 }
 
+  // // GET /api/products/:productId/qrcode
+  // async getProductQrCode(req: Request, res: Response): Promise<void> {
+  //   console.log('GET /api/products/:productId/qrcode called with', req.params);
+  //   try {
+  //     const productId = Number(req.params.productId);
 
-  // GET /api/products/:productId/qrcode
-  async getProductQrCode(req: Request, res: Response): Promise<void> {
-    console.log('GET /api/products/:productId/qrcode called with', req.params);
-    try {
-      const productId = Number(req.params.productId);
+  //     if (Number.isNaN(productId)) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: 'productId must be a number',
+  //       });
+  //       return;
+  //     }
 
-      if (Number.isNaN(productId)) {
-        res.status(400).json({
-          success: false,
-          error: 'productId must be a number',
-        });
-        return;
-      }
+  //     // 1) Load product (including qr_code if already stored)
+  //     const productRes = await pool.query(
+  //       `
+  //       SELECT
+  //         product_id,
+  //         serial_no,
+  //         registered_by,
+  //         qr_code
+  //       FROM fyp_25_s4_20.product
+  //       WHERE product_id = $1;
+  //       `,
+  //       [productId]
+  //     );
 
-      // 1) Load product (including qr_code if already stored)
-      const productRes = await pool.query(
-        `
-        SELECT
-          product_id,
-          serial_no,
-          registered_by,
-          qr_code
-        FROM fyp_25_s4_20.product
-        WHERE product_id = $1;
-        `,
-        [productId]
-      );
+  //     if (productRes.rows.length === 0) {
+  //       res.status(404).json({
+  //         success: false,
+  //         error: 'Product not found',
+  //       });
+  //       return;
+  //     }
 
-      if (productRes.rows.length === 0) {
-        res.status(404).json({
-          success: false,
-          error: 'Product not found',
-        });
-        return;
-      }
+  //     const product = productRes.rows[0];
 
-      const product = productRes.rows[0];
+  //     let qrBuffer: Buffer;
 
-      let qrBuffer: Buffer;
+  //     if (product.qr_code) {
+  //       // 2A) We already have QR bytes in DB
+  //       qrBuffer = product.qr_code;
+  //     } else {
+  //       // 2B) No QR in DB yet – generate one now, store it, then return it
 
-      if (product.qr_code) {
-        // 2A) We already have QR bytes in DB
-        qrBuffer = product.qr_code;
-      } else {
-        // 2B) No QR in DB yet – generate one now, store it, then return it
+  //       // Build a payload – same logic as in ProductRegistration
+  //       const payload = QrCodeService.buildPayload(
+  //         product.product_id,
+  //         product.serial_no,
+  //         product.registered_by
+  //       );
 
-        // Build a payload – same logic as in ProductRegistration
-        const payload = QrCodeService.buildPayload(
-          product.product_id,
-          product.serial_no,
-          product.registered_by
-        );
+  //       qrBuffer = await QrCodeService.generatePngBuffer(payload);
 
-        qrBuffer = await QrCodeService.generatePngBuffer(payload);
+  //       // Save into DB for future reuse
+  //       await pool.query(
+  //         `
+  //         UPDATE fyp_25_s4_20.product
+  //         SET qr_code = $1
+  //         WHERE product_id = $2;
+  //         `,
+  //         [qrBuffer, product.product_id]
+  //       );
+  //     }
 
-        // Save into DB for future reuse
-        await pool.query(
-          `
-          UPDATE fyp_25_s4_20.product
-          SET qr_code = $1
-          WHERE product_id = $2;
-          `,
-          [qrBuffer, product.product_id]
-        );
-      }
+  //     // 3) Return as image/png
+  //     res.setHeader('Content-Type', 'image/png');
+  //     res.setHeader('Content-Length', qrBuffer.length.toString());
+  //     res.send(qrBuffer);
+  //   } catch (err) {
+  //     res.status(500).json({
+  //       success: false,
+  //       error: 'Failed to generate QR code',
+  //       details: err instanceof Error ? err.message : String(err),
+  //     });
+  //   }
+  // }
 
-      // 3) Return as image/png
-      res.setHeader('Content-Type', 'image/png');
-      res.setHeader('Content-Length', qrBuffer.length.toString());
-      res.send(qrBuffer);
-    } catch (err) {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to generate QR code',
-        details: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+  // // PUT /api/products/:productId
+  // async updateProduct(req: Request, res: Response): Promise<void> {
+  //   try {
+  //     const productId = Number(req.params.productId);
 
-  // PUT /api/products/:productId
-  async updateProduct(req: Request, res: Response): Promise<void> {
-    try {
-      const productId = Number(req.params.productId);
+  //     if (Number.isNaN(productId)) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: 'productId must be a number',
+  //       });
+  //       return;
+  //     }
 
-      if (Number.isNaN(productId)) {
-        res.status(400).json({
-          success: false,
-          error: 'productId must be a number',
-        });
-        return;
-      }
+  //     const {
+  //       manufacturerId,
+  //       serialNo,
+  //       productName,
+  //       batchNo,
+  //       category,
+  //       manufactureDate,
+  //       description,
+  //     } = req.body || {};
 
-      const {
-        manufacturerId,
-        serialNo,
-        productName,
-        batchNo,
-        category,
-        manufactureDate,
-        description,
-      } = req.body || {};
+  //     if (!manufacturerId) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: 'manufacturerId is required in body',
+  //       });
+  //       return;
+  //     }
 
-      if (!manufacturerId) {
-        res.status(400).json({
-          success: false,
-          error: 'manufacturerId is required in body',
-        });
-        return;
-      }
+  //     const apiBase = process.env.API_BASE_URL || 'http://localhost:3000';
 
-      const apiBase = process.env.API_BASE_URL || 'http://localhost:3000';
+  //     try {
+  //       const updated = await ProductUpdate.updateProductWithQr({
+  //         productId,
+  //         manufacturerId,
+  //         serialNo,
+  //         productName,
+  //         batchNo,
+  //         category,
+  //         manufactureDate,
+  //         description,
+  //       });
 
-      try {
-        const updated = await ProductUpdate.updateProductWithQr({
-          productId,
-          manufacturerId,
-          serialNo,
-          productName,
-          batchNo,
-          category,
-          manufactureDate,
-          description,
-        });
+  //       res.json({
+  //         success: true,
+  //         data: {
+  //           productId: updated.product_id,
+  //           serialNumber: updated.serial_no,
+  //           productName: updated.model,
+  //           batchNumber: updated.batch_no,
+  //           category: updated.category,
+  //           manufactureDate: updated.manufacture_date,
+  //           productDescription: updated.description,
+  //           status: updated.status,
+  //           registeredOn: updated.registered_on,
+  //           qrPayload: updated.qr_payload,
 
-        res.json({
-          success: true,
-          data: {
-            productId: updated.product_id,
-            serialNumber: updated.serial_no,
-            productName: updated.model,
-            batchNumber: updated.batch_no,
-            category: updated.category,
-            manufactureDate: updated.manufacture_date,
-            productDescription: updated.description,
-            status: updated.status,
-            registeredOn: updated.registered_on,
-            qrPayload: updated.qr_payload,
-
-            // frontend can immediately refresh this image
-            qrImageUrl: `${apiBase}/api/products/${updated.product_id}/qrcode`,
-          },
-        });
-      } catch (err: any) {
-        res.status(400).json({
-          success: false,
-          error: 'Failed to update product',
-          details: err instanceof Error ? err.message : String(err),
-        });
-      }
-    } catch (err) {
-      res.status(500).json({
-        success: false,
-        error: 'Unexpected error while updating product',
-        details: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
+  //           // frontend can immediately refresh this image
+  //           qrImageUrl: `${apiBase}/api/products/${updated.product_id}/qrcode`,
+  //         },
+  //       });
+  //     } catch (err: any) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: 'Failed to update product',
+  //         details: err instanceof Error ? err.message : String(err),
+  //       });
+  //     }
+  //   } catch (err) {
+  //     res.status(500).json({
+  //       success: false,
+  //       error: 'Unexpected error while updating product',
+  //       details: err instanceof Error ? err.message : String(err),
+  //     });
+  //   }
+  // }
 
   // GET /api/products/manufacturer/:manufacturerId/listings
   async getManufacturerProductListings(req: Request, res: Response): Promise<void> {
@@ -402,91 +701,361 @@ class ProductController {
     }
   }
 
-  // GET /api/products/:productId/edit?manufacturerId=2
-  async getProductForEdit(req: Request, res: Response): Promise<void> {
+  // // GET /api/products/:productId/edit?manufacturerId=2
+  // async getProductForEdit(req: Request, res: Response): Promise<void> {
+  //   try {
+  //     const productId = Number(req.params.productId);
+  //     const manufacturerIdParam = req.query.manufacturerId as string | undefined;
+
+  //     if (Number.isNaN(productId)) {
+  //       res.status(400).json({ success: false, error: 'productId must be a number' });
+  //       return;
+  //     }
+  //     if (!manufacturerIdParam) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: "Missing 'manufacturerId' query parameter",
+  //       });
+  //       return;
+  //     }
+
+  //     const manufacturerId = Number(manufacturerIdParam);
+  //     if (Number.isNaN(manufacturerId)) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: "'manufacturerId' must be a number",
+  //       });
+  //       return;
+  //     }
+
+  //     // Read product from DB
+  //     const result = await pool.query(
+  //       `
+  //       SELECT
+  //         p.product_id,
+  //         p.serial_no,
+  //         p.model,
+  //         p.batch_no,
+  //         p.category,
+  //         p.manufacture_date,
+  //         p.description,
+  //         p.status,
+  //         p.registered_on,
+  //         p.registered_by
+  //       FROM fyp_25_s4_20.product p
+  //       WHERE p.product_id = $1;
+  //       `,
+  //       [productId]
+  //     );
+
+  //     if (result.rows.length === 0) {
+  //       res.status(404).json({ success: false, error: 'Product not found' });
+  //       return;
+  //     }
+
+  //     const p = result.rows[0];
+
+  //     if (p.registered_by !== manufacturerId) {
+  //       res.status(403).json({
+  //         success: false,
+  //         error: 'You are not allowed to edit this product',
+  //       });
+  //       return;
+  //     }
+
+  //     const apiBase = process.env.API_BASE_URL || 'http://localhost:3000';
+
+  //     res.json({
+  //       success: true,
+  //       data: {
+  //         productId: p.product_id,
+  //         serialNumber: p.serial_no,
+  //         productName: p.model,
+  //         batchNumber: p.batch_no,
+  //         category: p.category,
+  //         manufactureDate: p.manufacture_date,
+  //         productDescription: p.description,
+  //         status: p.status,
+  //         registeredOn: p.registered_on,
+
+  //         // for QR display on the Edit page:
+  //         qrImageUrl: `${apiBase}/api/products/${p.product_id}/qrcode`,
+  //       },
+  //     });
+  //   } catch (err) {
+  //     res.status(500).json({
+  //       success: false,
+  //       error: 'Failed to load product for editing',
+  //       details: err instanceof Error ? err.message : String(err),
+  //     });
+  //   }
+  // }
+
+  // GET /api/products/marketplace/listings
+  async getMarketplaceListings(req: Request, res: Response): Promise<void> {
     try {
-      const productId = Number(req.params.productId);
-      const manufacturerIdParam = req.query.manufacturerId as string | undefined;
-
-      if (Number.isNaN(productId)) {
-        res.status(400).json({ success: false, error: 'productId must be a number' });
-        return;
-      }
-      if (!manufacturerIdParam) {
-        res.status(400).json({
-          success: false,
-          error: "Missing 'manufacturerId' query parameter",
-        });
-        return;
-      }
-
-      const manufacturerId = Number(manufacturerIdParam);
-      if (Number.isNaN(manufacturerId)) {
-        res.status(400).json({
-          success: false,
-          error: "'manufacturerId' must be a number",
-        });
-        return;
-      }
-
-      // Read product from DB
-      const result = await pool.query(
-        `
-        SELECT
-          p.product_id,
-          p.serial_no,
-          p.model,
-          p.batch_no,
-          p.category,
-          p.manufacture_date,
-          p.description,
-          p.status,
-          p.registered_on,
-          p.registered_by
-        FROM fyp_25_s4_20.product p
-        WHERE p.product_id = $1;
-        `,
-        [productId]
-      );
-
-      if (result.rows.length === 0) {
-        res.status(404).json({ success: false, error: 'Product not found' });
-        return;
-      }
-
-      const p = result.rows[0];
-
-      if (p.registered_by !== manufacturerId) {
-        res.status(403).json({
-          success: false,
-          error: 'You are not allowed to edit this product',
-        });
-        return;
-      }
-
-      const apiBase = process.env.API_BASE_URL || 'http://localhost:3000';
+      const rows = await MarketplaceListing.findAvailable();
 
       res.json({
         success: true,
-        data: {
-          productId: p.product_id,
-          serialNumber: p.serial_no,
-          productName: p.model,
-          batchNumber: p.batch_no,
-          category: p.category,
-          manufactureDate: p.manufacture_date,
-          productDescription: p.description,
-          status: p.status,
-          registeredOn: p.registered_on,
+        data: rows.map(row => ({
+          listingId: row.listing_id,
+          productId: row.product_id,
+          serialNumber: row.serial_no,
+          productName: row.model,
+          productStatus: row.product_status,        // registered / verified / suspicious
+          registeredOn: row.registered_on,
 
-          // for QR display on the Edit page:
-          qrImageUrl: `${apiBase}/api/products/${p.product_id}/qrcode`,
-        },
+          price: row.price,
+          currency: row.currency,
+          listingStatus: row.listing_status,        // should be 'available'
+          listingCreatedOn: row.listing_created_on,
+
+          seller: {
+            userId: row.seller_id,
+            username: row.seller_username,
+            role: row.seller_role,                  // distributor / retailer / manufacturer
+          },
+
+          blockchainStatus: row.blockchain_status,  // 'on blockchain' | 'pending'
+          isAuthentic: row.product_status === 'verified',
+        })),
       });
     } catch (err) {
       res.status(500).json({
         success: false,
-        error: 'Failed to load product for editing',
+        error: 'Failed to fetch marketplace listings',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // GET /api/products/listings/:listingId/edit?userId=8
+async getListingForEdit(req: Request, res: Response): Promise<void> {
+  try {
+    const listingId = Number(req.params.listingId);
+    const userIdParam = req.query.userId as string | undefined;
+
+    if (Number.isNaN(listingId)) {
+      res.status(400).json({ success: false, error: 'listingId must be a number' });
+      return;
+    }
+    if (!userIdParam) {
+      res.status(400).json({
+        success: false,
+        error: "Missing 'userId' query parameter",
+        example: `/api/products/listings/${listingId}/edit?userId=8`,
+      });
+      return;
+    }
+
+    const userId = Number(userIdParam);
+    if (Number.isNaN(userId)) {
+      res.status(400).json({ success: false, error: 'userId must be a number' });
+      return;
+    }
+
+    try {
+      const listing = await ListingUpdate.getListingForUser(listingId, userId);
+
+      res.json({
+        success: true,
+        data: {
+          listingId: listing.listing_id,
+          productId: listing.product_id,
+          serialNumber: listing.serial_no,
+          productName: listing.model,
+          price: listing.price,
+          currency: listing.currency,
+          status: listing.status,
+          createdOn: listing.created_on,
+        },
+      });
+    } catch (err: any) {
+      res.status(403).json({
+        success: false,
+        error: 'Cannot load listing for edit',
+        details: err.message ?? String(err),
+      });
+    }
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: 'Unexpected error while loading listing for edit',
+      details: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+  // PUT /api/products/listings/:listingId
+  async updateListing(req: Request, res: Response): Promise<void> {
+    try {
+      const listingId = Number(req.params.listingId);
+      if (Number.isNaN(listingId)) {
+        res.status(400).json({ success: false, error: 'listingId must be a number' });
+        return;
+      }
+
+      const { userId, price, currency, status } = req.body || {};
+      if (!userId) {
+        res.status(400).json({ success: false, error: 'userId is required in request body' });
+        return;
+      }
+
+      const userIdNum = Number(userId);
+      if (Number.isNaN(userIdNum)) {
+        res.status(400).json({ success: false, error: 'userId must be a number' });
+        return;
+      }
+
+      try {
+        const updated = await ListingUpdate.updateListingForUser({
+          listingId,
+          userId: userIdNum,
+          price,
+          currency,
+          status,
+        });
+
+        res.json({
+          success: true,
+          data: {
+            listingId: updated.listing_id,
+            productId: updated.product_id,
+            serialNumber: updated.serial_no,
+            productName: updated.model,
+            price: updated.price,
+            currency: updated.currency,
+            status: updated.status,
+            updatedOn: updated.created_on,
+          },
+        });
+      } catch (err: any) {
+        res.status(403).json({
+          success: false,
+          error: 'Cannot update listing',
+          details: err.message ?? String(err),
+        });
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Unexpected error while updating listing',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // DELETE /api/products/listings/:listingId?userId=8
+  async deleteListing(req: Request, res: Response): Promise<void> {
+    try {
+      const listingId = Number(req.params.listingId);
+      const userIdParam = req.query.userId as string | undefined;
+
+      if (Number.isNaN(listingId)) {
+        res.status(400).json({ success: false, error: 'listingId must be a number' });
+        return;
+      }
+      if (!userIdParam) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'userId' query parameter",
+          example: `/api/products/listings/${listingId}?userId=8`,
+        });
+        return;
+      }
+
+      const userId = Number(userIdParam);
+      if (Number.isNaN(userId)) {
+        res.status(400).json({ success: false, error: 'userId must be a number' });
+        return;
+      }
+
+      try {
+        await ListingUpdate.deleteListingForUser(listingId, userId);
+        res.json({ success: true, message: 'Listing deleted successfully' });
+      } catch (err: any) {
+        const msg = err.message ?? String(err);
+        if (msg === 'Listing not found') {
+          res.status(404).json({ success: false, error: 'Listing not found' });
+        } else {
+          res.status(403).json({
+            success: false,
+            error: 'Cannot delete listing',
+            details: msg,
+          });
+        }
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Unexpected error while deleting listing',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // PATCH /api/products/listings/:listingId/availability
+  async updateListingAvailability(req: Request, res: Response): Promise<void> {
+    try {
+      const listingId = Number(req.params.listingId);
+      if (Number.isNaN(listingId)) {
+        res.status(400).json({ success: false, error: 'listingId must be a number' });
+        return;
+      }
+
+      const { userId, status } = req.body || {};
+      if (!userId) {
+        res.status(400).json({ success: false, error: 'userId is required in request body' });
+        return;
+      }
+
+      const userIdNum = Number(userId);
+      if (Number.isNaN(userIdNum)) {
+        res.status(400).json({ success: false, error: 'userId must be a number' });
+        return;
+      }
+
+      const allowedStatuses: ListingStatus[] = ['available', 'reserved', 'sold'];
+      if (!status || !allowedStatuses.includes(status)) {
+        res.status(400).json({
+          success: false,
+          error: `Invalid status. Allowed: ${allowedStatuses.join(', ')}`,
+        });
+        return;
+      }
+
+      try {
+        const updated = await ListingUpdate.updateListingForUser({
+          listingId,
+          userId: userIdNum,
+          status,
+        });
+
+        res.json({
+          success: true,
+          data: {
+            listingId: updated.listing_id,
+            productId: updated.product_id,
+            serialNumber: updated.serial_no,
+            productName: updated.model,
+            price: updated.price,
+            currency: updated.currency,
+            status: updated.status,
+            updatedOn: updated.created_on,
+          },
+        });
+      } catch (err: any) {
+        res.status(403).json({
+          success: false,
+          error: 'Cannot update availability for this listing',
+          details: err.message ?? String(err),
+        });
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Unexpected error while updating listing availability',
         details: err instanceof Error ? err.message : String(err),
       });
     }
@@ -801,7 +1370,8 @@ async getListingForEdit(req: Request, res: Response): Promise<void> {
 
           manufacturer: result.manufacturer,
           currentOwner: result.currentOwner,
-
+          
+          lifecycleStatus: result.lifecycleStatus,
           blockchainStatus: result.blockchainStatus,
           isAuthentic: result.isAuthentic,
         },

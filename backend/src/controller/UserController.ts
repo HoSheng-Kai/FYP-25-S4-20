@@ -41,11 +41,11 @@ class UserController {
         req.body.username,
         req.body.password
       );
+      let otp: number = generate_OTP();
 
       // If verified, send otp?
       if(user.verified){
         // Send otp here
-        let otp: number = generate_OTP();
         await sendOTP(user.email, otp);
 
         res.json({
@@ -58,7 +58,10 @@ class UserController {
       }
       
       res.json({
-        success: false,
+        success: true,
+        otp: otp,
+        role: user.role,
+        userId: user.userId,
         verified: user.verified
       });
       
