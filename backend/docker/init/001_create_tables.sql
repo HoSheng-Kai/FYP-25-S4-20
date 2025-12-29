@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS users (
     private_key TEXT,
     public_key TEXT,
     verified BOOLEAN,
+    banned BOOLEAN DEFAULT FALSE,
     created_on TIMESTAMP DEFAULT NOW()
 );
 

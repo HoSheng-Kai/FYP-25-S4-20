@@ -6,12 +6,28 @@ import {generate_OTP, sendOTP} from '../utils/email_service';
 import { Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
 
+import { encrypt, decrypt } from '../utils/encryption';
+
 class UserController {
   async createAccount(req: Request, res: Response){
     try{
       let key_pair = Keypair.generate();
       let public_key = key_pair.publicKey.toBase58();
       let private_key = bs58.encode(key_pair.secretKey);
+
+      // // TODO: Encryption
+      // let encrypted_email = await encrypt(req.body.email);
+      // let encrypted_password = await encrypt(req.body.password);
+      // let encrypted_private_key = await encrypt(private_key);
+
+      // await User.createAccount(
+      //   req.body.username,
+      //   encrypted_password,
+      //   encrypted_email,
+      //   req.body.role_id,
+      //   encrypted_private_key,
+      //   public_key
+      // );
 
       await User.createAccount(
         req.body.username,
@@ -38,25 +54,44 @@ class UserController {
   async loginAccount(req: Request, res: Response){
     try{
       let user = await User.loginAccount(
-        req.body.username,
-        req.body.password
+        req.body.username
       );
-      let otp: number = generate_OTP();
 
-      // If verified, send otp?
-      if(user.verified){
-        // Send otp here
-        await sendOTP(user.email, otp);
+      // // TODO: Decryption
+      // if(req.body.password != await decrypt(user.password)){
+      //   res.json({
+      //   success: false,
+      //   error: 'User entered wrong password'
+      //   });
+      //   return;
+      // }
 
+      // If not verified
+      if(!user.verified){
         res.json({
-          success: true,
-          otp: otp,
-          role: user.role,
-          userId: user.userId,
-          verified: user.verified
+        success: false,
+        error: 'User is not verified',
+        verified: user.verified
         });
+        return;
       }
+
+      // If banned
+      if(user.banned){
+        res.json({
+        success: false,
+        error: 'User is banned',
+        banned: user.banned
+        });
+        return;
+      }
+
+      // // TODO: Decryption
+      // let email = await decrypt(user.email);
       
+      let otp: number = generate_OTP();
+      await sendOTP(user.email, otp);
+
       res.json({
         success: true,
         otp: otp,

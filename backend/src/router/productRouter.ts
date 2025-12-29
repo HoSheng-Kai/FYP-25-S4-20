@@ -16,8 +16,8 @@ router.get('/history', productController.getTransactionHistory.bind(productContr
 // POST /api/products/register
 router.post('/register', productController.registerProduct.bind(productController));
 
-// POST /api/products/:productId/confirm
-router.post('/:productId/confirm', productController.confirmProduct.bind(productController));
+// // POST /api/products/:productId/confirm
+// router.post('/:productId/confirm', productController.confirmProduct.bind(productController));
 
 // Example:
 // DELETE /api/products/cancel-by-serial

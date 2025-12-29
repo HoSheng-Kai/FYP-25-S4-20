@@ -9,15 +9,13 @@ const vaultClient = vault({
   token: process.env.VAULT_TOKEN
 });
 
-export async function encrypt(plaintext: string): Promise<{ ciphertext: string }> {
+export async function encrypt(plaintext: string): Promise<string> {
   try {
     const { data } = await vaultClient.write('transit/encrypt/my-app-key', {
       plaintext: Buffer.from(plaintext).toString('base64')
     });
     
-    return {
-      ciphertext: data.ciphertext
-    };
+    return data.ciphertext;
   } catch (error) {
     console.error('Encryption failed:', error);
     throw error;
@@ -29,7 +27,7 @@ export async function decrypt(ciphertext: string): Promise<string> {
     const { data } = await vaultClient.write('transit/decrypt/my-app-key', {
       ciphertext: ciphertext
     });
-    
+
     return Buffer.from(data.plaintext, 'base64').toString('utf8');
   } catch (error) {
     console.error('Decryption failed:', error);
