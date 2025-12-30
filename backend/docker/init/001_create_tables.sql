@@ -281,4 +281,88 @@ CREATE INDEX IF NOT EXISTS idx_product_metadata_sha
 ON fyp_25_s4_20.product_metadata (metadata_sha256_hex);
 
 
+DROP VIEW IF EXISTS fyp_25_s4_20.v_product_read CASCADE;
+
+-- Read model view with latest listing info
+CREATE VIEW fyp_25_s4_20.v_product_read AS
+SELECT
+  p.product_id,
+  p.serial_no,
+  p.model                 AS product_name,
+  p.category,
+  p.batch_no,
+  p.manufacture_date,
+  p.description,
+  p.status                AS product_status,
+  p.registered_on,
+  p.track,
+
+  -- Manufacturer info
+  p.registered_by         AS manufacturer_id,
+  m.username              AS manufacturer_username,
+  m.public_key            AS manufacturer_public_key,
+  m.verified              AS manufacturer_verified,
+
+  -- On-chain linkage
+  p.product_pda,
+  p.tx_hash,
+
+  -- Latest listing (THIS WAS MISSING)
+  pl_latest.listing_id,
+  pl_latest.price,
+  pl_latest.currency,
+  pl_latest.status        AS listing_status,
+  pl_latest.created_on    AS listing_created_on,
+
+  -- Blockchain status
+  CASE
+    WHEN p.tx_hash IS NULL OR p.tx_hash = '' THEN 'pending'
+    ELSE 'on blockchain'
+  END AS blockchain_status,
+
+  -- Lifecycle status
+  CASE
+    WHEN EXISTS (
+      SELECT 1
+      FROM fyp_25_s4_20.ownership o
+      WHERE o.product_id = p.product_id
+        AND o.end_on IS NOT NULL
+    )
+    THEN 'transferred'
+    ELSE 'active'
+  END AS lifecycle_status,
+
+  -- Current owner
+  COALESCE(o_active.owner_id, p.registered_by) AS current_owner_id,
+  COALESCE(u_owner.username, m.username)       AS current_owner_username,
+  COALESCE(o_active.owner_public_key, m.public_key) AS current_owner_public_key
+
+FROM fyp_25_s4_20.product p
+LEFT JOIN fyp_25_s4_20.users m
+  ON m.user_id = p.registered_by
+
+-- Latest listing per product
+LEFT JOIN LATERAL (
+  SELECT *
+  FROM fyp_25_s4_20.product_listing pl
+  WHERE pl.product_id = p.product_id
+  ORDER BY pl.created_on DESC
+  LIMIT 1
+) pl_latest ON TRUE
+
+-- Active ownership
+LEFT JOIN LATERAL (
+  SELECT *
+  FROM fyp_25_s4_20.ownership o
+  WHERE o.product_id = p.product_id
+    AND o.end_on IS NULL
+  LIMIT 1
+) o_active ON TRUE
+
+LEFT JOIN fyp_25_s4_20.users u_owner
+  ON u_owner.user_id = o_active.owner_id;
+
+
+
+
 

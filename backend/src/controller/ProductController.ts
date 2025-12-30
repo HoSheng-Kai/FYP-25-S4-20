@@ -297,7 +297,6 @@ class ProductController {
     return res.json({ success: true, data: del.rows[0] });
   }
 
-
   // POST /api/products/:productId/confirm
   async confirmProductOnChain(req: Request, res: Response): Promise<void> {
     const client = await pool.connect();
@@ -394,7 +393,7 @@ class ProductController {
     }
   }
 
-
+  // POST /api/products/:productId/metadata-final
   async storeMetadataAfterConfirm(req: Request, res: Response) {
     try {
       const productId = Number(req.params.productId);
@@ -492,165 +491,148 @@ class ProductController {
     }
   }
 
+  // GET /api/products/:productId/qrcode
+  async getProductQrCode(req: Request, res: Response): Promise<void> {
+    console.log('GET /api/products/:productId/qrcode called with', req.params);
+    try {
+      const productId = Number(req.params.productId);
 
+      if (Number.isNaN(productId)) {
+        res.status(400).json({
+          success: false,
+          error: 'productId must be a number',
+        });
+        return;
+      }
 
-  // // GET /api/products/:productId/qrcode
-  // async getProductQrCode(req: Request, res: Response): Promise<void> {
-  //   console.log('GET /api/products/:productId/qrcode called with', req.params);
-  //   try {
-  //     const productId = Number(req.params.productId);
+      // 1) Load product (including qr_code if already stored)
+      const productRes = await pool.query(
+        `
+        SELECT
+          product_id,
+          serial_no,
+          registered_by,
+          qr_code
+        FROM fyp_25_s4_20.product
+        WHERE product_id = $1;
+        `,
+        [productId]
+      );
 
-  //     if (Number.isNaN(productId)) {
-  //       res.status(400).json({
-  //         success: false,
-  //         error: 'productId must be a number',
-  //       });
-  //       return;
-  //     }
+      if (productRes.rows.length === 0) {
+        res.status(404).json({
+          success: false,
+          error: 'Product not found',
+        });
+        return;
+      }
 
-  //     // 1) Load product (including qr_code if already stored)
-  //     const productRes = await pool.query(
-  //       `
-  //       SELECT
-  //         product_id,
-  //         serial_no,
-  //         registered_by,
-  //         qr_code
-  //       FROM fyp_25_s4_20.product
-  //       WHERE product_id = $1;
-  //       `,
-  //       [productId]
-  //     );
+      const product = productRes.rows[0];
 
-  //     if (productRes.rows.length === 0) {
-  //       res.status(404).json({
-  //         success: false,
-  //         error: 'Product not found',
-  //       });
-  //       return;
-  //     }
+      let qrBuffer: Buffer;
 
-  //     const product = productRes.rows[0];
+      if (product.qr_code) {
+        // 2A) We already have QR bytes in DB
+        qrBuffer = product.qr_code;
+      } else {
+        // 2B) No QR in DB yet – generate one now, store it, then return it
 
-  //     let qrBuffer: Buffer;
+        // Build a payload – same logic as in ProductRegistration
+        const payload = QrCodeService.buildPayload(
+          product.product_id,
+          product.serial_no,
+          product.registered_by
+        );
 
-  //     if (product.qr_code) {
-  //       // 2A) We already have QR bytes in DB
-  //       qrBuffer = product.qr_code;
-  //     } else {
-  //       // 2B) No QR in DB yet – generate one now, store it, then return it
+        qrBuffer = await QrCodeService.generatePngBuffer(payload);
 
-  //       // Build a payload – same logic as in ProductRegistration
-  //       const payload = QrCodeService.buildPayload(
-  //         product.product_id,
-  //         product.serial_no,
-  //         product.registered_by
-  //       );
+        // Save into DB for future reuse
+        await pool.query(
+          `
+          UPDATE fyp_25_s4_20.product
+          SET qr_code = $1
+          WHERE product_id = $2;
+          `,
+          [qrBuffer, product.product_id]
+        );
+      }
 
-  //       qrBuffer = await QrCodeService.generatePngBuffer(payload);
+      // 3) Return as image/png
+      res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Content-Length', qrBuffer.length.toString());
+      res.send(qrBuffer);
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to generate QR code',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
-  //       // Save into DB for future reuse
-  //       await pool.query(
-  //         `
-  //         UPDATE fyp_25_s4_20.product
-  //         SET qr_code = $1
-  //         WHERE product_id = $2;
-  //         `,
-  //         [qrBuffer, product.product_id]
-  //       );
-  //     }
+  // PUT /api/products/:productId
+  async updateProduct(req: Request, res: Response): Promise<void> {
+    try {
+      const productId = Number(req.params.productId);
 
-  //     // 3) Return as image/png
-  //     res.setHeader('Content-Type', 'image/png');
-  //     res.setHeader('Content-Length', qrBuffer.length.toString());
-  //     res.send(qrBuffer);
-  //   } catch (err) {
-  //     res.status(500).json({
-  //       success: false,
-  //       error: 'Failed to generate QR code',
-  //       details: err instanceof Error ? err.message : String(err),
-  //     });
-  //   }
-  // }
+      if (Number.isNaN(productId)) {
+        res.status(400).json({ success: false, error: "productId must be a number" });
+        return;
+      }
 
-  // // PUT /api/products/:productId
-  // async updateProduct(req: Request, res: Response): Promise<void> {
-  //   try {
-  //     const productId = Number(req.params.productId);
+      const {
+        manufacturerId,
+        serialNo, // will be rejected if you try to change it
+        productName,
+        batchNo,
+        category,
+        manufactureDate,
+        description,
+      } = req.body || {};
 
-  //     if (Number.isNaN(productId)) {
-  //       res.status(400).json({
-  //         success: false,
-  //         error: 'productId must be a number',
-  //       });
-  //       return;
-  //     }
+      if (!manufacturerId || typeof manufacturerId !== "number") {
+        res.status(400).json({ success: false, error: "manufacturerId is required in body (number)" });
+        return;
+      }
 
-  //     const {
-  //       manufacturerId,
-  //       serialNo,
-  //       productName,
-  //       batchNo,
-  //       category,
-  //       manufactureDate,
-  //       description,
-  //     } = req.body || {};
+      const apiBase = process.env.API_BASE_URL || "http://localhost:3000";
 
-  //     if (!manufacturerId) {
-  //       res.status(400).json({
-  //         success: false,
-  //         error: 'manufacturerId is required in body',
-  //       });
-  //       return;
-  //     }
+      const updated = await ProductUpdate.updateProductWithQr({
+        productId,
+        manufacturerId,
+        serialNo,
+        productName,
+        batchNo,
+        category,
+        manufactureDate,
+        description,
+      });
 
-  //     const apiBase = process.env.API_BASE_URL || 'http://localhost:3000';
-
-  //     try {
-  //       const updated = await ProductUpdate.updateProductWithQr({
-  //         productId,
-  //         manufacturerId,
-  //         serialNo,
-  //         productName,
-  //         batchNo,
-  //         category,
-  //         manufactureDate,
-  //         description,
-  //       });
-
-  //       res.json({
-  //         success: true,
-  //         data: {
-  //           productId: updated.product_id,
-  //           serialNumber: updated.serial_no,
-  //           productName: updated.model,
-  //           batchNumber: updated.batch_no,
-  //           category: updated.category,
-  //           manufactureDate: updated.manufacture_date,
-  //           productDescription: updated.description,
-  //           status: updated.status,
-  //           registeredOn: updated.registered_on,
-  //           qrPayload: updated.qr_payload,
-
-  //           // frontend can immediately refresh this image
-  //           qrImageUrl: `${apiBase}/api/products/${updated.product_id}/qrcode`,
-  //         },
-  //       });
-  //     } catch (err: any) {
-  //       res.status(400).json({
-  //         success: false,
-  //         error: 'Failed to update product',
-  //         details: err instanceof Error ? err.message : String(err),
-  //       });
-  //     }
-  //   } catch (err) {
-  //     res.status(500).json({
-  //       success: false,
-  //       error: 'Unexpected error while updating product',
-  //       details: err instanceof Error ? err.message : String(err),
-  //     });
-  //   }
-  // }
+      res.json({
+        success: true,
+        data: {
+          productId: updated.product_id,
+          serialNumber: updated.serial_no,
+          productName: updated.model,
+          batchNumber: updated.batch_no,
+          category: updated.category,
+          manufactureDate: updated.manufacture_date,
+          productDescription: updated.description,
+          status: updated.status,
+          registeredOn: updated.registered_on,
+          qrPayload: updated.qr_payload,
+          qrImageUrl: `${apiBase}/api/products/${updated.product_id}/qrcode`,
+        },
+      });
+    } catch (err: any) {
+      const status = err?.status ?? 500;
+      res.status(status).json({
+        success: false,
+        error: "Failed to update product",
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   // GET /api/products/manufacturer/:manufacturerId/listings
   async getManufacturerProductListings(req: Request, res: Response): Promise<void> {
@@ -706,95 +688,121 @@ class ProductController {
     }
   }
 
-  // // GET /api/products/:productId/edit?manufacturerId=2
-  // async getProductForEdit(req: Request, res: Response): Promise<void> {
-  //   try {
-  //     const productId = Number(req.params.productId);
-  //     const manufacturerIdParam = req.query.manufacturerId as string | undefined;
+  // GET /api/products/:productId/edit?manufacturerId=2
+  async getProductForEdit(req: Request, res: Response): Promise<void> {
+    try {
+      const productId = Number(req.params.productId);
+      const manufacturerIdParam = req.query.manufacturerId as string | undefined;
 
-  //     if (Number.isNaN(productId)) {
-  //       res.status(400).json({ success: false, error: 'productId must be a number' });
-  //       return;
-  //     }
-  //     if (!manufacturerIdParam) {
-  //       res.status(400).json({
-  //         success: false,
-  //         error: "Missing 'manufacturerId' query parameter",
-  //       });
-  //       return;
-  //     }
+      if (!Number.isFinite(productId) || productId <= 0) {
+        res.status(400).json({ success: false, error: "productId must be a positive number" });
+        return;
+      }
 
-  //     const manufacturerId = Number(manufacturerIdParam);
-  //     if (Number.isNaN(manufacturerId)) {
-  //       res.status(400).json({
-  //         success: false,
-  //         error: "'manufacturerId' must be a number",
-  //       });
-  //       return;
-  //     }
+      if (!manufacturerIdParam) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'manufacturerId' query parameter",
+        });
+        return;
+      }
 
-  //     // Read product from DB
-  //     const result = await pool.query(
-  //       `
-  //       SELECT
-  //         p.product_id,
-  //         p.serial_no,
-  //         p.model,
-  //         p.batch_no,
-  //         p.category,
-  //         p.manufacture_date,
-  //         p.description,
-  //         p.status,
-  //         p.registered_on,
-  //         p.registered_by
-  //       FROM fyp_25_s4_20.product p
-  //       WHERE p.product_id = $1;
-  //       `,
-  //       [productId]
-  //     );
+      const manufacturerId = Number(manufacturerIdParam);
 
-  //     if (result.rows.length === 0) {
-  //       res.status(404).json({ success: false, error: 'Product not found' });
-  //       return;
-  //     }
+      if (!Number.isFinite(manufacturerId) || manufacturerId <= 0) {
+        res.status(400).json({
+          success: false,
+          error: "'manufacturerId' must be a positive number",
+        });
+        return;
+      }
 
-  //     const p = result.rows[0];
+      // Read product from DB (include tx_hash + track so we can enforce rules)
+      const result = await pool.query(
+        `
+        SELECT
+          p.product_id,
+          p.serial_no,
+          p.model,
+          p.batch_no,
+          p.category,
+          p.manufacture_date,
+          p.description,
+          p.status,
+          p.registered_on,
+          p.registered_by,
+          p.tx_hash,
+          p.track
+        FROM fyp_25_s4_20.product p
+        WHERE p.product_id = $1
+        LIMIT 1;
+        `,
+        [productId]
+      );
 
-  //     if (p.registered_by !== manufacturerId) {
-  //       res.status(403).json({
-  //         success: false,
-  //         error: 'You are not allowed to edit this product',
-  //       });
-  //       return;
-  //     }
+      if (result.rows.length === 0) {
+        res.status(404).json({ success: false, error: "Product not found" });
+        return;
+      }
 
-  //     const apiBase = process.env.API_BASE_URL || 'http://localhost:3000';
+      const p = result.rows[0];
 
-  //     res.json({
-  //       success: true,
-  //       data: {
-  //         productId: p.product_id,
-  //         serialNumber: p.serial_no,
-  //         productName: p.model,
-  //         batchNumber: p.batch_no,
-  //         category: p.category,
-  //         manufactureDate: p.manufacture_date,
-  //         productDescription: p.description,
-  //         status: p.status,
-  //         registeredOn: p.registered_on,
+      // Only the manufacturer who registered this product can edit
+      if (p.registered_by !== manufacturerId) {
+        res.status(403).json({
+          success: false,
+          error: "You are not allowed to edit this product",
+        });
+        return;
+      }
 
-  //         // for QR display on the Edit page:
-  //         qrImageUrl: `${apiBase}/api/products/${p.product_id}/qrcode`,
-  //       },
-  //     });
-  //   } catch (err) {
-  //     res.status(500).json({
-  //       success: false,
-  //       error: 'Failed to load product for editing',
-  //       details: err instanceof Error ? err.message : String(err),
-  //     });
-  //   }
-  // }
+      // ✅ If already confirmed on-chain, editing should be blocked
+      if (p.tx_hash) {
+        res.status(409).json({
+          success: false,
+          error: "Cannot edit",
+          details: "Product is already confirmed on blockchain (tx_hash exists).",
+        });
+        return;
+      }
+
+      // OPTIONAL: block editing if not tracking anymore
+      // if (p.track === false) {
+      //   res.status(409).json({
+      //     success: false,
+      //     error: "Cannot edit",
+      //     details: "This product is no longer tracked.",
+      //   });
+      //   return;
+      // }
+
+      const apiBase = process.env.API_BASE_URL || "http://localhost:3000";
+
+      res.json({
+        success: true,
+        data: {
+          productId: p.product_id,
+          serialNumber: p.serial_no,
+          productName: p.model,
+          batchNumber: p.batch_no,
+          category: p.category,
+          manufactureDate: p.manufacture_date,
+          productDescription: p.description,
+          status: p.status,
+          registeredOn: p.registered_on,
+
+          // for QR display on the Edit page:
+          qrImageUrl: `${apiBase}/api/products/${p.product_id}/qrcode`,
+        },
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to load product for editing",
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
 
   // GET /api/products/marketplace/listings
   async getMarketplaceListings(req: Request, res: Response): Promise<void> {
@@ -803,40 +811,42 @@ class ProductController {
 
       res.json({
         success: true,
-        data: rows.map(row => ({
+        data: rows.map((row) => ({
           listingId: row.listing_id,
           productId: row.product_id,
           serialNumber: row.serial_no,
           productName: row.model,
-          productStatus: row.product_status,        // registered / verified / suspicious
+          productStatus: row.product_status,
           registeredOn: row.registered_on,
 
           price: row.price,
           currency: row.currency,
-          listingStatus: row.listing_status,        // should be 'available'
+          listingStatus: row.listing_status,
           listingCreatedOn: row.listing_created_on,
 
           seller: {
             userId: row.seller_id,
             username: row.seller_username,
-            role: row.seller_role,                  // distributor / retailer / manufacturer
+            role: row.seller_role,
           },
 
-          blockchainStatus: row.blockchain_status,  // 'on blockchain' | 'pending'
-          isAuthentic: row.product_status === 'verified',
+          blockchainStatus: row.blockchain_status,
+
+          // simple rule
+          isAuthentic: row.product_status === "verified" && row.blockchain_status === "on blockchain",
         })),
       });
     } catch (err) {
       res.status(500).json({
         success: false,
-        error: 'Failed to fetch marketplace listings',
+        error: "Failed to fetch marketplace listings",
         details: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
   // GET /api/products/listings/:listingId/edit?userId=8
-async getListingForEdit(req: Request, res: Response): Promise<void> {
+  async getListingForEdit(req: Request, res: Response): Promise<void> {
   try {
     const listingId = Number(req.params.listingId);
     const userIdParam = req.query.userId as string | undefined;
@@ -890,7 +900,7 @@ async getListingForEdit(req: Request, res: Response): Promise<void> {
       details: err instanceof Error ? err.message : String(err),
     });
   }
-}
+  }
 
   // PUT /api/products/listings/:listingId
   async updateListing(req: Request, res: Response): Promise<void> {
@@ -1121,7 +1131,7 @@ async getListingForEdit(req: Request, res: Response): Promise<void> {
   }
 
     // GET /api/products/history?serial=NIKE-AIR-001
-    async getTransactionHistory(req: Request, res: Response) {
+  async getTransactionHistory(req: Request, res: Response) {
     try {
       const serial = req.query.serial as string | undefined;
 

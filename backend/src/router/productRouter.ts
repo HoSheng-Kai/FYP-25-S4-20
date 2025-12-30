@@ -33,23 +33,22 @@ router.post("/:productId/confirm", productController.confirmProductOnChain.bind(
 // router.post("/metadata", productController.storeMetadata.bind(productController));
 router.post("/:productId/metadata-final", productController.storeMetadataAfterConfirm.bind(productController));
 
-
 // Example:
 // DELETE /api/products/:productId?manufacturerId=2
 router.delete('/:productId', productController.deleteProduct.bind(productController));
 
-// // Example:
-// // GET /api/products/9/qrcode
-// router.get('/:productId/qrcode',productController.getProductQrCode.bind(productController));
+// Example:
+// GET /api/products/9/qrcode
+router.get('/:productId/qrcode',productController.getProductQrCode.bind(productController));
 
-// // Example:
-// // GET /api/products/9/edit?manufacturerId=2
-// router.get('/:productId/edit', productController.getProductForEdit.bind(productController));
+// Example:
+// GET /api/products/9/edit?manufacturerId=2
+router.get('/:productId/edit', productController.getProductForEdit.bind(productController));
 
-// // Example:
-// // PUT /api/products/9
-// // Update product + regenerate QR
-// router.put('/:productId', productController.updateProduct.bind(productController));
+// Example:
+// PUT /api/products/9
+// Update product + regenerate QR
+router.put('/:productId', productController.updateProduct.bind(productController));
 
 // READ product listings for a manufacturer (includes products without listing)
 router.get('/manufacturer/:manufacturerId/listings', productController.getManufacturerProductListings.bind(productController));
