@@ -1,8 +1,13 @@
 {
   "compilerOptions": {
-    "moduleResolution": "node",
+    "target": "ES2019",
+    "module": "commonjs",
+    "rootDir": "src",
+    "outDir": "dist",
     "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
-    "types": ["node"]
-  }
+    "strict": false
+  },
+  "include": ["src"]
 }

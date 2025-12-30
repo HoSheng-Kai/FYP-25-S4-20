@@ -35,15 +35,16 @@ END $$;
 -- ===========================
 
 CREATE TABLE IF NOT EXISTS users (
-  user_id SERIAL PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  role_id user_role NOT NULL,
-  private_key TEXT,
-  public_key TEXT,
-  verified BOOLEAN,
-  created_on TIMESTAMP DEFAULT NOW()
+    user_id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    role_id user_role NOT NULL,
+    private_key TEXT,
+    public_key TEXT,
+    verified BOOLEAN,
+    banned BOOLEAN DEFAULT FALSE,
+    created_on TIMESTAMP DEFAULT NOW()
 );
 
 -- ===========================

@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { ProductScan } from '../entities/Product';
 import { ProductRegistration } from '../entities/ProductRegistration';
+import { ProductConfirmation } from '../entities/ProductConfirmation';
 import { ProductHistory, ProductHistoryResult } from '../entities/ProductHistory';
 import { ProductDeletion } from '../entities/ProductDeletion';
 import { ProductQr } from '../entities/ProductQr';
@@ -18,8 +19,7 @@ import crypto from "crypto";
 
 
 class ProductController {
-  // POST /api/products/register
-  async registerProduct(req: Request, res: Response): Promise<void> {
+    async registerProduct(req: Request, res: Response): Promise<void> {
     try {
       const {
         manufacturerId,
@@ -30,7 +30,7 @@ class ProductController {
         manufactureDate,
         description,
         price,
-        currency,
+        currency
       } = (req.body || {}) as any;
 
       if (!manufacturerId || !serialNo) {
@@ -54,6 +54,7 @@ class ProductController {
       }
 
       try {
+        // ✅ DB-only registration (pending)
         const result = await ProductRegistration.registerProduct({
           manufacturerId,
           serialNo,
@@ -63,12 +64,13 @@ class ProductController {
           manufactureDate,
           description,
           price,
-          currency,
+          currency
         });
 
         res.status(201).json({
           success: true,
           data: result,
+          blockchainStatus: 'pending'
         });
       } catch (err: any) {
         // ✅ clean typed 409 for "serial cannot be reused"

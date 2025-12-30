@@ -18,6 +18,9 @@ router.post('/verify-owner', ValidationController.verifyOwner);
 // Get and verify current owner of a product
 router.get('/product/:productId/current-owner', ValidationController.getCurrentOwner);
 
+// Validate a product registration transaction
+router.post('/product-registration', ValidationController.validateProductRegistration);
+
 export default router;
 
 /*
