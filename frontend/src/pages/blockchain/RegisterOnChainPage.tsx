@@ -3,6 +3,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { SystemProgram } from "@solana/web3.js";
 import axios from "axios";
+import { Buffer } from "buffer";
 
 import { getProvider, getProgram } from "../../lib/anchorClient";
 import { deriveProductPda } from "../../lib/pdas";
@@ -11,8 +12,6 @@ import { encodeJsonBytes, sha256Bytes, type ProductMetadata } from "../../lib/me
 export default function RegisterOnChainPage() {
   const wallet = useWallet();
 
-  console.log("wallets", (window as any).solana, (window as any).phantom);
-  
   const [serialNo, setSerialNo] = useState("");
   const [productName, setProductName] = useState("");
   const [batchNo, setBatchNo] = useState("");
@@ -21,56 +20,49 @@ export default function RegisterOnChainPage() {
   const [description, setDescription] = useState("");
   const [status, setStatus] = useState("");
 
-  const manufacturerId = 2; // keep consistent for now
+  const manufacturerId = 2;
 
   async function cancelPending() {
-  try {
-    if (!serialNo.trim()) throw new Error("Serial number is required to cancel");
+    try {
+      const serialToUse = serialNo.trim();
+      if (!serialToUse) throw new Error("Serial number is required to cancel");
 
-    const manufacturerId = 2;
+      setStatus("Cancelling pending DB registration...");
 
-    setStatus("Cancelling pending DB registration...");
+      const resp = await axios.delete("http://localhost:3000/api/products/cancel-by-serial", {
+        data: { manufacturerId, serialNo: serialToUse },
+      });
 
-    const resp = await axios.delete("http://localhost:3000/api/products/cancel-by-serial", {
-      data: { manufacturerId, serialNo },
-    });
+      setStatus(`✅ Cancelled pending product\n${JSON.stringify(resp.data, null, 2)}`);
 
-    const cancelled = resp.data?.data;
-    setStatus(
-      `✅ Cancelled pending product\nproductId=${cancelled?.product_id}\nserial=${cancelled?.serial_no}`
-    );
-
-    // optional: clear form
-    setSerialNo("");
-    setProductName("");
-    setBatchNo("");
-    setCategory("");
-    setManufactureDate("");
-    setDescription("");
-  } catch (e: any) {
-    const msg = e?.response?.data
-      ? JSON.stringify(e.response.data, null, 2)
-      : (e?.message ?? String(e));
-    setStatus(`❌ Cancel failed:\n${msg}`);
+      // optional: clear form
+      setSerialNo("");
+      setProductName("");
+      setBatchNo("");
+      setCategory("");
+      setManufactureDate("");
+      setDescription("");
+    } catch (e: any) {
+      const msg = e?.response?.data
+        ? JSON.stringify(e.response.data, null, 2)
+        : (e?.message ?? String(e));
+      setStatus(`❌ Cancel failed:\n${msg}`);
+    }
   }
-}
 
   async function submit() {
-  let productId: number | null = null;
-
-  try {
-    if (!wallet.publicKey) throw new Error("Connect wallet first");
-    if (!serialNo.trim()) throw new Error("Serial number is required");
-
-    const manufacturerId = 2;
-
-    // 1) Make / reuse DB row
-    setStatus("1/5 Ensure product exists in DB...");
-
     try {
+      if (!wallet.publicKey) throw new Error("Connect wallet first");
+
+      const serialToUse = serialNo.trim();
+      if (!serialToUse) throw new Error("Serial number is required");
+
+      // 1) DB register (pending)
+      setStatus("1/4 Ensure product exists in DB...");
+
       const dbRes = await axios.post("http://localhost:3000/api/products/register", {
         manufacturerId,
-        serialNo,
+        serialNo: serialToUse,
         productName,
         batchNo,
         category,
@@ -78,112 +70,69 @@ export default function RegisterOnChainPage() {
         description,
       });
 
-      productId = dbRes.data?.data?.product?.product_id;
-    } catch (e: any) {
-      // If serial already exists, reuse it (resume flow)
-      if (e?.response?.status === 409) {
-        const v = await axios.get("http://localhost:3000/api/products/verify", {
-          params: { serial: serialNo },
-        });
-        // adjust if your verify returns a different shape
-        productId = v.data?.data?.productId ?? v.data?.data?.product?.product_id;
-      } else {
-        throw e;
-      }
-    }
+      const productId: number | undefined = dbRes.data?.data?.product?.product_id;
+      if (!productId) throw new Error("Could not resolve productId from DB");
 
-    if (!productId) throw new Error("Could not resolve productId from DB");
+      // 2) Build metadata + hash locally
+      setStatus("2/4 Build metadata + hash locally...");
 
-    // 2) Build metadata object (NO hashing on frontend)
-    setStatus(`2/5 Build metadata... productId=${productId}`);
+      const meta: ProductMetadata = {
+        serialNo: serialToUse,
+        productName,
+        batchNo,
+        category,
+        manufactureDate,
+        description,
+      };
 
-    const meta: ProductMetadata = {
-      serialNo,
-      productName,
-      batchNo,
-      category,
-      manufactureDate,
-      description,
-    };
+      const metadataBytes = encodeJsonBytes(meta);
+      const metadataHash = await sha256Bytes(metadataBytes);
+      const hashHex = Buffer.from(metadataHash).toString("hex");
 
-    // 3) Backend stores JSON + returns URI + SHA256 HEX (THIS is the hash we use on-chain)
-    setStatus("3/5 Upload metadata to backend...");
+      // ✅ hash-based metadataUri (will exist AFTER metadata-final)
+      const metadataUri = `http://localhost:3000/metadata/${hashHex}.json`;
 
-    const metaRes = await axios.post("http://localhost:3000/api/products/metadata", {
-      productId,
-      metadata: meta,
-    });
+      // 3) Register on-chain
+      setStatus("3/4 Registering on-chain...");
 
-    const metadataUri: string = metaRes.data?.metadataUri;
-    const hashHex: string = metaRes.data?.metadataSha256Hex;
+      const [productPda, _bump, serialHash] = await deriveProductPda(wallet.publicKey, serialToUse);
 
-    if (!metadataUri || !hashHex) throw new Error("Backend did not return metadataUri/hash");
+      const provider = getProvider(wallet);
+      const program = getProgram(provider);
 
-    const metadataHash = Uint8Array.from(Buffer.from(hashHex, "hex"));
+      const txSig = await program.methods
+        .registerProduct(Array.from(serialHash), Array.from(metadataHash), metadataUri)
+        .accounts({
+          product: productPda,
+          manufacturer: wallet.publicKey,
+          systemProgram: SystemProgram.programId,
+        })
+        .rpc();
 
-
-    // 4) Derive PDA and check if already exists on-chain
-    setStatus("4/5 Check chain (resume if already exists)...");
-
-    const [productPda, _bump, serialHash] = await deriveProductPda(wallet.publicKey, serialNo);
-
-    const provider = getProvider(wallet);
-    const program = getProgram(provider);
-
-    const info = await provider.connection.getAccountInfo(productPda);
-
-    // ✅ If PDA exists → RESUME/CONFIRM (do not register again)
-    if (info) {
-      setStatus(`PDA already exists. Resuming confirm...\nPDA=${productPda.toBase58()}`);
-
-      const sigs = await provider.connection.getSignaturesForAddress(productPda, { limit: 1 });
-      const txHash = sigs?.[0]?.signature ?? null;
+      // 4) Confirm DB + finalize metadata in backend
+      setStatus("4/4 Confirming in DB + finalizing metadata...");
 
       await axios.post(`http://localhost:3000/api/products/${productId}/confirm`, {
         manufacturerId,
-        txHash,
+        txHash: txSig,
         productPda: productPda.toBase58(),
       });
 
+      await axios.post(`http://localhost:3000/api/products/${productId}/metadata-final`, {
+        manufacturerId,
+        metadata: meta,
+      });
+
       setStatus(
-        `✅ Resumed & confirmed!\nproductId=${productId}\nPDA=${productPda.toBase58()}\ntx=${txHash ?? "—"}`
+        `✅ Done!\nproductId=${productId}\nPDA=${productPda.toBase58()}\ntx=${txSig}\nuri=${metadataUri}\nhash=${hashHex}`
       );
-      return;
+    } catch (e: any) {
+      const msg = e?.response?.data
+        ? JSON.stringify(e.response.data, null, 2)
+        : (e?.message ?? String(e));
+      setStatus(`❌ Failed:\n${msg}`);
     }
-
-    // 5) PDA not exists → do normal on-chain register
-    setStatus("5/5 Registering on-chain...");
-
-    const txSig = await program.methods
-      .registerProduct(
-        Array.from(serialHash),            // u8[32]
-        Array.from(metadataHash),     // u8[32] from backend hash
-        metadataUri                        // string
-      )
-      .accounts({
-        product: productPda,
-        manufacturer: wallet.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-
-    // confirm DB
-    await axios.post(`http://localhost:3000/api/products/${productId}/confirm`, {
-      manufacturerId,
-      txHash: txSig,
-      productPda: productPda.toBase58(),
-    });
-
-    setStatus(
-      `✅ Done!\nproductId=${productId}\nPDA=${productPda.toBase58()}\ntx=${txSig}\nuri=${metadataUri}\nhash=${hashHex}`
-    );
-  } catch (e: any) {
-    const msg = e?.response?.data
-      ? JSON.stringify(e.response.data, null, 2)
-      : (e?.message ?? String(e));
-    setStatus(`❌ Failed:\n${msg}`);
   }
-}
 
   return (
     <main style={{ padding: 24, maxWidth: 720 }}>
@@ -197,7 +146,13 @@ export default function RegisterOnChainPage() {
       </div>
 
       <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
-        <input value={serialNo} onChange={(e) => setSerialNo(e.target.value)} placeholder="Serial No" style={{ padding: 10 }} />
+        <input
+          value={serialNo}
+          onChange={(e) => setSerialNo(e.target.value)}
+          placeholder="Serial No"
+          style={{ padding: 10 }}
+        />
+
         <input value={productName} onChange={(e) => setProductName(e.target.value)} placeholder="Product Name" style={{ padding: 10 }} />
         <input value={batchNo} onChange={(e) => setBatchNo(e.target.value)} placeholder="Batch No" style={{ padding: 10 }} />
         <input value={category} onChange={(e) => setCategory(e.target.value)} placeholder="Category" style={{ padding: 10 }} />
@@ -205,20 +160,31 @@ export default function RegisterOnChainPage() {
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Description" style={{ padding: 10, minHeight: 90 }} />
       </div>
 
-      <div style={{ display: "flex", gap: 10 }}>
-      <button onClick={submit} style={{ padding: 10, flex: 1 }}>
-        Submit to Blockchain
-      </button>
+      <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+        <button onClick={submit} style={{ padding: 10, flex: 1 }}>
+          Submit to Blockchain
+        </button>
 
-      <button
-        onClick={cancelPending}
-        style={{ padding: 10, flex: 1, background: "#400", color: "#fff" }}
-      >
-        Cancel Pending
-      </button>
-    </div>
+        <button
+          type="button"
+          onClick={() => {
+            setSerialNo("");
+            setProductName("");
+            setBatchNo("");
+            setCategory("");
+            setManufactureDate("");
+            setDescription("");
+            setStatus("");
+          }}
+          style={{ padding: 10 }}
+        >
+          Reset
+        </button>
 
-      
+        <button onClick={cancelPending} style={{ padding: 10, flex: 1, background: "#400", color: "#fff" }}>
+          Cancel Pending
+        </button>
+      </div>
 
       <pre style={{ marginTop: 16, background: "#111", color: "#0f0", padding: 12, whiteSpace: "pre-wrap" }}>
         {status || "Status..."}

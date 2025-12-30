@@ -16,6 +16,7 @@ import fs from "fs";
 import path from "path";
 import crypto from "crypto";
 
+
 class ProductController {
   // POST /api/products/register
   async registerProduct(req: Request, res: Response): Promise<void> {
@@ -70,14 +71,26 @@ class ProductController {
           data: result,
         });
       } catch (err: any) {
-        if (err?.code === '23505') {
+        // ✅ clean typed 409 for "serial cannot be reused"
+        if (err?.status === 409) {
           res.status(409).json({
             success: false,
-            error: 'Serial number already exists',
-            details: 'Choose a unique serial_no',
+            error: "Serial number already exists",
+            details: err.reason ?? "SERIAL_LOCKED",
           });
           return;
         }
+
+        // legacy unique violation
+        if (err?.code === "23505") {
+          res.status(409).json({
+            success: false,
+            error: "Serial number already exists",
+            details: "Choose a unique serial_no",
+          });
+          return;
+        }
+
         throw err;
       }
     } catch (err) {
@@ -261,231 +274,225 @@ class ProductController {
   async cancelBySerial(req: Request, res: Response) {
     const { manufacturerId, serialNo } = req.body ?? {};
     if (!manufacturerId || !serialNo) {
-      return res.status(400).json({ success:false, error:"Missing fields" });
+      return res.status(400).json({ success: false, error: "Missing fields" });
     }
 
-    await pool.query(`DELETE FROM fyp_25_s4_20.product_listing WHERE product_id IN (
-      SELECT product_id FROM fyp_25_s4_20.product WHERE serial_no=$1 AND registered_by=$2 AND tx_hash IS NULL
-    )`, [serialNo, manufacturerId]);
-
-    const del = await pool.query(`
+    // Only cancel if tx_hash IS NULL (pending)
+    const del = await pool.query(
+      `
       DELETE FROM fyp_25_s4_20.product
       WHERE serial_no = $1 AND registered_by = $2 AND tx_hash IS NULL
       RETURNING product_id, serial_no;
-    `, [serialNo, manufacturerId]);
-
-    if (del.rows.length === 0) {
-      return res.status(409).json({ success:false, error:"Nothing to cancel (maybe already confirmed)" });
-    }
-
-    return res.json({ success:true, data: del.rows[0] });
-  }
-  
-  // POST /api/products/:productId/confirm
-  async confirmProductOnChain(req: Request, res: Response): Promise<void> {
-  const client = await pool.connect();
-  try {
-    const productId = Number(req.params.productId);
-    const { manufacturerId, txHash, productPda, blockSlot } = (req.body || {}) as any;
-
-    // ✅ Require txHash for confirm
-    if (!productId || !manufacturerId || !txHash) {
-      res.status(400).json({
-        success: false,
-        error: "Missing required fields",
-        details: ["productId", "manufacturerId", "txHash"],
-        receivedBody: req.body ?? null,
-      });
-      return;
-    }
-
-    if (typeof manufacturerId !== "number") {
-      res.status(400).json({ success: false, error: "manufacturerId must be a number" });
-      return;
-    }
-
-    await client.query("BEGIN");
-
-    // 1) Lock product row
-    const check = await client.query(
-      `
-      SELECT product_id, registered_by, tx_hash, product_pda
-      FROM fyp_25_s4_20.product
-      WHERE product_id = $1
-      FOR UPDATE;
       `,
-      [productId]
+      [serialNo, manufacturerId]
     );
 
-    if (check.rows.length === 0) {
-      await client.query("ROLLBACK");
-      res.status(404).json({ success: false, error: "Product not found" });
-      return;
-    }
-
-    const prod = check.rows[0];
-
-    if (prod.registered_by !== manufacturerId) {
-      await client.query("ROLLBACK");
-      res.status(403).json({
+    if (del.rows.length === 0) {
+      return res.status(409).json({
         success: false,
-        error: "Not allowed",
-        details: "You are not the manufacturer who registered this product",
+        error: "Nothing to cancel (maybe already confirmed)",
       });
-      return;
     }
 
-    // ✅ 2) Idempotency behavior
-    // If already confirmed:
-    if (prod.tx_hash) {
-      // same tx? -> success (resume-friendly)
-      if (prod.tx_hash === txHash) {
-        await client.query("COMMIT");
-        res.status(200).json({
-          success: true,
-          data: {
-            product: {
-              product_id: prod.product_id,
-              tx_hash: prod.tx_hash,
-              product_pda: prod.product_pda,
-            },
-            alreadyConfirmed: true,
-          },
+    return res.json({ success: true, data: del.rows[0] });
+  }
+
+
+  // POST /api/products/:productId/confirm
+  async confirmProductOnChain(req: Request, res: Response): Promise<void> {
+    const client = await pool.connect();
+    try {
+      const productId = Number(req.params.productId);
+      const { manufacturerId, txHash, productPda, blockSlot } = (req.body || {}) as any;
+
+      if (!productId || !manufacturerId || !txHash) {
+        res.status(400).json({
+          success: false,
+          error: "Missing required fields",
+          details: ["productId", "manufacturerId", "txHash"],
+          receivedBody: req.body ?? null,
         });
         return;
       }
 
-      // different tx? -> conflict
-      await client.query("ROLLBACK");
-      res.status(409).json({
-        success: false,
-        error: "Already on blockchain",
-        details: `Existing tx_hash differs. existing=${prod.tx_hash} incoming=${txHash}`,
-      });
-      return;
-    }
+      await client.query("BEGIN");
 
-    // 3) Update product row
-    const updated = await client.query(
-      `
-      UPDATE fyp_25_s4_20.product
-      SET tx_hash = $1,
-          product_pda = COALESCE($2, product_pda)
-      WHERE product_id = $3
-      RETURNING product_id, serial_no, tx_hash, product_pda;
-      `,
-      [txHash, productPda ?? null, productId]
-    );
-
-    // 4) Insert blockchain_node event safely (optional, non-blocking)
-    // If your blockchain_node table schema is unstable, do NOT let it break confirm.
-    try {
-      const userRes = await client.query(
-        `SELECT public_key FROM fyp_25_s4_20.users WHERE user_id = $1;`,
-        [manufacturerId]
+      const check = await client.query(
+        `
+        SELECT product_id, registered_by, tx_hash, product_pda
+        FROM fyp_25_s4_20.product
+        WHERE product_id = $1
+        FOR UPDATE;
+        `,
+        [productId]
       );
 
-      const manufacturerPublicKey: string | null = userRes.rows[0]?.public_key ?? null;
-
-      const slot: number = typeof blockSlot === "number" ? blockSlot : Date.now();
-
-      // ✅ If public_key missing, skip logging instead of failing confirm
-      if (manufacturerPublicKey) {
-        await client.query(
-          `
-          INSERT INTO fyp_25_s4_20.blockchain_node (
-            tx_hash,
-            prev_tx_hash,
-            from_user_id,
-            from_public_key,
-            to_user_id,
-            to_public_key,
-            product_id,
-            block_slot,
-            event,
-            created_on
-          )
-          VALUES ($1, NULL, $2, $3, $2, $3, $4, $5, 'REGISTER', NOW())
-          ON CONFLICT (tx_hash) DO NOTHING;
-          `,
-          [txHash, manufacturerId, manufacturerPublicKey, productId, slot]
-        );
+      if (check.rows.length === 0) {
+        await client.query("ROLLBACK");
+        res.status(404).json({ success: false, error: "Product not found" });
+        return;
       }
-    } catch (logErr) {
-      // ✅ Never fail confirm because of blockchain_node logging
-      console.warn("blockchain_node insert skipped:", logErr);
-    }
 
-    await client.query("COMMIT");
+      const prod = check.rows[0];
 
-    res.status(200).json({
-      success: true,
-      data: {
-        product: updated.rows[0],
-        confirmed: true,
-      },
-    });
-  } catch (err) {
-    try {
-      await client.query("ROLLBACK"); // ✅ must be client
-    } catch {}
-    res.status(500).json({
-      success: false,
-      error: "Failed to confirm product on blockchain",
-      details: err instanceof Error ? err.message : String(err),
-    });
-  } finally {
-    client.release();
-  }
-}
+      if (prod.registered_by !== manufacturerId) {
+        await client.query("ROLLBACK");
+        res.status(403).json({
+          success: false,
+          error: "Not allowed",
+          details: "You are not the manufacturer who registered this product",
+        });
+        return;
+      }
 
-async storeMetadata(req: Request, res: Response) {
-  try {
-    const { productId, metadata } = req.body;
+      // idempotent confirm
+      if (prod.tx_hash) {
+        if (prod.tx_hash === txHash) {
+          await client.query("COMMIT");
+          res.status(200).json({
+            success: true,
+            data: { productId, txHash: prod.tx_hash, productPda: prod.product_pda, alreadyConfirmed: true },
+          });
+          return;
+        }
 
-    if (!productId || !metadata) {
-      return res.status(400).json({
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          success: false,
+          error: "Already on blockchain",
+          details: `Existing tx_hash differs. existing=${prod.tx_hash} incoming=${txHash}`,
+        });
+        return;
+      }
+
+      const updated = await client.query(
+        `
+        UPDATE fyp_25_s4_20.product
+        SET tx_hash = $1,
+            product_pda = COALESCE($2, product_pda)
+        WHERE product_id = $3
+        RETURNING product_id, serial_no, tx_hash, product_pda;
+        `,
+        [txHash, productPda ?? null, productId]
+      );
+
+      await client.query("COMMIT");
+
+      res.status(200).json({
+        success: true,
+        data: { product: updated.rows[0], confirmed: true },
+      });
+    } catch (err) {
+      try { await client.query("ROLLBACK"); } catch {}
+      res.status(500).json({
         success: false,
-        error: "Missing productId or metadata",
+        error: "Failed to confirm product on blockchain",
+        details: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      client.release();
+    }
+  }
+
+
+  async storeMetadataAfterConfirm(req: Request, res: Response) {
+    try {
+      const productId = Number(req.params.productId);
+      const { manufacturerId, metadata } = req.body || {};
+
+      if (!productId || !manufacturerId || !metadata) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required fields",
+          details: ["productId (params)", "manufacturerId", "metadata"],
+        });
+      }
+
+      // 1) Must exist + must be confirmed
+      const p = await pool.query(
+        `
+        SELECT product_id, registered_by, tx_hash
+        FROM fyp_25_s4_20.product
+        WHERE product_id = $1
+        LIMIT 1;
+        `,
+        [productId]
+      );
+
+      if (p.rows.length === 0) {
+        return res.status(404).json({ success: false, error: "Product not found" });
+      }
+
+      const prod = p.rows[0];
+
+      if (prod.registered_by !== manufacturerId) {
+        return res.status(403).json({ success: false, error: "Not allowed" });
+      }
+
+      // ✅ MUST be confirmed before writing metadata file
+      if (!prod.tx_hash) {
+        return res.status(409).json({
+          success: false,
+          error: "Product not yet confirmed on-chain",
+          details: "Confirm the product first, then finalize metadata",
+        });
+      }
+
+      // 2) Block if already finalized (immutability)
+      const existing = await pool.query(
+        `SELECT 1 FROM fyp_25_s4_20.product_metadata WHERE product_id = $1 LIMIT 1;`,
+        [productId]
+      );
+
+      if (existing.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          error: "Metadata already finalized",
+          details: "Metadata is immutable once stored.",
+        });
+      }
+
+      // 3) Hash JSON stable
+      const jsonText = JSON.stringify(metadata);
+      const hashHex = crypto.createHash("sha256").update(jsonText, "utf8").digest("hex");
+
+      // 4) Write file by HASH (never overwrite)
+      const dir = path.join(process.cwd(), "metadata");
+      fs.mkdirSync(dir, { recursive: true });
+
+      const filePath = path.join(dir, `${hashHex}.json`);
+      if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, jsonText, "utf8");
+      }
+
+      // 5) Insert-only DB row (immutable)
+      await pool.query(
+        `
+        INSERT INTO fyp_25_s4_20.product_metadata
+          (product_id, metadata_json, metadata_sha256_hex)
+        VALUES ($1, $2::jsonb, $3);
+        `,
+        [productId, jsonText, hashHex]
+      );
+
+      const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
+      const metadataUri = `${baseUrl}/metadata/${hashHex}.json`;
+
+      return res.json({
+        success: true,
+        metadataUri,
+        metadataSha256Hex: hashHex,
+      });
+    } catch (e: any) {
+      console.error("storeMetadataAfterConfirm error:", e);
+      return res.status(500).json({
+        success: false,
+        error: e.message ?? "Failed to finalize metadata",
       });
     }
-
-    // 1) Write JSON file to disk (EXACT bytes we hash)
-    const dir = path.join(process.cwd(), "metadata");
-    fs.mkdirSync(dir, { recursive: true });
-
-    const filePath = path.join(dir, `${productId}.json`);
-    const jsonText = JSON.stringify(metadata); // ✅ no pretty printing
-    fs.writeFileSync(filePath, jsonText, "utf8");
-
-    // 2) Hash metadata (sha256)
-    const hashHex = crypto.createHash("sha256").update(jsonText, "utf8").digest("hex");
-
-    // 3) Store metadata in DB (store the SAME jsonText)
-    await pool.query(
-      `
-      INSERT INTO fyp_25_s4_20.product_metadata
-        (product_id, metadata_json, metadata_sha256_hex)
-      VALUES ($1, $2::jsonb, $3)
-      ON CONFLICT (product_id)
-      DO UPDATE SET
-        metadata_json = EXCLUDED.metadata_json,
-        metadata_sha256_hex = EXCLUDED.metadata_sha256_hex;
-      `,
-      [productId, jsonText, hashHex]
-    );
-
-    // 4) Return URI + hash (frontend will pass hash to chain)
-    const metadataUri = `http://localhost:3000/metadata/${productId}.json`;
-    return res.json({ metadataUri, metadataSha256Hex: hashHex });
-  } catch (e: any) {
-    console.error("storeMetadata error:", e);
-    return res.status(500).json({
-      success: false,
-      error: e.message ?? "Failed to store metadata",
-    });
   }
-}
+
+
 
   // // GET /api/products/:productId/qrcode
   // async getProductQrCode(req: Request, res: Response): Promise<void> {

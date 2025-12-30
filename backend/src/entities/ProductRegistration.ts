@@ -69,19 +69,22 @@ export class ProductRegistration {
           description,
           registered_on,
           tx_hash,
-          product_pda
+          product_pda,
+          track
         )
-        VALUES ($1, $2, NULL, 'registered', $3, $4, $5, $6, $7, NOW(), NULL, NULL)
+        VALUES ($1, $2, NULL, 'registered', $3, $4, $5, $6, $7, NOW(), NULL, NULL, TRUE)
         ON CONFLICT (serial_no) DO UPDATE
         SET
           model = EXCLUDED.model,
           batch_no = EXCLUDED.batch_no,
           category = EXCLUDED.category,
           manufacture_date = EXCLUDED.manufacture_date,
-          description = EXCLUDED.description
+          description = EXCLUDED.description,
+          track = TRUE
         WHERE
           fyp_25_s4_20.product.registered_by = EXCLUDED.registered_by
           AND fyp_25_s4_20.product.tx_hash IS NULL
+          AND fyp_25_s4_20.product.track = TRUE
         RETURNING
           product_id,
           serial_no,
@@ -107,13 +110,16 @@ export class ProductRegistration {
         ]
       );
 
+
       if (productResult.rows.length === 0) {
-        // Serial exists but can't be reused:
-        // - different manufacturer OR already confirmed on-chain
-        throw new Error(
+        const err: any = new Error(
           "Serial number already exists (belongs to another manufacturer or already confirmed on-chain)"
         );
+        err.status = 409;
+        err.reason = "SERIAL_LOCKED";
+        throw err;
       }
+
 
       const productRow = productResult.rows[0];
 

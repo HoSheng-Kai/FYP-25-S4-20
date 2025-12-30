@@ -30,7 +30,9 @@ router.delete("/:productId/cancel", productController.cancelPendingById.bind(pro
 // POST /api/products/:productId/confirm
 router.post("/:productId/confirm", productController.confirmProductOnChain.bind(productController));
 
-router.post("/metadata", productController.storeMetadata.bind(productController));
+// router.post("/metadata", productController.storeMetadata.bind(productController));
+router.post("/:productId/metadata-final", productController.storeMetadataAfterConfirm.bind(productController));
+
 
 // Example:
 // DELETE /api/products/:productId?manufacturerId=2

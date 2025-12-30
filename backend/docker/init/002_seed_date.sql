@@ -38,8 +38,12 @@ VALUES
 
   ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
    '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
-   '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so', FALSE),
+   '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', FALSE),
 
+--      ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
+--    '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
+--    '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so', FALSE),
+   
   ('adidas_manufacturer','adidas123','adidas@manufacturer.com','manufacturer',
    '2aW6cVrGAGsTv9UXFMpcDRhb9iiPcfxgR1jHoBcYKKTFoFcZYjazQSsQtQEfHhar3MukdKz7jUaWCNVKQaYbgKbp',
    'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc', FALSE),

@@ -88,18 +88,22 @@ async function fetchAndVerifyMetadata(uri: string, expectedHashHex: string) {
   return JSON.parse(text) as ProductMetadata;
 }
 
+async function resolveUserIdByPubkey(pubkey: string): Promise<number | null> {
+  const r = await pool.query(
+    `SELECT user_id FROM fyp_25_s4_20.users WHERE public_key = $1 LIMIT 1`,
+    [pubkey]
+  );
+  return r.rows.length ? r.rows[0].user_id : null;
+}
+
 
 
 async function upsertProductToDb(args: {
   productPda: string;
-  manufacturerPubkey: string;
-  currentOwnerPubkey: string;
+  registeredByUserId: number | null;
   txHash: string | null;
-  metadataUri: string;
-  metadataHashHex: string;
   meta: ProductMetadata;
 }) {
-
   const q = `
     INSERT INTO fyp_25_s4_20.product (
       registered_by,
@@ -115,20 +119,21 @@ async function upsertProductToDb(args: {
       tx_hash
     )
     VALUES (
-      NULL,                 -- registered_by (unknown unless you map pubkey->user_id)
-      $1,                   -- serial_no
-      'verified',           -- status (or 'registered' if you prefer)
-      $2,                   -- model (we'll store productName here since your column is "model")
-      $3,                   -- batch_no
-      $4,                   -- category
-      $5,                   -- manufacture_date
-      $6,                   -- description
+      $1,   -- registered_by
+      $2,   -- serial_no
+      'verified',
+      $3,
+      $4,
+      $5,
+      $6,
+      $7,
       NOW(),
-      $7,                   -- product_pda
-      $8                    -- tx_hash (latest sig involving PDA)
+      $8,
+      $9
     )
     ON CONFLICT (product_pda)
     DO UPDATE SET
+      registered_by = COALESCE(fyp_25_s4_20.product.registered_by, EXCLUDED.registered_by),
       serial_no = EXCLUDED.serial_no,
       model = EXCLUDED.model,
       batch_no = EXCLUDED.batch_no,
@@ -139,6 +144,7 @@ async function upsertProductToDb(args: {
   `;
 
   await pool.query(q, [
+    args.registeredByUserId,
     args.meta.serialNo,
     args.meta.productName ?? null,
     args.meta.batchNo ?? null,
@@ -148,10 +154,7 @@ async function upsertProductToDb(args: {
     args.productPda,
     args.txHash,
   ]);
-
-  // Optional: if you want to log “blockchain_node” entries during sync, we can add later.
 }
-
 
 
 function decodeByIdlDiscriminator(program: Program, idl: any, data: Buffer) {
@@ -264,6 +267,15 @@ async function getOrCreateProductIdByPda(productPda: string, serialNo: string): 
   return ins.rows[0].product_id;
 }
 
+async function getUserIdByPubkey(pubkey: string): Promise<number | null> {
+  const r = await pool.query(
+    `SELECT user_id FROM fyp_25_s4_20.users WHERE public_key = $1 LIMIT 1`,
+    [pubkey]
+  );
+  return r.rows.length ? r.rows[0].user_id : null;
+}
+
+
 async function upsertMetadataToDb(args: {
   productId: number;
   metadata: ProductMetadata;
@@ -287,6 +299,24 @@ async function upsertMetadataToDb(args: {
 }
 
 async function main() {
+
+  const who = await pool.query(`
+    SELECT current_database() as db,
+          current_schema() as schema,
+          inet_server_addr() as server_ip,
+          inet_server_port() as port,
+          current_user as user
+  `);
+  console.log("DB CONNECTED:", who.rows[0]);
+
+  const tables = await pool.query(`
+    SELECT table_schema, table_name
+    FROM information_schema.tables
+    WHERE table_name IN ('product', 'product_metadata')
+    ORDER BY table_schema, table_name;
+  `);
+  console.log("TABLES FOUND:", tables.rows);
+
   console.log("RPC:", RPC_URL);
   console.log("Program:", PROGRAM_ID.toBase58());
 
@@ -334,16 +364,16 @@ async function main() {
       // latest tx touching PDA
       const txHash = await getLatestTxForAddress(a.pubkey);
 
-      // upsert into product table
+      const manufacturerPubkey = decoded.manufacturer.toBase58();
+      const registeredByUserId = await resolveUserIdByPubkey(manufacturerPubkey);
+
       await upsertProductToDb({
         productPda,
-        manufacturerPubkey: decoded.manufacturer.toBase58(),
-        currentOwnerPubkey: decoded.currentOwner.toBase58(),
+        registeredByUserId,
         txHash,
-        metadataUri: decoded.metadataUri,
-        metadataHashHex,
         meta,
       });
+
 
       // ALSO save into product_metadata table
       const productId = await getOrCreateProductIdByPda(productPda, meta.serialNo);
