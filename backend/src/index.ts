@@ -8,6 +8,7 @@ import adminRouter from './router/adminRouter';
 import validationRouter from './router/validationRouter';
 import productRouter from './router/productRouter';
 import notificationRouter from './router/notificationRouter';
+import reviewRouter from './router/reviewRouter';
 // import { syncFromChain } from "../scripts/syncFromChain";
 import metadataRouter from "./router/metadataRouter";
 import { upsertProductMetadata } from "./controller/ProductMetadata";
@@ -73,6 +74,7 @@ app.use('/api/users', userRouter);
 app.use('/api/admins', adminRouter);
 app.use('/api/products', productRouter);
 app.use('/api/notifications', notificationRouter);
+app.use('/api/reviews', reviewRouter);
 
 // Testing blockchain here
 app.use('/api/distributors', distributorRouter);

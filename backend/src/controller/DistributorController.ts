@@ -42,10 +42,9 @@ class DistributorController {
             created_on: Date.now()
         };
 
-        // Need for solana transaction
-        let from_public_key = new PublicKey(from_user.public_key)
-
         try{
+            // Need for solana transaction
+            let from_public_key = new PublicKey(from_user.public_key)
             const balance = await connection.getBalance(from_public_key);
             const needAmount = 0.01 * LAMPORTS_PER_SOL;
 

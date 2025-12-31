@@ -66,6 +66,14 @@ class UserController {
       //   return;
       // }
 
+      if(req.body.password != user.password){
+        res.json({
+        success: false,
+        error: 'User entered wrong password'
+        });
+        return;
+      }
+
       // If not verified
       if(!user.verified){
         res.json({

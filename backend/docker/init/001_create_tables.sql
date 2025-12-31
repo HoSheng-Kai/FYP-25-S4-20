@@ -363,7 +363,27 @@ LEFT JOIN LATERAL (
 LEFT JOIN fyp_25_s4_20.users u_owner
   ON u_owner.user_id = o_active.owner_id;
 
+-- ===========================
+-- REVIEW
+-- ===========================
+CREATE TABLE IF NOT EXISTS review (
+    review_id SERIAL PRIMARY KEY,
+    owner_id INT REFERENCES users(user_id) ON DELETE CASCADE,
+    author_id INT REFERENCES users(user_id) ON DELETE SET NULL,
+    rating INT CHECK (rating BETWEEN 1 AND 5),
+    COMMENT TEXT,
+    created_on TIMESTAMP DEFAULT NOW()
+);
 
-
-
+-- ===========================
+-- NOTIFICATION
+-- ===========================
+CREATE TABLE IF NOT EXISTS notification (
+    notification_id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_on TIMESTAMP DEFAULT NOW()
+);
 
