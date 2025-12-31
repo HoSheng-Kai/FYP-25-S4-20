@@ -3,9 +3,13 @@ import DistributorController from '../controller/DistributorController';
 
 const router = express.Router();
 
-// Bind ensures `this` is correct if you ever use it in the controller
+// Register product on blockchain
+router.post('/register-product', DistributorController.registerProduct.bind(DistributorController));
 
+// Transfer ownership (3-step: propose, accept, execute)
 router.post('/update-ownership', DistributorController.updateOwnership.bind(DistributorController));
 
+// Check ownership on blockchain
+router.post('/check-ownership', DistributorController.checkOwnership.bind(DistributorController));
 
 export default router;
