@@ -2,6 +2,74 @@ import pool from '../schema/database';
 import { ownership, blockchain_node } from '../db/table'
 
 class DistributorEntity {
+
+    static async getUserById(userId: number) {
+        const result = await pool.query(
+            `SELECT user_id, username, public_key, private_key FROM fyp_25_s4_20.users WHERE user_id = $1`,
+            [userId]
+        );
+        return result.rows[0] || null;
+    }
+
+    static async getProductById(productId: number) {
+        const result = await pool.query(
+            `SELECT product_id, serial_no, product_pda, registered_by, tx_hash FROM fyp_25_s4_20.product WHERE product_id = $1`,
+            [productId]
+        );
+        return result.rows[0] || null;
+    }
+
+    static async getUserByPublicKey(publicKey: string) {
+        const result = await pool.query(
+            `SELECT user_id, username, public_key FROM fyp_25_s4_20.users WHERE public_key = $1`,
+            [publicKey]
+        );
+        return result.rows[0] || null;
+    }
+
+    static async updateProductPda(productId: number, productPda: string, txHash: string | null): Promise<void> {
+        await pool.query(`
+            UPDATE fyp_25_s4_20.product
+            SET product_pda = $1, tx_hash = $2, status = 'verified'
+            WHERE product_id = $3
+        `, [productPda, txHash, productId]);
+    }
+
+    static async upsertProduct(data: {
+        manufacturer_id: number;
+        serial_no: string;
+        product_name?: string;
+        batch_no?: string;
+        category?: string;
+        manufacture_date?: string;
+        description?: string;
+        product_pda: string;
+        tx_hash: string;
+    }): Promise<number> {
+        const result = await pool.query(`
+            INSERT INTO fyp_25_s4_20.product (
+                registered_by, serial_no, model, batch_no, category,
+                manufacture_date, description, status, registered_on,
+                product_pda, tx_hash
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'verified', NOW(), $8, $9)
+            ON CONFLICT (serial_no) DO UPDATE SET
+                product_pda = EXCLUDED.product_pda,
+                tx_hash = EXCLUDED.tx_hash,
+                status = 'verified'
+            RETURNING product_id
+        `, [
+            data.manufacturer_id,
+            data.serial_no,
+            data.product_name || null,
+            data.batch_no || null,
+            data.category || null,
+            data.manufacture_date || null,
+            data.description || null,
+            data.product_pda,
+            data.tx_hash
+        ]);
+        return result.rows[0].product_id;
+    }
     static async viewLatestBlockchainNode(product_id: number)
     : Promise<blockchain_node | null>{
         const result = await pool.query(`

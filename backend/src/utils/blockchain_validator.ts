@@ -36,6 +36,31 @@ interface OwnershipChainResult {
     };
 }
 
+interface ProductRegistrationMemoData {
+    type: 'PRODUCT_REGISTRATION';
+    timestamp: string;
+    manufacturerId: number;
+    serialNo: string;
+    productName?: string;
+    batchNo?: string;
+    category?: string;
+    manufactureDate?: string;
+    description?: string;
+    price?: number | null;
+    currency?: string;
+}
+
+interface ProductRegistrationValidationResult {
+    isValid: boolean;
+    errors: string[];
+    blockchainData?: ProductRegistrationMemoData;
+    transactionInfo?: {
+        signature: string;
+        blockTime: number | null;
+        slot: number;
+    };
+}
+
 class BlockchainValidator {
 
     /**
@@ -385,6 +410,126 @@ class BlockchainValidator {
                 verified: false,
                 message: `Verification error: ${error.message}`
             };
+        }
+    }
+
+    /**
+     * Fetch and parse product registration memo data from a Solana transaction
+     */
+    async getProductRegistrationMemoData(txHash: string): Promise<{
+        memoData: ProductRegistrationMemoData | null;
+        transactionInfo: { signature: string; blockTime: number | null; slot: number } | null;
+    }> {
+        try {
+            const txDetails = await connection.getTransaction(txHash, {
+                maxSupportedTransactionVersion: 0
+            });
+
+            if (!txDetails) {
+                return { memoData: null, transactionInfo: null };
+            }
+
+            const transactionInfo = {
+                signature: txHash,
+                blockTime: txDetails.blockTime,
+                slot: txDetails.slot
+            };
+
+            const instructions = txDetails.transaction.message.compiledInstructions;
+            
+            for (const instruction of instructions) {
+                const programId = txDetails.transaction.message.staticAccountKeys[instruction.programIdIndex];
+                
+                if (programId.toString() === 'MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr') {
+                    const memoData = Buffer.from(instruction.data).toString('utf8');
+                    const parsed = JSON.parse(memoData);
+                    
+                    if (parsed.type === 'PRODUCT_REGISTRATION') {
+                        return { 
+                            memoData: parsed as ProductRegistrationMemoData, 
+                            transactionInfo 
+                        };
+                    }
+                }
+            }
+
+            return { memoData: null, transactionInfo };
+        } catch (error) {
+            console.error('Error fetching product registration memo:', error);
+            return { memoData: null, transactionInfo: null };
+        }
+    }
+
+    /**
+     * Validate a product registration transaction on the blockchain
+     */
+    async validateProductRegistration(txHash: string, expectedData?: {
+        manufacturerId?: number;
+        serialNo?: string;
+        productName?: string;
+    }): Promise<ProductRegistrationValidationResult> {
+        const result: ProductRegistrationValidationResult = {
+            isValid: true,
+            errors: []
+        };
+
+        try {
+            const { memoData, transactionInfo } = await this.getProductRegistrationMemoData(txHash);
+
+            if (!transactionInfo) {
+                result.isValid = false;
+                result.errors.push('Transaction not found on Solana blockchain');
+                return result;
+            }
+
+            result.transactionInfo = transactionInfo;
+
+            if (!memoData) {
+                result.isValid = false;
+                result.errors.push('Transaction does not contain valid product registration memo data');
+                return result;
+            }
+
+            if (memoData.type !== 'PRODUCT_REGISTRATION') {
+                result.isValid = false;
+                result.errors.push(`Invalid memo type: expected PRODUCT_REGISTRATION, got ${memoData.type}`);
+                return result;
+            }
+
+            result.blockchainData = memoData;
+
+            if (expectedData) {
+                if (expectedData.manufacturerId !== undefined && 
+                    memoData.manufacturerId !== expectedData.manufacturerId) {
+                    result.isValid = false;
+                    result.errors.push(
+                        `manufacturerId mismatch: expected ${expectedData.manufacturerId}, got ${memoData.manufacturerId}`
+                    );
+                }
+
+                if (expectedData.serialNo !== undefined && 
+                    memoData.serialNo !== expectedData.serialNo) {
+                    result.isValid = false;
+                    result.errors.push(
+                        `serialNo mismatch: expected ${expectedData.serialNo}, got ${memoData.serialNo}`
+                    );
+                }
+
+                if (expectedData.productName !== undefined && 
+                    memoData.productName !== expectedData.productName) {
+                    result.isValid = false;
+                    result.errors.push(
+                        `productName mismatch: expected ${expectedData.productName}, got ${memoData.productName}`
+                    );
+                }
+            }
+
+            return result;
+
+        } catch (error: any) {
+            result.isValid = false;
+            result.errors.push(`Validation error: ${error.message}`);
+            return result;
         }
     }
 }

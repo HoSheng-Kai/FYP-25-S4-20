@@ -1,17 +1,25 @@
 import path from "path";
 import express from 'express';
-import cors from "cors";
+import cors from 'cors';
+
 import userRouter from './router/userRouter';
 import distributorRouter from './router/distributorRouter';
-// import validationRouter from './router/validationRouter';
+import adminRouter from './router/adminRouter';
+import validationRouter from './router/validationRouter';
 import productRouter from './router/productRouter';
 import notificationRouter from './router/notificationRouter';
+import reviewRouter from './router/reviewRouter';
 // import { syncFromChain } from "../scripts/syncFromChain";
 import metadataRouter from "./router/metadataRouter";
 import { upsertProductMetadata } from "./controller/ProductMetadata";
 
+import { sanitize } from "./utils/sanitise";
+
 const app = express();
+
+app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true })); // optional but useful
 
 // app.use(
 //   cors({
@@ -44,14 +52,33 @@ app.use(
 // ✅ FIX: RegExp, avoids path-to-regexp crash
 app.options(/.*/, cors());
 
+// sanitize incoming data
+// TODO: Need test case for this
+app.use((req, res, next) => {
+  if (req.body) req.body = sanitize(req.body);
+  // req.query and req.params are read-only, sanitize in place
+  if (req.query) {
+    for (const key of Object.keys(req.query)) {
+      (req.query as Record<string, unknown>)[key] = sanitize(req.query[key]);
+    }
+  }
+  if (req.params) {
+    for (const key of Object.keys(req.params)) {
+      req.params[key] = sanitize(req.params[key]) as string;
+    }
+  }
+  next();
+});
 
 app.use('/api/users', userRouter);
+app.use('/api/admins', adminRouter);
 app.use('/api/products', productRouter);
 app.use('/api/notifications', notificationRouter);
+app.use('/api/reviews', reviewRouter);
 
 // Testing blockchain here
-app.use('/api/distributor', distributorRouter);
-// app.use('/api/validate', validationRouter)
+app.use('/api/distributors', distributorRouter);
+app.use('/api/validate', validationRouter);
 
 app.post("/api/products/metadata", upsertProductMetadata);
 

@@ -1,0 +1,34 @@
+4.1. (Shared Interfaces) All Users	12
+4.1.1. As a USER, I want to CREATE a new account so that I can use the website features. (US-001)	12
+4.1.2. As a USER, I want to LOGIN so that I can access the website. (US-002)	13
+4.1.3. As a USER, I want to CREATE a One-Time Password (OTP) so that I can prove my identity. (US-003)	13
+4.1.4. As a USER, I want to LOGOUT so that I can exit the system. (US-004)	14
+4.1.5. As a USER, I want to READ a product’s details by using the QR code so that I can verify authenticity. (US-005)	15
+4.1.6. As a USER, I want to READ the transaction history of a product by using the QR code so that I can view the product’s transaction history. (US-006)	16
+4.1.7. As a USER, I want to READ notifications that pertain to me so that I can be informed of actions taken that will interest me. (US-007)	17
+4.1.8. As a USER, I want to DELETE notifications that I have read so that I only see new ones. (US-008)	17
+4.2. Manufacturer Interfaces	18
+4.2.1. As a MANUFACTURER, I want to CREATE product registration so that I can add new products to the blockchain. (US-009)	18
+4.2.2. As a MANUFACTURER, I want to DELETE product registration so that I can remove incorrect products before they hit the blockchain. (US-010)	19
+4.2.3. As a MANUFACTURER, I want to CREATE unique QR code based on product details so that I can ensure authenticity. (US-011)	20
+4.2.4. As a MANUFACTURER, I want to UPDATE product details with unique QR code so that I can ensure the QR code is tied to the product. (US-012)	21
+4.2.5. As a MANUFACTURER, I want to READ product listings for my products so that I can check blockchain registration status. (US-013)	22
+4.3. Distributor/Retailer Interfaces	23
+4.3.1. As a USER, I want to CREATE a request to transfer ownership so that I can remove ownership of products that are no longer with me. (US-014)	23
+4.3.2. As a USER, I want to UPDATE ownership by accepting requests so that I can receive ownership of products I acquire. (US-015)	25
+4.4. Consumer Interfaces	26
+4.4.1. As a USER, I want to READ product listings of available products for sale so that I can buy products I want. (US-016)	26
+4.4.2. As a USER, I want to UPDATE product listings for products I own so that I can ensure products I list show the latest details. (US-017)	26
+4.4.3. As a USER, I want to DELETE product listings for products I own so that other users would not see unavailable products. (US-018)	27
+4.4.4. As a USER, I want to UPDATE product availability so that other users know if the product is still available. (US-019)	28
+4.4.5. As a USER, I want to CREATE reviews so that other users will know if a user was trustworthy. (US-020)	29
+4.4.6. As a USER, I want to READ reviews so that I can know if other users are trustworthy.(US-021)	29
+4.4.7. As a USER, I want to DELETE reviews so that I can remove inaccurate reviews I made.(US-022)	30
+4.4.8. As a USER, I want to READ the transaction history of a product by using the QR code so that I can view previous owners. (US-023)	31
+4.5. Admin Interfaces	32
+4.5.1. As an ADMIN, I want to CREATE new user accounts so that they can access the website. (US-024)	32
+4.5.2. As an ADMIN, I want to READ all user accounts’ details so that I can see issues with user details. (US-025)	32
+4.5.3. As an ADMIN, I want to UPDATE user account permissions so that I can correct issues for the user. (US-026)	34
+4.5.4. As an ADMIN, I want to DELETE user accounts so that I can remove unwanted user accounts (US-027)	35
+4.5.5. As an ADMIN, I want to READ all product listings so that I can check for suspicious product listings. (US-028)	35
+4.5.6. As an ADMIN, I want to DELETE any product listing so that I can remove suspicious product listings. (US-029)	36

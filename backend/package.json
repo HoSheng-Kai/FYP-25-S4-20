@@ -19,6 +19,7 @@
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "node-vault": "^0.10.9",
     "nodemailer": "^7.0.12",
     "pg": "^8.16.3",
     "qrcode": "^1.5.4"
@@ -28,7 +29,9 @@
     "@types/express": "^5.0.6",
     "@types/node": "^25.0.3",
     "@types/nodemailer": "^7.0.4",
+    "@types/pg": "^8.16.0",
     "@types/qrcode": "^1.5.6",
+    "@types/request": "^2.48.13",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3"

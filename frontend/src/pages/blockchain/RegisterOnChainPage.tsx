@@ -3,7 +3,6 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { SystemProgram } from "@solana/web3.js";
 import axios from "axios";
-import { Buffer } from "buffer";
 
 import { getProvider, getProgram } from "../../lib/anchorClient";
 import { deriveProductPda } from "../../lib/pdas";
@@ -115,6 +114,7 @@ export default function RegisterProductPage() {
       setStatus(`❌ Save Draft failed:\n${prettyError(e)}`);
     }
   }
+}
 
   // // -----------------------------
   // // B) RESUME (by serial)
@@ -235,8 +235,7 @@ export default function RegisterProductPage() {
       setStatus("2/4 Registering on-chain...");
       const [productPda, _bump, serialHash] = await deriveProductPda(wallet.publicKey, s);
 
-      const provider = getProvider(wallet);
-      const program = getProgram(provider);
+    if (!metadataUri || !hashHex) throw new Error("Backend did not return metadataUri/hash");
 
       const sig = await program.methods
         .registerProduct(Array.from(serialHash), Array.from(metadataHash), uri)
@@ -274,7 +273,40 @@ export default function RegisterProductPage() {
     } catch (e: any) {
       setStatus(`❌ Send to blockchain failed:\n${prettyError(e)}`);
     }
+
+    // 5) PDA not exists → do normal on-chain register
+    setStatus("5/5 Registering on-chain...");
+
+    const txSig = await program.methods
+      .registerProduct(
+        Array.from(serialHash),            // u8[32]
+        Array.from(metadataHash),     // u8[32] from backend hash
+        metadataUri                        // string
+      )
+      .accounts({
+        product: productPda,
+        manufacturer: wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    // confirm DB
+    await axios.post(`http://localhost:3000/api/products/${productId}/confirm`, {
+      manufacturerId,
+      txHash: txSig,
+      productPda: productPda.toBase58(),
+    });
+
+    setStatus(
+      `✅ Done!\nproductId=${productId}\nPDA=${productPda.toBase58()}\ntx=${txSig}\nuri=${metadataUri}\nhash=${hashHex}`
+    );
+  } catch (e: any) {
+    const msg = e?.response?.data
+      ? JSON.stringify(e.response.data, null, 2)
+      : (e?.message ?? String(e));
+    setStatus(`❌ Failed:\n${msg}`);
   }
+}
 
   return (
     <div style={{ maxWidth: 820, margin: "24px auto", padding: 16 }}>

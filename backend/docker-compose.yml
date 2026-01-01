@@ -49,5 +49,22 @@ services:
       timeout: 5s
       retries: 5
 
+  vault:
+    image: hashicorp/vault:latest
+    container_name: backend_hashicorp_vault
+    ports:
+      - "8200:8200"
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - VAULT_ADDR=http://127.0.0.1:8200
+    volumes:
+      - ./docker/init/vault/init.sh:/vault-init.sh
+      - ./docker/vault-data:/vault/file
+      - ./docker/init/vault/config.hcl:/vault/config/vault.hcl
+    command: >
+      sh -c "vault server -config=/vault/config/vault.hcl & sh /vault-init.sh"
+
 volumes:
   solana-ledger:
+  vault-data:

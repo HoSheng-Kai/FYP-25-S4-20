@@ -1,7 +1,14 @@
 -- SET search_path TO fyp_25_s4_20;
 SET search_path TO fyp_25_s4_20, public;
 
-BEGIN;
+-- UPDATE product
+-- SET qr_code = NULL;
+
+-- SELECT 
+--     product_id, 
+--     serial_no, 
+--     qr_code IS NOT NULL AS has_qr
+-- FROM product;
 
 -- ===========================
 -- Insert Users (base58 private keys, base58 public keys)
@@ -29,16 +36,18 @@ INSERT INTO users (
   role_id,
   private_key,
   public_key,
-  verified
+  verified,
+  banned
 )
 VALUES
   ('admin_user','admin123','admin@example.com','admin',
    '5Jn1PsY9FYjYtpjfLaivRW5dSdkCsDxDnmkCn8MXkGFmnPA3NqFSoEww45mm4ukeFwvGFwG9akagGF2cLCofGsnp',
-   'pR9HgGJrxkFTVebFhYAoq4URkLti4tph9f7Sxvgrpzc', TRUE),
-
+   'pR9HgGJrxkFTVebFhYAoq4URkLti4tph9f7Sxvgrpzc', TRUE, FALSE),
+   
+-- unverify test case
   ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
    '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
-   '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', FALSE),
+   '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so', FALSE, FALSE),
 
 --      ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
 --    '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
@@ -46,37 +55,36 @@ VALUES
    
   ('adidas_manufacturer','adidas123','adidas@manufacturer.com','manufacturer',
    '2aW6cVrGAGsTv9UXFMpcDRhb9iiPcfxgR1jHoBcYKKTFoFcZYjazQSsQtQEfHhar3MukdKz7jUaWCNVKQaYbgKbp',
-   'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc', FALSE),
+   'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc', FALSE, FALSE),
 
   ('global_distributor','global123','global@distributor.com','distributor',
    '66X4Fdd7XwpbBrYSRYda3dpQsmaWhcbV9qTu9aD12fcdKa7zkHs5nrzHebWspuzBgDMGL75Rwu4QBqieULwAtvvb',
-   'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh', TRUE),
+   'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh', TRUE, FALSE),
 
   ('asia_distributor','asia123','asia@distributor.com','distributor',
    '4oSPuV9peRKqVQJ9zd8s2p8Mj3TPznGtBEjTZwSHM4gLuwojDGbTb3v7FiPpisfXWf6Bdv4AQhLSVMpKP4EwL3zz',
-   'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg', TRUE),
+   'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg', TRUE, FALSE),
 
   ('sports_retailer','sports123','sports@retailer.com','retailer',
    '5VKwRzTi4ou39Rf9xASUFHfvXhdXZgdiQyXod84BFrmGsEe86qK7bpc5TcwajKaxsLXMdu6HcxzGzpzW7SZfPnDx',
-   '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ', TRUE),
+   '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ', TRUE, FALSE),
 
+-- banned test case
   ('fashion_retailer','fashion123','fashion@retailer.com','retailer',
    '2KFueTrHAsahgPPRApK6Ci8grXY1Nae6ZBUcmD3X9LWke31yjLUkdyHKvs4BUBPvmjn78ehy29gC1yJyhrD2DeoP',
-   '3NdBsPtC3cXjo16jsTuJxbBXhRFWFiWT9kz9wWXHokYd', TRUE),
+   '3NdBsPtC3cXjo16jsTuJxbBXhRFWFiWT9kz9wWXHokYd', TRUE, TRUE),
 
   ('john_consumer','john123','john@consumer.com','consumer',
    '4ucS3Vh1ZYEJxsfzjpJ8uxY6w7dxjptGVCrJpuQv4azCX8xrYjqNHB8gBweFzmCKY4388DamUqnH63KshsHKdFcr',
-   'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6', TRUE),
+   'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6', TRUE, FALSE),
 
   ('sarah_consumer','sarah123','sarah@consumer.com','consumer',
    'g9VEqeoDDGCkSVfq9q89zBu6smRGUzxzh9b8HTEvmehQacsokv76DSFWhk33WvoR4yqookTTGE1rSzxPop5mJv2',
-   'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U', TRUE),
+   'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U', TRUE, FALSE),
 
   ('mike_consumer','mike123','mike@consumer.com','consumer',
    '4NcvkwnkyFBN79bJ643dBSJQ3oqTrpQ98hHqbn1RGoKoFVmdCcqdf1pKnTTApYdf5QmzohQ9phAwaf4RztzfBq25',
-   '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid', TRUE);
-
-COMMIT;
+   '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid', TRUE, FALSE);
 
 -- ===========================
 -- Insert Products
@@ -99,7 +107,7 @@ INSERT INTO product (
 VALUES (
         2,
         'NIKE-AIR-001',
-        E'\\x89504e470d0a1a0a',
+        NULL,
         'verified',
         'Nike Air Max 270',
         'BATCH-2024-001',
@@ -113,7 +121,7 @@ VALUES (
     (
         2,
         'NIKE-ZOOM-002',
-        E'\\x89504e470d0a1a0b',
+        NULL,
         'verified',
         'Nike Zoom Pegasus',
         'BATCH-2024-002',
@@ -127,7 +135,7 @@ VALUES (
     (
         2,
         'NIKE-REACT-003',
-        E'\\x89504e470d0a1a0c',
+        NULL,
         'verified',
         'Nike React Infinity',
         'BATCH-2024-003',
@@ -141,7 +149,7 @@ VALUES (
     (
         3,
         'ADIDAS-ULTRA-001',
-        E'\\x89504e470d0a1a0d',
+        NULL,
         'verified',
         'Adidas Ultraboost',
         'BATCH-2024-004',
@@ -155,7 +163,7 @@ VALUES (
     (
         3,
         'ADIDAS-NMD-002',
-        E'\\x89504e470d0a1a0e',
+        NULL,
         'registered',
         'Adidas NMD R1',
         'BATCH-2024-005',
@@ -169,7 +177,7 @@ VALUES (
     (
         3,
         'ADIDAS-SUPER-003',
-        E'\\x89504e470d0a1a0f',
+        NULL,
         'verified',
         'Adidas Superstar',
         'BATCH-2024-006',
@@ -183,7 +191,7 @@ VALUES (
     (
         2,
         'NIKE-DUNK-004',
-        E'\\x89504e470d0a1a10',
+        NULL,
         'verified',
         'Nike Dunk Low',
         'BATCH-2024-007',
@@ -197,7 +205,7 @@ VALUES (
     (
         3,
         'ADIDAS-STAN-004',
-        E'\\x89504e470d0a1a11',
+        NULL,
         'suspicious',
         'Adidas Stan Smith',
         'BATCH-2024-008',
@@ -212,108 +220,109 @@ VALUES (
 -- ===========================
 -- Insert Product Listings
 -- ===========================
-INSERT INTO fyp_25_s4_20.product (
-  registered_by,
-  serial_no,
-  qr_code,
-  status,
-  model,
-  batch_no,
-  category,
-  manufacture_date,
-  description,
-  registered_on,
-  tx_hash,
-  product_pda
-)
-VALUES ($1, $2, NULL, 'registered', $3, $4, $5, $6, $7, NOW(), NULL, NULL)
-ON CONFLICT (serial_no) DO UPDATE
-SET
-  -- only allow reuse if SAME manufacturer and still pending (not confirmed on-chain)
-  model = EXCLUDED.model,
-  batch_no = EXCLUDED.batch_no,
-  category = EXCLUDED.category,
-  manufacture_date = EXCLUDED.manufacture_date,
-  description = EXCLUDED.description
-WHERE
-  fyp_25_s4_20.product.registered_by = EXCLUDED.registered_by
-  AND fyp_25_s4_20.product.tx_hash IS NULL
-RETURNING
-  product_id, serial_no, model, batch_no, category,
-  manufacture_date, description, status, registered_on, tx_hash, product_pda;
 
--- INSERT INTO product_listing (
---         product_id,
---         seller_id,
---         price,
---         currency,
---         STATUS,
---         created_on
---     )
--- VALUES (
---         1,
---         4,
---         150.00,
---         'USD',
---         'sold',
---         '2024-01-16 08:00:00'
---     ),
---     (
---         2,
---         5,
---         140.00,
---         'USD',
---         'sold',
---         '2024-01-21 09:30:00'
---     ),
---     (
---         3,
---         6,
---         215.50,
---         'SGD',
---         'available',
---         '2024-02-06 10:15:00'
---     ),
---     (
---         4,
---         4,
---         180.00,
---         'USD',
---         'sold',
---         '2024-01-26 11:45:00'
---     ),
---     (
---         5,
---         5,
---         175.00,
---         'SGD',
---         'reserved',
---         '2024-02-11 14:00:00'
---     ),
---     (
---         6,
---         6,
---         120.00,
---         'EUR',
---         'available',
---         '2024-02-16 12:30:00'
---     ),
---     (
---         7,
---         6,
---         120.00,
---         'USD',
---         'sold',
---         '2024-03-02 09:00:00'
---     ),
---     (
---         8,
---         5,
---         115.00,
---         'SGD',
---         'available',
---         '2024-03-06 16:00:00'
---     );
+-- INSERT INTO fyp_25_s4_20.product (
+--   registered_by,
+--   serial_no,
+--   qr_code,
+--   status,
+--   model,
+--   batch_no,
+--   category,
+--   manufacture_date,
+--   description,
+--   registered_on,
+--   tx_hash,
+--   product_pda
+-- )
+-- VALUES ($1, $2, NULL, 'registered', $3, $4, $5, $6, $7, NOW(), NULL, NULL)
+-- ON CONFLICT (serial_no) DO UPDATE
+-- SET
+--   -- only allow reuse if SAME manufacturer and still pending (not confirmed on-chain)
+--   model = EXCLUDED.model,
+--   batch_no = EXCLUDED.batch_no,
+--   category = EXCLUDED.category,
+--   manufacture_date = EXCLUDED.manufacture_date,
+--   description = EXCLUDED.description
+-- WHERE
+--   fyp_25_s4_20.product.registered_by = EXCLUDED.registered_by
+--   AND fyp_25_s4_20.product.tx_hash IS NULL
+-- RETURNING
+--   product_id, serial_no, model, batch_no, category,
+--   manufacture_date, description, status, registered_on, tx_hash, product_pda;
+
+INSERT INTO product_listing (
+        product_id,
+        seller_id,
+        price,
+        currency,
+        STATUS,
+        created_on
+    )
+VALUES (
+        1,
+        4,
+        150.00,
+        'USD',
+        'sold',
+        '2024-01-16 08:00:00'
+    ),
+    (
+        2,
+        5,
+        140.00,
+        'USD',
+        'sold',
+        '2024-01-21 09:30:00'
+    ),
+    (
+        3,
+        6,
+        215.50,
+        'SGD',
+        'available',
+        '2024-02-06 10:15:00'
+    ),
+    (
+        4,
+        4,
+        180.00,
+        'USD',
+        'sold',
+        '2024-01-26 11:45:00'
+    ),
+    (
+        5,
+        5,
+        175.00,
+        'SGD',
+        'reserved',
+        '2024-02-11 14:00:00'
+    ),
+    (
+        6,
+        6,
+        120.00,
+        'EUR',
+        'available',
+        '2024-02-16 12:30:00'
+    ),
+    (
+        7,
+        6,
+        120.00,
+        'USD',
+        'sold',
+        '2024-03-02 09:00:00'
+    ),
+    (
+        8,
+        5,
+        115.00,
+        'SGD',
+        'available',
+        '2024-03-06 16:00:00'
+    );
 
 -- ===========================
 -- Insert Blockchain Node Records

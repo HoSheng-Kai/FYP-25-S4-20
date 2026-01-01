@@ -23,7 +23,7 @@ export interface RegisteredProductResult {
     category: string | null;
     manufacture_date: Date | null;
     description: string | null;
-    status: string;
+    status: string;          // will be 'registered'
     registered_on: Date;
     qr_payload: string;
     tx_hash: string | null;
@@ -57,7 +57,7 @@ export class ProductRegistration {
        */
       const productResult = await client.query(
         `
-        INSERT INTO fyp_25_s4_20.product (
+        INSERT INTO product (
           registered_by,
           serial_no,
           qr_code,

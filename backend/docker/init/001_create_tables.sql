@@ -35,15 +35,16 @@ END $$;
 -- ===========================
 
 CREATE TABLE IF NOT EXISTS users (
-  user_id SERIAL PRIMARY KEY,
-  username TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  email TEXT NOT NULL UNIQUE,
-  role_id user_role NOT NULL,
-  private_key TEXT,
-  public_key TEXT,
-  verified BOOLEAN,
-  created_on TIMESTAMP DEFAULT NOW()
+    user_id SERIAL PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    role_id user_role NOT NULL,
+    private_key TEXT,
+    public_key TEXT,
+    verified BOOLEAN,
+    banned BOOLEAN DEFAULT FALSE,
+    created_on TIMESTAMP DEFAULT NOW()
 );
 
 -- ===========================
@@ -394,6 +395,17 @@ LEFT JOIN LATERAL (
 LEFT JOIN fyp_25_s4_20.users u_owner
   ON u_owner.user_id = o_active.owner_id;
 
+-- ===========================
+-- REVIEW
+-- ===========================
+CREATE TABLE IF NOT EXISTS review (
+    review_id SERIAL PRIMARY KEY,
+    owner_id INT REFERENCES users(user_id) ON DELETE CASCADE,
+    author_id INT REFERENCES users(user_id) ON DELETE SET NULL,
+    rating INT CHECK (rating BETWEEN 1 AND 5),
+    COMMENT TEXT,
+    created_on TIMESTAMP DEFAULT NOW()
+);
 
 ALTER TABLE fyp_25_s4_20.product
 ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'draft';
