@@ -3,6 +3,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { SystemProgram } from "@solana/web3.js";
 import axios from "axios";
+import { Buffer } from "buffer";
 
 import { getProvider, getProgram } from "../../lib/anchorClient";
 import { deriveProductPda } from "../../lib/pdas";
@@ -55,6 +56,7 @@ export default function RegisterProductPage() {
     [serialNo, productName, batchNo, category, manufactureDate, description]
   );
 
+  // locked after confirm-draft OR after finalized
   const isLocked = draftStage === "confirmed" || isFinalized;
 
   function prettyError(e: any) {
@@ -69,6 +71,7 @@ export default function RegisterProductPage() {
   async function saveDraft(): Promise<number> {
     const s = serialNo.trim();
     if (!s) throw new Error("Serial number is required");
+    if (isLocked) throw new Error("Product is locked (confirmed/finalized).");
 
     const dbRes = await axios.post(`${API_BASE}/api/products/draft`, {
       manufacturerId,
@@ -80,7 +83,6 @@ export default function RegisterProductPage() {
       description,
     });
 
-    // tolerate multiple shapes
     const pid: number | null =
       dbRes.data?.data?.product?.product_id ??
       dbRes.data?.data?.productId ??
@@ -94,7 +96,7 @@ export default function RegisterProductPage() {
     }
 
     setProductId(pid);
-    setDraftStage("draft"); // your backend draft stage should be draft after register
+    setDraftStage("draft");
     setIsFinalized(false);
     setTxSig("");
     setProductPdaStr("");
@@ -106,7 +108,6 @@ export default function RegisterProductPage() {
 
   async function onSaveDraftClick() {
     try {
-      if (isLocked) throw new Error("Product is locked (confirmed/finalized). Cannot edit draft.");
       setStatus("Saving draft (DB only)...");
       const pid = await saveDraft();
       setStatus(`✅ Draft saved.\nproductId=${pid}\nserial=${serialNo.trim()}\nstage=draft`);
@@ -114,66 +115,19 @@ export default function RegisterProductPage() {
       setStatus(`❌ Save Draft failed:\n${prettyError(e)}`);
     }
   }
-}
 
-  // // -----------------------------
-  // // B) RESUME (by serial)
-  // // -----------------------------
-  // async function resumeBySerial() {
-  //   try {
-  //     const s = serialNo.trim();
-  //     if (!s) throw new Error("Enter serial number first");
-
-  //     setStatus("Resuming from DB...");
-
-  //     const r = await axios.get(`${API_BASE}/api/products/resume`, {
-  //       params: { serial: s },
-  //     });
-
-  //     const d = r.data?.data;
-  //     if (!d) throw new Error("Resume returned no data");
-
-  //     setProductId(d.productId ?? null);
-  //     setSerialNo(d.serialNo ?? s);
-  //     setProductName(d.productName ?? "");
-  //     setBatchNo(d.batchNo ?? "");
-  //     setCategory(d.category ?? "");
-  //     setManufactureDate(d.manufactureDate ? String(d.manufactureDate).slice(0, 10) : "");
-  //     setDescription(d.description ?? "");
-
-  //     // infer lock from tx hash if your resume returns it
-  //     const confirmedOnChain = Boolean(d.txHash);
-  //     setIsFinalized(false);
-  //     setTxSig(d.txHash ?? "");
-  //     setProductPdaStr(d.productPda ?? "");
-
-  //     // stage: if your resume endpoint returns stage, use it; otherwise infer:
-  //     const stage = d.stage as string | undefined;
-  //     if (stage === "draft" || stage === "confirmed") {
-  //       setDraftStage(stage);
-  //     } else {
-  //       // fallback inference
-  //       setDraftStage(confirmedOnChain ? "confirmed" : "draft");
-  //     }
-
-  //     setStatus(`✅ Resumed.\nproductId=${d.productId}\ndbStatus=${d.status}\nchain=${d.blockchainStatus}`);
-  //   } catch (e: any) {
-  //     setStatus(`❌ Resume failed:\n${prettyError(e)}`);
-  //   }
-  // }
-
-  // =======================================
-  // C) DELETE DRAFT (only before confirm)
-  // =======================================
+  // ==========================
+  // B) DELETE DRAFT
+  // ==========================
   async function deleteDraft() {
     try {
-      if (!productId) throw new Error("No productId. Save draft or resume first.");
-      if (isLocked) throw new Error("Draft is locked (confirmed/on-chain). Cannot delete.");
+      if (!productId) throw new Error("No productId. Save draft first.");
+      if (isLocked) throw new Error("Draft is locked (confirmed/finalized). Cannot delete.");
 
       setStatus("Deleting draft (DB)...");
 
       const r = await axios.delete(`${API_BASE}/api/products/${productId}/draft`, {
-        data: { manufacturerId }, // ✅ goes to req.body
+        data: { manufacturerId }, // goes to req.body
         headers: { "Content-Type": "application/json" },
       });
 
@@ -185,17 +139,16 @@ export default function RegisterProductPage() {
     }
   }
 
-
-
-  // =================================
-  // D) CONFIRM DRAFT (locks draft)
-  // =================================
+  // ==========================
+  // C) CONFIRM DRAFT (LOCKS)
+  // ==========================
   async function confirmDraft() {
     try {
-      if (!productId) throw new Error("No productId. Save draft or resume first.");
+      if (!productId) throw new Error("No productId. Save draft first.");
       if (isLocked) throw new Error("Already locked.");
 
       setStatus("Confirming draft (DB)...");
+
       await axios.post(`${API_BASE}/api/products/${productId}/confirm-draft`, {
         manufacturerId,
       });
@@ -207,21 +160,19 @@ export default function RegisterProductPage() {
     }
   }
 
-  // ======================================================================
-  // E) SEND TO BLOCKCHAIN (after confirm) + confirm tx + finalize metadata
-  // ======================================================================
+  // ==========================================================
+  // D) SEND TO BLOCKCHAIN (after confirm) + confirm in DB + finalize metadata
+  // ==========================================================
   async function sendToBlockchain() {
     try {
       if (!wallet.publicKey) throw new Error("Connect wallet first");
       const s = serialNo.trim();
       if (!s) throw new Error("Serial number is required");
       if (!productId) throw new Error("No productId. Save draft first.");
-      if (draftStage !== "confirmed") {
-        throw new Error("Draft not confirmed yet. Click 'Confirm Draft' first.");
-      }
+      if (draftStage !== "confirmed") throw new Error("Draft not confirmed. Click 'Confirm Draft' first.");
       if (isFinalized) throw new Error("Already finalized.");
 
-      // 1) Build metadata hash locally
+      // 1) build metadata hash + uri
       setStatus("1/4 Building metadata hash...");
       const metadataBytes = encodeJsonBytes(meta);
       const metadataHash = await sha256Bytes(metadataBytes);
@@ -231,11 +182,12 @@ export default function RegisterProductPage() {
       setMetadataHashHex(hashHex);
       setMetadataUri(uri);
 
-      // 2) Register on-chain
+      // 2) on-chain register
       setStatus("2/4 Registering on-chain...");
       const [productPda, _bump, serialHash] = await deriveProductPda(wallet.publicKey, s);
 
-    if (!metadataUri || !hashHex) throw new Error("Backend did not return metadataUri/hash");
+      const provider = getProvider(wallet);
+      const program = getProgram(provider);
 
       const sig = await program.methods
         .registerProduct(Array.from(serialHash), Array.from(metadataHash), uri)
@@ -249,15 +201,14 @@ export default function RegisterProductPage() {
       setTxSig(sig);
       setProductPdaStr(productPda.toBase58());
 
-      // 3) Confirm on-chain in DB
+      // 3) finalize metadata BEFORE confirm
       setStatus("3/4 Finalizing metadata...");
       await axios.post(`${API_BASE}/api/products/${productId}/metadata-final`, {
         manufacturerId,
         metadata: meta,
       });
-    
 
-      // 4) Finalize metadata
+      // 3) confirm tx in DB FIRST (so tx_hash exists)
       setStatus("4/4 Confirming on-chain tx in DB...");
       await axios.post(`${API_BASE}/api/products/${productId}/confirm`, {
         manufacturerId,
@@ -266,47 +217,13 @@ export default function RegisterProductPage() {
       });
 
       setIsFinalized(true);
-
       setStatus(
         `✅ SENT + FINALIZED!\nproductId=${productId}\nPDA=${productPda.toBase58()}\ntx=${sig}\nuri=${uri}\nhash=${hashHex}\n\nProduct is now PERMANENTLY LOCKED.`
       );
     } catch (e: any) {
       setStatus(`❌ Send to blockchain failed:\n${prettyError(e)}`);
     }
-
-    // 5) PDA not exists → do normal on-chain register
-    setStatus("5/5 Registering on-chain...");
-
-    const txSig = await program.methods
-      .registerProduct(
-        Array.from(serialHash),            // u8[32]
-        Array.from(metadataHash),     // u8[32] from backend hash
-        metadataUri                        // string
-      )
-      .accounts({
-        product: productPda,
-        manufacturer: wallet.publicKey,
-        systemProgram: SystemProgram.programId,
-      })
-      .rpc();
-
-    // confirm DB
-    await axios.post(`http://localhost:3000/api/products/${productId}/confirm`, {
-      manufacturerId,
-      txHash: txSig,
-      productPda: productPda.toBase58(),
-    });
-
-    setStatus(
-      `✅ Done!\nproductId=${productId}\nPDA=${productPda.toBase58()}\ntx=${txSig}\nuri=${metadataUri}\nhash=${hashHex}`
-    );
-  } catch (e: any) {
-    const msg = e?.response?.data
-      ? JSON.stringify(e.response.data, null, 2)
-      : (e?.message ?? String(e));
-    setStatus(`❌ Failed:\n${msg}`);
   }
-}
 
   return (
     <div style={{ maxWidth: 820, margin: "24px auto", padding: 16 }}>
@@ -346,7 +263,7 @@ export default function RegisterProductPage() {
             type="text"
             value={productId ?? ""}
             readOnly
-            placeholder="(auto after Save Draft / Resume)"
+            placeholder="(auto after Save Draft)"
             style={{ width: "100%", padding: 8, background: "#f5f5f5" }}
           />
         </label>
@@ -364,54 +281,27 @@ export default function RegisterProductPage() {
 
         <label>
           Product Name
-          <input
-            value={productName}
-            onChange={(e) => setProductName(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
+          <input value={productName} onChange={(e) => setProductName(e.target.value)} style={{ width: "100%", padding: 8 }} disabled={isLocked} />
         </label>
 
         <label>
           Batch No
-          <input
-            value={batchNo}
-            onChange={(e) => setBatchNo(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
+          <input value={batchNo} onChange={(e) => setBatchNo(e.target.value)} style={{ width: "100%", padding: 8 }} disabled={isLocked} />
         </label>
 
         <label>
           Category
-          <input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
+          <input value={category} onChange={(e) => setCategory(e.target.value)} style={{ width: "100%", padding: 8 }} disabled={isLocked} />
         </label>
 
         <label>
           Manufacture Date
-          <input
-            type="date"
-            value={manufactureDate}
-            onChange={(e) => setManufactureDate(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
+          <input type="date" value={manufactureDate} onChange={(e) => setManufactureDate(e.target.value)} style={{ width: "100%", padding: 8 }} disabled={isLocked} />
         </label>
 
         <label style={{ gridColumn: "1 / -1" }}>
           Description
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
+          <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={4} style={{ width: "100%", padding: 8 }} disabled={isLocked} />
         </label>
       </div>
 
@@ -419,10 +309,6 @@ export default function RegisterProductPage() {
         <button onClick={onSaveDraftClick} style={{ padding: "10px 14px" }} disabled={isLocked}>
           Save Draft (DB)
         </button>
-
-        {/* <button onClick={resumeBySerial} style={{ padding: "10px 14px" }}>
-          Resume by Serial
-        </button> */}
 
         <button onClick={deleteDraft} style={{ padding: "10px 14px" }} disabled={isLocked || !productId}>
           Delete Draft
