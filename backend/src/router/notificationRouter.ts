@@ -1,19 +1,22 @@
-// src/router/notificationRouter.ts
-import { Router } from 'express';
-import notificationController from '../controller/NotificationController';
+import { Router } from "express";
+import { NotificationController } from "../controller/NotificationController";
 
 const router = Router();
+const c = new NotificationController();
 
-// READ notifications
-// GET /api/notifications?userId=8&onlyUnread=true
-router.get('/', notificationController.getUserNotifications.bind(notificationController));
+// GET /api/notifications?userId=2&onlyUnread=true
+router.get("/", c.getUserNotifications.bind(c));
 
-// DELETE a single read notification
-// DELETE /api/notifications/5?userId=8
-router.delete('/:id', notificationController.deleteNotification.bind(notificationController));
+// PUT /api/notifications/:notificationId/read?userId=2
+router.put("/:notificationId/read", c.markOneRead.bind(c));
 
-// DELETE all read notifications for a user
-// DELETE /api/notifications?userId=8
-router.delete('/', notificationController.deleteAllRead.bind(notificationController));
+// PUT /api/notifications/read?userId=2
+router.put("/read", c.markAllRead.bind(c));
+
+// DELETE /api/notifications/read?userId=2
+router.delete("/read", c.deleteReadNotifications.bind(c));
+
+// DELETE /api/notifications/:notificationId?userId=2
+router.delete("/:notificationId", c.deleteOneReadNotification.bind(c));
 
 export default router;

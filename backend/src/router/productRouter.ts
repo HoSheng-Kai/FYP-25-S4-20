@@ -1,8 +1,12 @@
 import { Router } from 'express';
 import productController from '../controller/ProductController';
-import pool from '../schema/database';
+// import pool from '../schema/database';
 
 const router = Router();
+
+// ===========================
+// Manufacturer
+// ===========================
 
 // Example:
 // GET /api/products/verify?serial=NIKE-AIR-001
@@ -12,31 +16,45 @@ router.get('/verify', productController.verifyProductBySerial.bind(productContro
 // GET /api/products/history?serial=NIKE-AIR-001
 router.get('/history', productController.getTransactionHistory.bind(productController));
 
-// Example:
-// POST /api/products/register
-router.post('/register', productController.registerProduct.bind(productController));
+// // Example:
+// // POST /api/products/register
+// router.post('/register', productController.registerProduct.bind(productController));
 
-// Example:
-// DELETE /api/products/cancel-by-serial
-router.delete("/cancel-by-serial", productController.cancelBySerial.bind(productController));
+// // Example:
+// // DELETE /api/products/cancel-by-serial
+// router.delete("/cancel-by-serial", productController.cancelBySerial.bind(productController));
 
-// GET /api/products/resume?serial=TEST-META-001
-router.get("/resume", productController.resumeRegistration.bind(productController));
 
-// (optional, but recommended) if user cancels Phantom, cleanup pending record:
-router.delete("/:productId/cancel", productController.cancelPendingById.bind(productController));
+// // (optional, but recommended) if user cancels Phantom, cleanup pending record:
+// router.delete("/:productId/cancel", productController.cancelPendingById.bind(productController));
 
-// Example:
-// POST /api/products/:productId/confirm
-router.post("/:productId/confirm", productController.confirmProductOnChain.bind(productController));
+// READ product listings for a manufacturer (includes products without listing)
+router.get('/manufacturer/:manufacturerId/listings', productController.getManufacturerProductListings.bind(productController));
+
+// ============================================
+// DRAFT FLOW (REGISTER PRODUCT)
+// ============================================
+router.post('/draft', productController.createDraft.bind(productController));
+
+// PUT /api/products/:productId/draft
+router.put('/:productId/draft', productController.updateDraft.bind(productController));
+
+// DELETE /api/products/:productId/draft
+router.delete('/:productId/draft', productController.deleteDraft.bind(productController));
+
+// POST /api/products/:productId/confirm-draft
+router.post('/:productId/confirm-draft', productController.confirmDraft.bind(productController));
 
 // router.post("/metadata", productController.storeMetadata.bind(productController));
 router.post("/:productId/metadata-final", productController.storeMetadataAfterConfirm.bind(productController));
 
-// Example:
-// DELETE /api/products/:productId?manufacturerId=2
-router.delete('/:productId', productController.deleteProduct.bind(productController));
+// POST /api/products/:productId/confirm
+router.post("/:productId/confirm", productController.confirmProductOnChain.bind(productController));
 
+
+// =============================================
+// QR Code & Product Edit
+// =============================================
 // Example:
 // GET /api/products/9/qrcode
 router.get('/:productId/qrcode',productController.getProductQrCode.bind(productController));
@@ -50,8 +68,10 @@ router.get('/:productId/edit', productController.getProductForEdit.bind(productC
 // Update product + regenerate QR
 router.put('/:productId', productController.updateProduct.bind(productController));
 
-// READ product listings for a manufacturer (includes products without listing)
-router.get('/manufacturer/:manufacturerId/listings', productController.getManufacturerProductListings.bind(productController));
+
+// =============================================
+// User
+// =============================================
 
 // Marketplace Page (Buyer View) – available products for sale
 router.get('/marketplace/listings', productController.getMarketplaceListings.bind(productController));
@@ -70,5 +90,7 @@ router.delete('/listings/:listingId',productController.deleteListing.bind(produc
 
 // Toggle availability (My Listings switch/button)
 router.patch('/listings/:listingId/availability',productController.updateListingAvailability.bind(productController));
+
+
 
 export default router;

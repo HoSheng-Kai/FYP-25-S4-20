@@ -636,55 +636,27 @@ VALUES (
 -- ===========================
 -- Insert Notifications
 -- ===========================
-INSERT INTO notification (user_id, title, message, is_read, created_on)
-VALUES (
-        8,
-        'Product Verified',
-        'Your product NIKE-AIR-001 has been verified as authentic.',
-        FALSE,
-        '2024-03-10 10:00:00'
-    ),
-    (
-        8,
-        'Ownership Updated',
-        'Ownership of product NIKE-AIR-001 was transferred to you.',
-        TRUE,
-        '2024-03-08 09:00:00'
-    ),
-    (
-        9,
-        'Product Shipped',
-        'Your Nike Zoom Pegasus has been shipped and is on the way.',
-        TRUE,
-        '2024-01-21 10:00:00'
-    ),
-    (
-        10,
-        'New Product Available',
-        'Nike Dunk Low is now available for purchase at sports_retailer.',
-        FALSE,
-        '2024-03-02 09:30:00'
-    ),
-    (
-        6,
-        'Suspicious Activity',
-        'Product ADIDAS-STAN-004 has been flagged as suspicious. Please review.',
-        FALSE,
-        '2024-03-05 15:30:00'
-    ),
-    (
-        2,
-        'Product Registration',
-        'Your product NIKE-AIR-001 has been successfully registered on the blockchain.',
-        TRUE,
-        '2024-01-15 10:35:00'
-    ),
-    (
-        3,
-        'Product Registration',
-        'Your product ADIDAS-ULTRA-001 has been successfully registered on the blockchain.',
-        TRUE,
-        '2024-01-25 11:05:00'
-    );
+INSERT INTO fyp_25_s4_20.notification
+  (user_id, title, message, is_read, created_on, product_id, tx_hash)
+VALUES
+  (2, 'Product Registration',
+   'Your product NIKE-AIR-001 has been successfully registered on the blockchain. tx=seed_tx_ni_ke_001',
+   FALSE, '2024-01-15 10:35:00', 1, 'seed_tx_ni_ke_001'),
+
+  (8, 'Ownership Updated',
+   'Ownership of product NIKE-AIR-001 was transferred to you. tx=seed_tx_p1_ret_to_cons',
+   TRUE, '2024-03-08 09:00:00', 1, 'seed_tx_p1_ret_to_cons'),
+
+  (8, 'Product Verified',
+   'Your product NIKE-AIR-001 has been verified as authentic.',
+   FALSE, '2024-03-10 10:00:00', 1, NULL),
+
+  (6, 'Suspicious Activity',
+   'Product ADIDAS-STAN-004 has been flagged as suspicious. Please review.',
+   FALSE, '2024-03-05 15:30:00', 8, NULL)
+
+ON CONFLICT ON CONSTRAINT notification_user_product_tx_uniq
+DO NOTHING;
+
 
 -- COMMIT;

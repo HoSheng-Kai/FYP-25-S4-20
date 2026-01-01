@@ -1,4 +1,4 @@
-import pool from "../schema/database";
+import pool from "../../schema/database";
 
 export type MarketplaceListingRow = {
   listing_id: number;

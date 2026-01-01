@@ -1,5 +1,5 @@
 // src/entities/ProductDeletion.ts
-import pool from "../schema/database";
+import pool from "../../schema/database";
 
 export class ProductDeletion {
   static async deleteProductIfAllowed(

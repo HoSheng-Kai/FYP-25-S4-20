@@ -1,13 +1,13 @@
 import type { Request, Response } from "express";
 import crypto from "crypto";
 import pool from "../schema/database";
-import fs from "fs";
-import path from "path";
 
 function sha256Hex(input: string) {
   return crypto.createHash("sha256").update(input, "utf8").digest("hex");
 }
 
+// POST /api/products/metadata
+// Stores draft metadata in DB only (no file), allowed ONLY before confirm
 export async function upsertProductMetadata(req: Request, res: Response) {
   try {
     const { productId, metadata } = (req.body || {}) as any;
@@ -21,7 +21,6 @@ export async function upsertProductMetadata(req: Request, res: Response) {
       });
     }
 
-    // Basic required key for your workflow
     if (!metadata.serialNo || typeof metadata.serialNo !== "string") {
       return res.status(400).json({
         success: false,
@@ -29,46 +28,55 @@ export async function upsertProductMetadata(req: Request, res: Response) {
       });
     }
 
-    // Ensure product exists
-    const p = await pool.query(
-      `SELECT product_id FROM fyp_25_s4_20.product WHERE product_id = $1`,
+    // block draft edits AFTER confirm
+    const lock = await pool.query(
+      `SELECT product_id, tx_hash FROM fyp_25_s4_20.product WHERE product_id = $1`,
       [pid]
     );
-    if (p.rows.length === 0) {
+
+    if (lock.rows.length === 0) {
       return res.status(404).json({ success: false, error: "Product not found" });
     }
 
-    // Store exact JSON string so hash is stable
+    const tx = lock.rows[0]?.tx_hash;
+    if (tx && String(tx).trim() !== "") {
+      return res.status(409).json({
+        success: false,
+        error: "Metadata is locked after blockchain confirmation",
+        details: "Use metadata-final only once after confirm; draft cannot change.",
+      });
+    }
+
+    // hash stable bytes
     const jsonText = JSON.stringify(metadata);
     const hashHex = sha256Hex(jsonText);
 
-    // Write EXACT bytes that we hashed so /metadata/:id.json matches on-chain hash
-    const dir = path.join(process.cwd(), "metadata");
-    fs.mkdirSync(dir, { recursive: true });
-
-    const filePath = path.join(dir, `${pid}.json`);
-    fs.writeFileSync(filePath, jsonText, "utf8");
-
+    // upsert draft record
     await pool.query(
       `
-      INSERT INTO fyp_25_s4_20.product_metadata (product_id, metadata_json, metadata_sha256_hex)
-      VALUES ($1, $2::jsonb, $3)
+      INSERT INTO fyp_25_s4_20.product_metadata
+        (product_id, metadata_json, metadata_sha256_hex, is_final, metadata_uri)
+      VALUES
+        ($1, $2::jsonb, $3, FALSE, NULL)
       ON CONFLICT (product_id)
       DO UPDATE SET
         metadata_json = EXCLUDED.metadata_json,
-        metadata_sha256_hex = EXCLUDED.metadata_sha256_hex
+        metadata_sha256_hex = EXCLUDED.metadata_sha256_hex,
+        is_final = FALSE,
+        metadata_uri = NULL
       `,
       [pid, jsonText, hashHex]
     );
 
-    // Base URL (lets you change later when hosting)
+    // This is the *future* URI after finalize (hash-based)
     const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
-    const metadataUri = `${baseUrl}/metadata/${pid}.json`;
+    const metadataUri = `${baseUrl}/metadata/${hashHex}.json`;
 
     return res.status(200).json({
       success: true,
       metadataUri,
       metadataSha256Hex: hashHex,
+      isFinal: false,
     });
   } catch (err) {
     return res.status(500).json({

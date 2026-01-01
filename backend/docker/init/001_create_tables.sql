@@ -96,6 +96,42 @@ CREATE TABLE IF NOT EXISTS product_listing (
 );
 
 -- ===========================
+-- Notification Table
+-- ===========================
+-- Create notification table if missing
+CREATE TABLE IF NOT EXISTS fyp_25_s4_20.notification (
+  notification_id SERIAL PRIMARY KEY,
+  user_id INT NOT NULL REFERENCES fyp_25_s4_20.users(user_id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  message TEXT NOT NULL,
+  is_read BOOLEAN NOT NULL DEFAULT FALSE,
+  created_on TIMESTAMP DEFAULT NOW(),
+
+  -- optional linkage (can be null for generic notifications)
+  product_id INT REFERENCES fyp_25_s4_20.product(product_id) ON DELETE CASCADE,
+  tx_hash TEXT
+);
+
+-- Helpful index for reads
+CREATE INDEX IF NOT EXISTS idx_notification_user_created
+ON fyp_25_s4_20.notification (user_id, created_on DESC);
+
+-- Add UNIQUE CONSTRAINT for idempotency (this is what ON CONFLICT ON CONSTRAINT needs)
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'notification_user_product_tx_uniq'
+      AND conrelid = 'fyp_25_s4_20.notification'::regclass
+  ) THEN
+    ALTER TABLE fyp_25_s4_20.notification
+      ADD CONSTRAINT notification_user_product_tx_uniq
+      UNIQUE (user_id, product_id, tx_hash);
+  END IF;
+END $$;
+
+-- ===========================
 -- BLOCKCHAIN NODE
 -- ===========================
 
@@ -174,10 +210,6 @@ EXECUTE FUNCTION set_updated_on();
 
 -- drop the partial unique index
 DROP INDEX IF EXISTS fyp_25_s4_20.ux_product_product_pda;
-
--- -- add a real unique constraint (creates a full unique index)
--- ALTER TABLE fyp_25_s4_20.product
---   ADD CONSTRAINT product_product_pda_unique UNIQUE (product_pda);
 
 -- ===========================
 -- READ MODEL VIEW
@@ -362,6 +394,27 @@ LEFT JOIN LATERAL (
 LEFT JOIN fyp_25_s4_20.users u_owner
   ON u_owner.user_id = o_active.owner_id;
 
+
+ALTER TABLE fyp_25_s4_20.product
+ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'draft';
+
+-- Optional: restrict allowed values
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'product_stage_check'
+      AND conrelid = 'fyp_25_s4_20.product'::regclass
+  ) THEN
+    ALTER TABLE fyp_25_s4_20.product
+    ADD CONSTRAINT product_stage_check
+    CHECK (stage IN ('draft','confirmed','onchain'));
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_product_stage
+ON fyp_25_s4_20.product(stage);
 
 
 

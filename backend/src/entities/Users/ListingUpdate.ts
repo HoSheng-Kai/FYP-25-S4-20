@@ -1,4 +1,4 @@
-import pool from '../schema/database';
+import pool from '../../schema/database';
 
 export type ListingStatus = 'available' | 'reserved' | 'sold';
 
@@ -19,6 +19,17 @@ export interface UpdateListingInput {
   price?: number;
   currency?: string;
   status?: ListingStatus;
+}
+
+export interface ListingRow {
+  listing_id: number;
+  product_id: number;
+  serial_no: string;
+  model: string | null;
+  price: string | null;
+  currency: string | null;
+  status: ListingStatus;
+  created_on: Date; // you can treat this as updatedOn if you don't add updated_on column
 }
 
 export class ListingUpdate {
@@ -101,7 +112,6 @@ export class ListingUpdate {
     }
   }
 
-
   /**
    * Update listing fields (price / currency / status) for a user.
    */
@@ -175,38 +185,130 @@ export class ListingUpdate {
     }
   }
 
-  /**
-   * Delete a listing for the user, with permission checks.
-   */
-  static async deleteListingForUser(
+  static async getListingForEdit(
     listingId: number,
     userId: number
-  ): Promise<void> {
-    const client = await pool.connect();
-    try {
-      await client.query('BEGIN');
+  ): Promise<ListingForEdit> {
+    const r = await pool.query(
+      `
+      SELECT
+        pl.listing_id,
+        pl.product_id,
+        p.serial_no,
+        p.model,
+        pl.price,
+        pl.currency,
+        pl.status,
+        pl.created_on
+      FROM fyp_25_s4_20.product_listing pl
+      JOIN fyp_25_s4_20.product p
+        ON p.product_id = pl.product_id
+      WHERE pl.listing_id = $1
+        AND pl.seller_id = $2
+      LIMIT 1;
+      `,
+      [listingId, userId]
+    );
 
-      const existing = await this.getListingForUser(listingId, userId);
-
-      // optional: block deleting sold listings
-      if (existing.status === 'sold') {
-        throw new Error('Cannot delete a listing that has already been sold');
-      }
-
-      await client.query(
-        `
-        DELETE FROM fyp_25_s4_20.product_listing
-        WHERE listing_id = $1;
-        `,
+    if (r.rows.length === 0) {
+      // distinguish not found vs not owner
+      const exists = await pool.query(
+        `SELECT listing_id FROM fyp_25_s4_20.product_listing WHERE listing_id = $1`,
         [listingId]
       );
 
-      await client.query('COMMIT');
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
+      if (exists.rows.length === 0) {
+        throw new Error("Listing not found");
+      }
+
+      throw new Error("Not owner of this listing");
     }
+
+    return r.rows[0] as ListingForEdit;
+  }
+
+  /**
+   * Delete a listing for the user, with permission checks.
+   */
+  static async deleteListingForUser(listingId: number, userId: number): Promise<void> {
+    // Delete only if the listing belongs to this user
+    const del = await pool.query(
+      `
+      DELETE FROM fyp_25_s4_20.product_listing
+      WHERE listing_id = $1
+        AND seller_id = $2
+      RETURNING listing_id;
+      `,
+      [listingId, userId]
+    );
+
+    if (del.rows.length > 0) return;
+
+    // If nothing deleted, decide why (not found vs not owner)
+    const exists = await pool.query(
+      `SELECT listing_id FROM fyp_25_s4_20.product_listing WHERE listing_id = $1`,
+      [listingId]
+    );
+
+    if (exists.rows.length === 0) throw new Error("Listing not found");
+    throw new Error("Not owner of this listing");
+  }
+
+  static async updateListingAvailabilityForUser(args: {
+    listingId: number;
+    userId: number;
+    status: ListingStatus;
+  }): Promise<ListingRow> {
+    // Only update if listing belongs to this user
+    const upd = await pool.query(
+      `
+      UPDATE fyp_25_s4_20.product_listing pl
+      SET status = $3::fyp_25_s4_20.availability
+      WHERE pl.listing_id = $1
+        AND pl.seller_id = $2
+      RETURNING
+        pl.listing_id,
+        pl.product_id,
+        pl.price,
+        pl.currency::text AS currency,
+        pl.status::text AS status,
+        pl.created_on;
+      `,
+      [args.listingId, args.userId, args.status]
+    );
+
+    if (upd.rows.length === 0) {
+      // Decide why: not found vs not owner
+      const exists = await pool.query(
+        `SELECT listing_id FROM fyp_25_s4_20.product_listing WHERE listing_id = $1`,
+        [args.listingId]
+      );
+      if (exists.rows.length === 0) throw new Error("Listing not found");
+      throw new Error("Not owner of this listing");
+    }
+
+    const row = upd.rows[0];
+
+    // Pull product details for UI response (serial/model)
+    const p = await pool.query(
+      `
+      SELECT p.serial_no, p.model
+      FROM fyp_25_s4_20.product p
+      WHERE p.product_id = $1
+      LIMIT 1;
+      `,
+      [row.product_id]
+    );
+
+    return {
+      listing_id: row.listing_id,
+      product_id: row.product_id,
+      serial_no: p.rows[0]?.serial_no ?? "",
+      model: p.rows[0]?.model ?? null,
+      price: row.price ?? null,
+      currency: row.currency ?? null,
+      status: row.status as ListingStatus,
+      created_on: row.created_on,
+    };
   }
 }

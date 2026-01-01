@@ -1,14 +1,14 @@
 // src/controller/ProductController.ts
 import { Request, Response } from 'express';
 import { ProductScan } from '../entities/Product';
-import { ProductRegistration } from '../entities/ProductRegistration';
+import { ProductRegistration } from '../entities/Manufacturer/ProductRegistration';
 import { ProductHistory, ProductHistoryResult } from '../entities/ProductHistory';
-import { ProductDeletion } from '../entities/ProductDeletion';
+import { ProductDeletion } from '../entities/Manufacturer/ProductDeletion';
 import { ProductQr } from '../entities/ProductQr';
 import { ProductUpdate } from '../entities/ProductUpdate';
-import { ManufacturerProductListing } from '../entities/ManufacturerProductListing';
-import { MarketplaceListing } from '../entities/MarketplaceListing';
-import { ListingUpdate, ListingStatus } from '../entities/ListingUpdate';
+import { ManufacturerProductListing } from '../entities/Manufacturer/ManufacturerProductListing';
+import { MarketplaceListing } from '../entities/Manufacturer/MarketplaceListing';
+import { ListingUpdate, ListingStatus } from '../entities/Users/ListingUpdate';
 import { QrCodeService } from '../service/QrCodeService';
 
 import pool from '../schema/database';
@@ -18,8 +18,440 @@ import crypto from "crypto";
 
 
 class ProductController {
-  // POST /api/products/register
-  async registerProduct(req: Request, res: Response): Promise<void> {
+
+// ===========================
+// Manufacturer
+// ===========================
+
+  // GET /api/products/verify?serial=NIKE-AIR-001
+  async verifyProductBySerial(req: Request, res: Response): Promise<void> {
+    try {
+      const serial = req.query.serial as string | undefined;
+
+      if (!serial) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'serial' query parameter",
+          example: '/api/products/verify?serial=NIKE-AIR-001',
+        });
+        return;
+      }
+
+      const result = await ProductScan.findBySerial(serial);
+
+      if (!result) {
+        res.status(404).json({
+          success: false,
+          error: 'Product not found',
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: {
+          productId: result.productId,
+          productName: result.productName,
+          serialNumber: result.serialNumber,
+          batchNumber: result.batchNumber,
+          category: result.category,
+          manufactureDate: result.manufactureDate,
+          productDescription: result.productDescription,
+          status: result.status,
+          registeredOn: result.registeredOn,
+
+          manufacturer: result.manufacturer,
+          currentOwner: result.currentOwner,
+          
+          lifecycleStatus: result.lifecycleStatus,
+          blockchainStatus: result.blockchainStatus,
+          isAuthentic: result.isAuthentic,
+        },
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to verify product',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // GET /api/products/history?serial=NIKE-AIR-001
+  async getTransactionHistory(req: Request, res: Response) {
+    try {
+      const serial = req.query.serial as string | undefined;
+
+      if (!serial) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'serial' query parameter",
+        });
+        return;
+      }
+
+      const history = await ProductHistory.getBySerial(serial);
+
+      if (!history) {
+        res.status(404).json({
+          success: false,
+          error: 'Product not found',
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: history,
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch transaction history',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // // POST /api/products/register
+  // async registerProduct(req: Request, res: Response): Promise<void> {
+  //   try {
+  //     const {
+  //       manufacturerId,
+  //       serialNo,
+  //       productName,
+  //       batchNo,
+  //       category,
+  //       manufactureDate,
+  //       description,
+  //       price,
+  //       currency,
+  //     } = (req.body || {}) as any;
+
+  //     if (!manufacturerId || !serialNo) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: 'Missing required fields',
+  //         details: {
+  //           required: ['manufacturerId', 'serialNo'],
+  //           receivedBody: req.body ?? null,
+  //         },
+  //       });
+  //       return;
+  //     }
+
+  //     if (typeof manufacturerId !== 'number') {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: 'manufacturerId must be a number',
+  //       });
+  //       return;
+  //     }
+
+  //     try {
+  //       const result = await ProductRegistration.registerProduct({
+  //         manufacturerId,
+  //         serialNo,
+  //         productName,
+  //         batchNo,
+  //         category,
+  //         manufactureDate,
+  //         description,
+  //         price,
+  //         currency,
+  //       });
+
+  //       res.status(201).json({
+  //         success: true,
+  //         data: result,
+  //       });
+  //     } catch (err: any) {
+  //       // ✅ clean typed 409 for "serial cannot be reused"
+  //       if (err?.status === 409) {
+  //         res.status(409).json({
+  //           success: false,
+  //           error: "Serial number already exists",
+  //           details: err.reason ?? "SERIAL_LOCKED",
+  //         });
+  //         return;
+  //       }
+
+  //       // legacy unique violation
+  //       if (err?.code === "23505") {
+  //         res.status(409).json({
+  //           success: false,
+  //           error: "Serial number already exists",
+  //           details: "Choose a unique serial_no",
+  //         });
+  //         return;
+  //       }
+
+  //       throw err;
+  //     }
+  //   } catch (err) {
+  //     res.status(500).json({
+  //       success: false,
+  //       error: 'Failed to register product',
+  //       details: err instanceof Error ? err.message : String(err),
+  //     });
+  //   }
+  // }
+
+  // // GET /api/products/resume?serial=TEST-META-001
+  // async resumeRegistration(req: Request, res: Response): Promise<void> {
+  //   try {
+  //     const serial = req.query.serial as string | undefined;
+  //     if (!serial?.trim()) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: "Missing 'serial' query parameter",
+  //         example: "/api/products/resume?serial=TEST-META-001",
+  //       });
+  //       return;
+  //     }
+
+  //     // Find the product record (registered/pending or already on-chain)
+  //     const p = await pool.query(
+  //       `
+  //       SELECT
+  //         p.product_id,
+  //         p.serial_no,
+  //         p.model,
+  //         p.batch_no,
+  //         p.category,
+  //         p.manufacture_date,
+  //         p.description,
+  //         p.status,
+  //         p.registered_on,
+  //         p.registered_by,
+  //         p.product_pda,
+  //         p.tx_hash,
+  //         u.public_key AS manufacturer_public_key
+  //       FROM fyp_25_s4_20.product p
+  //       LEFT JOIN fyp_25_s4_20.users u ON u.user_id = p.registered_by
+  //       WHERE p.serial_no = $1
+  //       LIMIT 1;
+  //       `,
+  //       [serial.trim()]
+  //     );
+
+  //     if (p.rows.length === 0) {
+  //       res.status(404).json({ success: false, error: "Product not found in DB" });
+  //       return;
+  //     }
+
+  //     const row = p.rows[0];
+
+  //     res.status(200).json({
+  //       success: true,
+  //       data: {
+  //         productId: row.product_id,
+  //         serialNo: row.serial_no,
+  //         productName: row.model,
+  //         batchNo: row.batch_no,
+  //         category: row.category,
+  //         manufactureDate: row.manufacture_date,
+  //         description: row.description,
+  //         status: row.status,
+  //         registeredOn: row.registered_on,
+
+  //         manufacturerId: row.registered_by,
+  //         manufacturerPublicKey: row.manufacturer_public_key,
+
+  //         productPda: row.product_pda,
+  //         txHash: row.tx_hash,
+
+  //         blockchainStatus: row.tx_hash ? "on blockchain" : "pending",
+  //       },
+  //     });
+  //   } catch (err) {
+  //     res.status(500).json({
+  //       success: false,
+  //       error: "Failed to resume registration",
+  //       details: err instanceof Error ? err.message : String(err),
+  //     });
+  //   }
+  // }
+
+  // // DELETE /api/products/:productId/cancel   body: { manufacturerId }
+  // async cancelPendingById(req: Request, res: Response): Promise<void> {
+  //   const client = await pool.connect();
+  //   try {
+  //     const productId = Number(req.params.productId);
+  //     const { manufacturerId } = (req.body || {}) as any;
+
+  //     if (!productId || !manufacturerId) {
+  //       res.status(400).json({
+  //         success: false,
+  //         error: "Missing required fields",
+  //         details: ["productId", "manufacturerId"],
+  //         receivedBody: req.body ?? null,
+  //       });
+  //       return;
+  //     }
+
+  //     await client.query("BEGIN");
+
+  //     // Lock row
+  //     const check = await client.query(
+  //       `
+  //       SELECT product_id, registered_by, tx_hash
+  //       FROM fyp_25_s4_20.product
+  //       WHERE product_id = $1
+  //       FOR UPDATE;
+  //       `,
+  //       [productId]
+  //     );
+
+  //     if (check.rows.length === 0) {
+  //       await client.query("ROLLBACK");
+  //       res.status(404).json({ success: false, error: "Product not found" });
+  //       return;
+  //     }
+
+  //     const prod = check.rows[0];
+
+  //     // Must be the same manufacturer who created it
+  //     if (prod.registered_by !== manufacturerId) {
+  //       await client.query("ROLLBACK");
+  //       res.status(403).json({
+  //         success: false,
+  //         error: "Not allowed",
+  //         details: "You are not the manufacturer who registered this product",
+  //       });
+  //       return;
+  //     }
+
+  //     // If already confirmed, do NOT delete
+  //     if (prod.tx_hash) {
+  //       await client.query("ROLLBACK");
+  //       res.status(409).json({
+  //         success: false,
+  //         error: "Cannot cancel",
+  //         details: "Product already has tx_hash (already on-chain / confirmed)",
+  //       });
+  //       return;
+  //     }
+
+  //     // Delete metadata first (FK cascade exists in your schema, but safe anyway)
+  //     await client.query(
+  //       `DELETE FROM fyp_25_s4_20.product_metadata WHERE product_id = $1;`,
+  //       [productId]
+  //     );
+
+  //     // Delete product (will cascade delete listing/ownership if any)
+  //     await client.query(
+  //       `DELETE FROM fyp_25_s4_20.product WHERE product_id = $1;`,
+  //       [productId]
+  //     );
+
+  //     await client.query("COMMIT");
+
+  //     res.status(200).json({
+  //       success: true,
+  //       data: { cancelled: true, productId },
+  //     });
+  //   } catch (err) {
+  //     try {
+  //       await client.query("ROLLBACK");
+  //     } catch {}
+  //     res.status(500).json({
+  //       success: false,
+  //       error: "Failed to cancel pending product",
+  //       details: err instanceof Error ? err.message : String(err),
+  //     });
+  //   } finally {
+  //     client.release();
+  //   }
+  // }
+
+  // // DELETE /api/products/cancel-by-serial
+  // async cancelBySerial(req: Request, res: Response) {
+  //   const { manufacturerId, serialNo } = req.body ?? {};
+  //   if (!manufacturerId || !serialNo) {
+  //     return res.status(400).json({ success: false, error: "Missing fields" });
+  //   }
+
+  //   // Only cancel if tx_hash IS NULL (pending)
+  //   const del = await pool.query(
+  //     `
+  //     DELETE FROM fyp_25_s4_20.product
+  //     WHERE serial_no = $1 AND registered_by = $2 AND tx_hash IS NULL
+  //     RETURNING product_id, serial_no;
+  //     `,
+  //     [serialNo, manufacturerId]
+  //   );
+
+  //   if (del.rows.length === 0) {
+  //     return res.status(409).json({
+  //       success: false,
+  //       error: "Nothing to cancel (maybe already confirmed)",
+  //     });
+  //   }
+
+  //   return res.json({ success: true, data: del.rows[0] });
+  // }
+
+  // GET /api/products/manufacturer/:manufacturerId/listings
+  async getManufacturerProductListings(req: Request, res: Response): Promise<void> {
+    try {
+      const manufacturerIdParam = req.params.manufacturerId;
+
+      if (!manufacturerIdParam) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'manufacturerId' path parameter",
+          example: "/api/products/manufacturer/2/listings"
+        });
+        return;
+      }
+
+      const manufacturerId = Number(manufacturerIdParam);
+
+      if (Number.isNaN(manufacturerId)) {
+        res.status(400).json({
+          success: false,
+          error: "'manufacturerId' must be a number",
+        });
+        return;
+      }
+
+      const rows = await ManufacturerProductListing.findByManufacturer(manufacturerId);
+
+      res.json({
+        success: true,
+        data: rows.map(row => ({
+          productId: row.product_id,
+          serialNumber: row.serial_no,
+          productName: row.model,
+          category: row.category,
+          productStatus: row.product_status,       // registered / verified / suspicious
+          lifecycleStatus: row.lifecycle_status,   // active / transferred
+          blockchainStatus: row.blockchain_status, // on blockchain / pending
+          registeredOn: row.registered_on,
+
+          // latest listing (may be null if no listing)
+          price: row.price,
+          currency: row.currency,
+          listingStatus: row.listing_status,
+          listingCreatedOn: row.listing_created_on,
+        })),
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to fetch product listings for manufacturer',
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // ================================
+  // Register Product Flow 
+  // ================================
+
+  // POST /api/products/draft
+  async createDraft(req: Request, res: Response): Promise<void> {
     try {
       const {
         manufacturerId,
@@ -29,178 +461,143 @@ class ProductController {
         category,
         manufactureDate,
         description,
-        price,
-        currency,
-      } = (req.body || {}) as any;
+      } = req.body || {};
 
       if (!manufacturerId || !serialNo) {
-        res.status(400).json({
-          success: false,
-          error: 'Missing required fields',
-          details: {
-            required: ['manufacturerId', 'serialNo'],
-            receivedBody: req.body ?? null,
-          },
-        });
+        res.status(400).json({ success: false, error: "Missing manufacturerId or serialNo" });
         return;
       }
 
-      if (typeof manufacturerId !== 'number') {
-        res.status(400).json({
-          success: false,
-          error: 'manufacturerId must be a number',
-        });
-        return;
-      }
-
-      try {
-        const result = await ProductRegistration.registerProduct({
-          manufacturerId,
-          serialNo,
-          productName,
-          batchNo,
-          category,
-          manufactureDate,
-          description,
-          price,
-          currency,
-        });
-
-        res.status(201).json({
-          success: true,
-          data: result,
-        });
-      } catch (err: any) {
-        // ✅ clean typed 409 for "serial cannot be reused"
-        if (err?.status === 409) {
-          res.status(409).json({
-            success: false,
-            error: "Serial number already exists",
-            details: err.reason ?? "SERIAL_LOCKED",
-          });
-          return;
-        }
-
-        // legacy unique violation
-        if (err?.code === "23505") {
-          res.status(409).json({
-            success: false,
-            error: "Serial number already exists",
-            details: "Choose a unique serial_no",
-          });
-          return;
-        }
-
-        throw err;
-      }
-    } catch (err) {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to register product',
-        details: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  // GET /api/products/resume?serial=TEST-META-001
-  async resumeRegistration(req: Request, res: Response): Promise<void> {
-    try {
-      const serial = req.query.serial as string | undefined;
-      if (!serial?.trim()) {
-        res.status(400).json({
-          success: false,
-          error: "Missing 'serial' query parameter",
-          example: "/api/products/resume?serial=TEST-META-001",
-        });
-        return;
-      }
-
-      // Find the product record (registered/pending or already on-chain)
-      const p = await pool.query(
+      const r = await pool.query(
         `
-        SELECT
-          p.product_id,
-          p.serial_no,
-          p.model,
-          p.batch_no,
-          p.category,
-          p.manufacture_date,
-          p.description,
-          p.status,
-          p.registered_on,
-          p.registered_by,
-          p.product_pda,
-          p.tx_hash,
-          u.public_key AS manufacturer_public_key
-        FROM fyp_25_s4_20.product p
-        LEFT JOIN fyp_25_s4_20.users u ON u.user_id = p.registered_by
-        WHERE p.serial_no = $1
-        LIMIT 1;
+        INSERT INTO fyp_25_s4_20.product
+          (registered_by, serial_no, status, model, batch_no, category, manufacture_date, description, stage, track)
+        VALUES
+          ($1, $2, 'registered', $3, $4, $5, $6, $7, 'draft', TRUE)
+        ON CONFLICT (serial_no) DO NOTHING
+        RETURNING product_id, serial_no, model, batch_no, category, manufacture_date, description, status, stage, registered_on;
         `,
-        [serial.trim()]
+        [manufacturerId, serialNo.trim(), productName ?? null, batchNo ?? null, category ?? null, manufactureDate ?? null, description ?? null]
       );
 
-      if (p.rows.length === 0) {
-        res.status(404).json({ success: false, error: "Product not found in DB" });
+      if (r.rows.length === 0) {
+        res.status(409).json({
+          success: false,
+          error: "Serial number already exists",
+          details: "Choose a unique serialNo",
+        });
         return;
       }
 
-      const row = p.rows[0];
-
-      res.status(200).json({
-        success: true,
-        data: {
-          productId: row.product_id,
-          serialNo: row.serial_no,
-          productName: row.model,
-          batchNo: row.batch_no,
-          category: row.category,
-          manufactureDate: row.manufacture_date,
-          description: row.description,
-          status: row.status,
-          registeredOn: row.registered_on,
-
-          manufacturerId: row.registered_by,
-          manufacturerPublicKey: row.manufacturer_public_key,
-
-          productPda: row.product_pda,
-          txHash: row.tx_hash,
-
-          blockchainStatus: row.tx_hash ? "on blockchain" : "pending",
-        },
-      });
+      res.status(201).json({ success: true, data: { product: r.rows[0] } });
     } catch (err) {
       res.status(500).json({
         success: false,
-        error: "Failed to resume registration",
+        error: "Failed to create draft product",
         details: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
-  // DELETE /api/products/:productId/cancel   body: { manufacturerId }
-  async cancelPendingById(req: Request, res: Response): Promise<void> {
+  // PUT /api/products/:productId/draft
+  async updateDraft(req: Request, res: Response): Promise<void> {
+    try {
+      const productId = Number(req.params.productId);
+      if (Number.isNaN(productId)) {
+        res.status(400).json({ success: false, error: "productId must be a number" });
+        return;
+      }
+
+      const {
+        manufacturerId,
+        serialNo, // optional: allow editing serial while still draft (but must remain unique)
+        productName,
+        batchNo,
+        category,
+        manufactureDate,
+        description,
+      } = req.body || {};
+
+      if (!manufacturerId) {
+        res.status(400).json({ success: false, error: "manufacturerId is required" });
+        return;
+      }
+
+      const r = await pool.query(
+        `
+        UPDATE fyp_25_s4_20.product
+        SET
+          serial_no = COALESCE($1, serial_no),
+          model = COALESCE($2, model),
+          batch_no = COALESCE($3, batch_no),
+          category = COALESCE($4, category),
+          manufacture_date = COALESCE($5, manufacture_date),
+          description = COALESCE($6, description)
+        WHERE product_id = $7
+          AND registered_by = $8
+          AND stage = 'draft'
+          AND (tx_hash IS NULL OR tx_hash = '')
+        RETURNING product_id, serial_no, model, batch_no, category, manufacture_date, description, status, stage, registered_on;
+        `,
+        [
+          serialNo ? String(serialNo).trim() : null,
+          productName ?? null,
+          batchNo ?? null,
+          category ?? null,
+          manufactureDate ?? null,
+          description ?? null,
+          productId,
+          manufacturerId,
+        ]
+      );
+
+      if (r.rows.length === 0) {
+        res.status(409).json({
+          success: false,
+          error: "Cannot update product",
+          details: "Only draft products (not on-chain) can be updated by the registering manufacturer.",
+        });
+        return;
+      }
+
+      res.json({ success: true, data: { product: r.rows[0] } });
+    } catch (err: any) {
+      // unique serial conflict
+      if (err?.code === "23505") {
+        res.status(409).json({
+          success: false,
+          error: "Serial number already exists",
+          details: "Choose a unique serialNo",
+        });
+        return;
+      }
+
+      res.status(500).json({
+        success: false,
+        error: "Failed to update draft product",
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // DELETE /api/products/:productId/draft   body: { manufacturerId }
+  async deleteDraft(req: Request, res: Response): Promise<void> {
     const client = await pool.connect();
     try {
       const productId = Number(req.params.productId);
-      const { manufacturerId } = (req.body || {}) as any;
+      const { manufacturerId } = req.body || {};
 
       if (!productId || !manufacturerId) {
-        res.status(400).json({
-          success: false,
-          error: "Missing required fields",
-          details: ["productId", "manufacturerId"],
-          receivedBody: req.body ?? null,
-        });
+        res.status(400).json({ success: false, error: "Missing productId or manufacturerId" });
         return;
       }
 
       await client.query("BEGIN");
 
-      // Lock row
+      // lock row
       const check = await client.query(
         `
-        SELECT product_id, registered_by, tx_hash
+        SELECT product_id, registered_by, stage, tx_hash
         FROM fyp_25_s4_20.product
         WHERE product_id = $1
         FOR UPDATE;
@@ -214,55 +611,33 @@ class ProductController {
         return;
       }
 
-      const prod = check.rows[0];
+      const p = check.rows[0];
 
-      // Must be the same manufacturer who created it
-      if (prod.registered_by !== manufacturerId) {
+      if (p.registered_by !== manufacturerId) {
         await client.query("ROLLBACK");
-        res.status(403).json({
-          success: false,
-          error: "Not allowed",
-          details: "You are not the manufacturer who registered this product",
-        });
+        res.status(403).json({ success: false, error: "Not allowed" });
         return;
       }
 
-      // If already confirmed, do NOT delete
-      if (prod.tx_hash) {
+      if (p.stage !== "draft" || p.tx_hash) {
         await client.query("ROLLBACK");
         res.status(409).json({
           success: false,
-          error: "Cannot cancel",
-          details: "Product already has tx_hash (already on-chain / confirmed)",
+          error: "Cannot delete product",
+          details: "Only draft products (not confirmed / not on-chain) can be deleted.",
         });
         return;
       }
 
-      // Delete metadata first (FK cascade exists in your schema, but safe anyway)
-      await client.query(
-        `DELETE FROM fyp_25_s4_20.product_metadata WHERE product_id = $1;`,
-        [productId]
-      );
-
-      // Delete product (will cascade delete listing/ownership if any)
-      await client.query(
-        `DELETE FROM fyp_25_s4_20.product WHERE product_id = $1;`,
-        [productId]
-      );
+      await client.query(`DELETE FROM fyp_25_s4_20.product WHERE product_id = $1;`, [productId]);
 
       await client.query("COMMIT");
-
-      res.status(200).json({
-        success: true,
-        data: { cancelled: true, productId },
-      });
+      res.json({ success: true, data: { deleted: true, productId } });
     } catch (err) {
-      try {
-        await client.query("ROLLBACK");
-      } catch {}
+      try { await client.query("ROLLBACK"); } catch {}
       res.status(500).json({
         success: false,
-        error: "Failed to cancel pending product",
+        error: "Failed to delete draft product",
         details: err instanceof Error ? err.message : String(err),
       });
     } finally {
@@ -270,31 +645,143 @@ class ProductController {
     }
   }
 
-  // DELETE /api/products/cancel-by-serial
-  async cancelBySerial(req: Request, res: Response) {
-    const { manufacturerId, serialNo } = req.body ?? {};
-    if (!manufacturerId || !serialNo) {
-      return res.status(400).json({ success: false, error: "Missing fields" });
-    }
+  // POST /api/products/:productId/confirm-draft   body: { manufacturerId }
+  async confirmDraft(req: Request, res: Response): Promise<void> {
+    const client = await pool.connect();
+    try {
+      const productId = Number(req.params.productId);
+      const { manufacturerId } = req.body || {};
 
-    // Only cancel if tx_hash IS NULL (pending)
-    const del = await pool.query(
-      `
-      DELETE FROM fyp_25_s4_20.product
-      WHERE serial_no = $1 AND registered_by = $2 AND tx_hash IS NULL
-      RETURNING product_id, serial_no;
-      `,
-      [serialNo, manufacturerId]
-    );
+      if (!productId || !manufacturerId) {
+        res.status(400).json({ success: false, error: "Missing productId or manufacturerId" });
+        return;
+      }
 
-    if (del.rows.length === 0) {
-      return res.status(409).json({
+      await client.query("BEGIN");
+
+      const r = await client.query(
+        `
+        UPDATE fyp_25_s4_20.product
+        SET stage = 'confirmed'
+        WHERE product_id = $1
+          AND registered_by = $2
+          AND stage = 'draft'
+          AND (tx_hash IS NULL OR tx_hash = '')
+        RETURNING product_id, serial_no, stage;
+        `,
+        [productId, manufacturerId]
+      );
+
+      if (r.rows.length === 0) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          success: false,
+          error: "Cannot confirm",
+          details: "Only draft products (owned by you) can be confirmed.",
+        });
+        return;
+      }
+
+      await client.query("COMMIT");
+      res.json({ success: true, data: { product: r.rows[0], confirmedDraft: true } });
+    } catch (err) {
+      try { await client.query("ROLLBACK"); } catch {}
+      res.status(500).json({
         success: false,
-        error: "Nothing to cancel (maybe already confirmed)",
+        error: "Failed to confirm draft",
+        details: err instanceof Error ? err.message : String(err),
       });
+    } finally {
+      client.release();
     }
+  }
 
-    return res.json({ success: true, data: del.rows[0] });
+   // POST /api/products/:productId/metadata-final
+  async storeMetadataAfterConfirm(req: Request, res: Response) {
+    try {
+      const productId = Number(req.params.productId);
+      const { manufacturerId, metadata } = req.body || {};
+
+      if (!productId || !manufacturerId || !metadata) {
+        return res.status(400).json({
+          success: false,
+          error: "Missing required fields",
+          details: ["productId (params)", "manufacturerId", "metadata"],
+        });
+      }
+
+      const p = await pool.query(
+        `
+        SELECT product_id, registered_by, tx_hash, stage
+        FROM fyp_25_s4_20.product
+        WHERE product_id = $1
+        LIMIT 1;
+        `,
+        [productId]
+      );
+
+      if (p.rows.length === 0) return res.status(404).json({ success: false, error: "Product not found" });
+
+      const prod = p.rows[0];
+
+      if (prod.registered_by !== manufacturerId) return res.status(403).json({ success: false, error: "Not allowed" });
+
+      // ✅ must be confirmed first (draft still editable)
+      if (prod.stage !== "confirmed") {
+        return res.status(409).json({
+          success: false,
+          error: "Product must be confirmed before finalizing metadata",
+          details: "Call /confirm-draft first. After on-chain, metadata is immutable.",
+        });
+      }
+
+      // Block if already finalized
+      const existing = await pool.query(
+        `SELECT is_final FROM fyp_25_s4_20.product_metadata WHERE product_id = $1 LIMIT 1;`,
+        [productId]
+      );
+
+      if (existing.rows.length > 0 && existing.rows[0].is_final === true) {
+        return res.status(409).json({
+          success: false,
+          error: "Metadata already finalized",
+          details: "Metadata is immutable once stored.",
+        });
+      }
+
+      const jsonText = JSON.stringify(metadata);
+      const hashHex = crypto.createHash("sha256").update(jsonText, "utf8").digest("hex");
+
+      const dir = path.join(process.cwd(), "metadata");
+      fs.mkdirSync(dir, { recursive: true });
+
+      const filePath = path.join(dir, `${hashHex}.json`);
+      if (!fs.existsSync(filePath)) fs.writeFileSync(filePath, jsonText, "utf8");
+
+      const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
+      const metadataUri = `${baseUrl}/metadata/${hashHex}.json`;
+
+      // Upsert row, but lock as final=true
+      await pool.query(
+        `
+        INSERT INTO fyp_25_s4_20.product_metadata
+          (product_id, metadata_json, metadata_sha256_hex, is_final, metadata_uri)
+        VALUES ($1, $2::jsonb, $3, TRUE, $4)
+        ON CONFLICT (product_id)
+        DO UPDATE SET
+          metadata_json = EXCLUDED.metadata_json,
+          metadata_sha256_hex = EXCLUDED.metadata_sha256_hex,
+          is_final = TRUE,
+          metadata_uri = EXCLUDED.metadata_uri;
+        `,
+        [productId, jsonText, hashHex, metadataUri]
+      );
+
+      return res.json({ success: true, metadataUri, metadataSha256Hex: hashHex });
+    } catch (e: any) {
+      console.error("storeMetadataAfterConfirm error:", e);
+      return res.status(500).json({ success: false, error: e.message ?? "Failed to finalize metadata" });
+    }
   }
 
   // POST /api/products/:productId/confirm
@@ -302,7 +789,7 @@ class ProductController {
     const client = await pool.connect();
     try {
       const productId = Number(req.params.productId);
-      const { manufacturerId, txHash, productPda, blockSlot } = (req.body || {}) as any;
+      const { manufacturerId, txHash, productPda } = (req.body || {}) as any;
 
       if (!productId || !manufacturerId || !txHash) {
         res.status(400).json({
@@ -318,7 +805,7 @@ class ProductController {
 
       const check = await client.query(
         `
-        SELECT product_id, registered_by, tx_hash, product_pda
+        SELECT product_id, registered_by, tx_hash, product_pda, serial_no, stage
         FROM fyp_25_s4_20.product
         WHERE product_id = $1
         FOR UPDATE;
@@ -336,10 +823,17 @@ class ProductController {
 
       if (prod.registered_by !== manufacturerId) {
         await client.query("ROLLBACK");
-        res.status(403).json({
+        res.status(403).json({ success: false, error: "Not allowed" });
+        return;
+      }
+
+      // ✅ Must be confirmed before on-chain
+      if (prod.stage !== "confirmed" && !prod.tx_hash) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
           success: false,
-          error: "Not allowed",
-          details: "You are not the manufacturer who registered this product",
+          error: "Product not confirmed (draft is editable)",
+          details: "Call /confirm-draft first, then register on-chain.",
         });
         return;
       }
@@ -364,23 +858,45 @@ class ProductController {
         return;
       }
 
+      // ✅ set on-chain + lock stage
       const updated = await client.query(
         `
         UPDATE fyp_25_s4_20.product
         SET tx_hash = $1,
-            product_pda = COALESCE($2, product_pda)
+            product_pda = COALESCE($2, product_pda),
+            stage = 'onchain'
         WHERE product_id = $3
-        RETURNING product_id, serial_no, tx_hash, product_pda;
+        RETURNING product_id, serial_no, tx_hash, product_pda, stage;
         `,
         [txHash, productPda ?? null, productId]
       );
 
-      await client.query("COMMIT");
+      // ✅ notification (idempotent via UNIQUE constraint notification_user_product_tx_uniq)
+      try {
+        const serialNo = updated.rows[0]?.serial_no ?? "";
+        await client.query(
+          `
+          INSERT INTO fyp_25_s4_20.notification
+            (user_id, title, message, is_read, created_on, product_id, tx_hash)
+          VALUES
+            ($1, $2, $3, FALSE, NOW(), $4, $5)
+          ON CONFLICT ON CONSTRAINT notification_user_product_tx_uniq
+          DO NOTHING;
+          `,
+          [
+            manufacturerId,
+            "Product Registration",
+            `Your product ${serialNo} has been successfully registered on the blockchain. tx=${txHash}`,
+            productId,
+            txHash,
+          ]
+        );
+      } catch (e) {
+        console.warn("notification insert skipped:", e);
+      }
 
-      res.status(200).json({
-        success: true,
-        data: { product: updated.rows[0], confirmed: true },
-      });
+      await client.query("COMMIT");
+      res.status(200).json({ success: true, data: { product: updated.rows[0], confirmed: true } });
     } catch (err) {
       try { await client.query("ROLLBACK"); } catch {}
       res.status(500).json({
@@ -393,103 +909,9 @@ class ProductController {
     }
   }
 
-  // POST /api/products/:productId/metadata-final
-  async storeMetadataAfterConfirm(req: Request, res: Response) {
-    try {
-      const productId = Number(req.params.productId);
-      const { manufacturerId, metadata } = req.body || {};
-
-      if (!productId || !manufacturerId || !metadata) {
-        return res.status(400).json({
-          success: false,
-          error: "Missing required fields",
-          details: ["productId (params)", "manufacturerId", "metadata"],
-        });
-      }
-
-      // 1) Must exist + must be confirmed
-      const p = await pool.query(
-        `
-        SELECT product_id, registered_by, tx_hash
-        FROM fyp_25_s4_20.product
-        WHERE product_id = $1
-        LIMIT 1;
-        `,
-        [productId]
-      );
-
-      if (p.rows.length === 0) {
-        return res.status(404).json({ success: false, error: "Product not found" });
-      }
-
-      const prod = p.rows[0];
-
-      if (prod.registered_by !== manufacturerId) {
-        return res.status(403).json({ success: false, error: "Not allowed" });
-      }
-
-      // ✅ MUST be confirmed before writing metadata file
-      if (!prod.tx_hash) {
-        return res.status(409).json({
-          success: false,
-          error: "Product not yet confirmed on-chain",
-          details: "Confirm the product first, then finalize metadata",
-        });
-      }
-
-      // 2) Block if already finalized (immutability)
-      const existing = await pool.query(
-        `SELECT 1 FROM fyp_25_s4_20.product_metadata WHERE product_id = $1 LIMIT 1;`,
-        [productId]
-      );
-
-      if (existing.rows.length > 0) {
-        return res.status(409).json({
-          success: false,
-          error: "Metadata already finalized",
-          details: "Metadata is immutable once stored.",
-        });
-      }
-
-      // 3) Hash JSON stable
-      const jsonText = JSON.stringify(metadata);
-      const hashHex = crypto.createHash("sha256").update(jsonText, "utf8").digest("hex");
-
-      // 4) Write file by HASH (never overwrite)
-      const dir = path.join(process.cwd(), "metadata");
-      fs.mkdirSync(dir, { recursive: true });
-
-      const filePath = path.join(dir, `${hashHex}.json`);
-      if (!fs.existsSync(filePath)) {
-        fs.writeFileSync(filePath, jsonText, "utf8");
-      }
-
-      // 5) Insert-only DB row (immutable)
-      await pool.query(
-        `
-        INSERT INTO fyp_25_s4_20.product_metadata
-          (product_id, metadata_json, metadata_sha256_hex)
-        VALUES ($1, $2::jsonb, $3);
-        `,
-        [productId, jsonText, hashHex]
-      );
-
-      const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
-      const metadataUri = `${baseUrl}/metadata/${hashHex}.json`;
-
-      return res.json({
-        success: true,
-        metadataUri,
-        metadataSha256Hex: hashHex,
-      });
-    } catch (e: any) {
-      console.error("storeMetadataAfterConfirm error:", e);
-      return res.status(500).json({
-        success: false,
-        error: e.message ?? "Failed to finalize metadata",
-      });
-    }
-  }
+  // ================================
+  // QR Code Handling
+  // ================================
 
   // GET /api/products/:productId/qrcode
   async getProductQrCode(req: Request, res: Response): Promise<void> {
@@ -634,55 +1056,47 @@ class ProductController {
     }
   }
 
-  // GET /api/products/manufacturer/:manufacturerId/listings
-  async getManufacturerProductListings(req: Request, res: Response): Promise<void> {
+  
+// ===========================
+// User
+// ===========================
+
+  // GET /api/products/marketplace/listings
+  async getMarketplaceListings(req: Request, res: Response): Promise<void> {
     try {
-      const manufacturerIdParam = req.params.manufacturerId;
-
-      if (!manufacturerIdParam) {
-        res.status(400).json({
-          success: false,
-          error: "Missing 'manufacturerId' path parameter",
-          example: "/api/products/manufacturer/2/listings"
-        });
-        return;
-      }
-
-      const manufacturerId = Number(manufacturerIdParam);
-
-      if (Number.isNaN(manufacturerId)) {
-        res.status(400).json({
-          success: false,
-          error: "'manufacturerId' must be a number",
-        });
-        return;
-      }
-
-      const rows = await ManufacturerProductListing.findByManufacturer(manufacturerId);
+      const rows = await MarketplaceListing.findAvailable();
 
       res.json({
         success: true,
-        data: rows.map(row => ({
+        data: rows.map((row) => ({
+          listingId: row.listing_id,
           productId: row.product_id,
           serialNumber: row.serial_no,
           productName: row.model,
-          category: row.category,
-          productStatus: row.product_status,       // registered / verified / suspicious
-          lifecycleStatus: row.lifecycle_status,   // active / transferred
-          blockchainStatus: row.blockchain_status, // on blockchain / pending
+          productStatus: row.product_status,
           registeredOn: row.registered_on,
 
-          // latest listing (may be null if no listing)
           price: row.price,
           currency: row.currency,
           listingStatus: row.listing_status,
           listingCreatedOn: row.listing_created_on,
+
+          seller: {
+            userId: row.seller_id,
+            username: row.seller_username,
+            role: row.seller_role,
+          },
+
+          blockchainStatus: row.blockchain_status,
+
+          // simple rule
+          isAuthentic: row.product_status === "verified" && row.blockchain_status === "on blockchain",
         })),
       });
     } catch (err) {
       res.status(500).json({
         success: false,
-        error: 'Failed to fetch product listings for manufacturer',
+        error: "Failed to fetch marketplace listings",
         details: err instanceof Error ? err.message : String(err),
       });
     }
@@ -804,55 +1218,14 @@ class ProductController {
     }
   }
 
-  // GET /api/products/marketplace/listings
-  async getMarketplaceListings(req: Request, res: Response): Promise<void> {
-    try {
-      const rows = await MarketplaceListing.findAvailable();
-
-      res.json({
-        success: true,
-        data: rows.map((row) => ({
-          listingId: row.listing_id,
-          productId: row.product_id,
-          serialNumber: row.serial_no,
-          productName: row.model,
-          productStatus: row.product_status,
-          registeredOn: row.registered_on,
-
-          price: row.price,
-          currency: row.currency,
-          listingStatus: row.listing_status,
-          listingCreatedOn: row.listing_created_on,
-
-          seller: {
-            userId: row.seller_id,
-            username: row.seller_username,
-            role: row.seller_role,
-          },
-
-          blockchainStatus: row.blockchain_status,
-
-          // simple rule
-          isAuthentic: row.product_status === "verified" && row.blockchain_status === "on blockchain",
-        })),
-      });
-    } catch (err) {
-      res.status(500).json({
-        success: false,
-        error: "Failed to fetch marketplace listings",
-        details: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  // GET /api/products/listings/:listingId/edit?userId=8
+   // GET /api/products/listings/:listingId/edit?userId=8
   async getListingForEdit(req: Request, res: Response): Promise<void> {
   try {
     const listingId = Number(req.params.listingId);
     const userIdParam = req.query.userId as string | undefined;
 
     if (Number.isNaN(listingId)) {
-      res.status(400).json({ success: false, error: 'listingId must be a number' });
+      res.status(400).json({ success: false, error: "listingId must be a number" });
       return;
     }
     if (!userIdParam) {
@@ -866,38 +1239,31 @@ class ProductController {
 
     const userId = Number(userIdParam);
     if (Number.isNaN(userId)) {
-      res.status(400).json({ success: false, error: 'userId must be a number' });
+      res.status(400).json({ success: false, error: "userId must be a number" });
       return;
     }
 
-    try {
-      const listing = await ListingUpdate.getListingForUser(listingId, userId);
+    const listing = await ListingUpdate.getListingForEdit(listingId, userId);
 
-      res.json({
-        success: true,
-        data: {
-          listingId: listing.listing_id,
-          productId: listing.product_id,
-          serialNumber: listing.serial_no,
-          productName: listing.model,
-          price: listing.price,
-          currency: listing.currency,
-          status: listing.status,
-          createdOn: listing.created_on,
-        },
-      });
-    } catch (err: any) {
-      res.status(403).json({
-        success: false,
-        error: 'Cannot load listing for edit',
-        details: err.message ?? String(err),
-      });
-    }
-  } catch (err) {
-    res.status(500).json({
+    res.json({
+      success: true,
+      data: {
+        listingId: listing.listing_id,
+        productId: listing.product_id,
+        serialNumber: listing.serial_no,
+        productName: listing.model,
+        price: listing.price,
+        currency: listing.currency,
+        status: listing.status,
+        createdOn: listing.created_on,
+      },
+    });
+  } catch (err: any) {
+    const status = err?.status ?? 500;
+    res.status(status).json({
       success: false,
-      error: 'Unexpected error while loading listing for edit',
-      details: err instanceof Error ? err.message : String(err),
+      error: "Cannot load listing for edit",
+      details: err?.message ?? String(err),
     });
   }
   }
@@ -968,9 +1334,10 @@ class ProductController {
       const userIdParam = req.query.userId as string | undefined;
 
       if (Number.isNaN(listingId)) {
-        res.status(400).json({ success: false, error: 'listingId must be a number' });
+        res.status(400).json({ success: false, error: "listingId must be a number" });
         return;
       }
+
       if (!userIdParam) {
         res.status(400).json({
           success: false,
@@ -982,21 +1349,21 @@ class ProductController {
 
       const userId = Number(userIdParam);
       if (Number.isNaN(userId)) {
-        res.status(400).json({ success: false, error: 'userId must be a number' });
+        res.status(400).json({ success: false, error: "userId must be a number" });
         return;
       }
 
       try {
         await ListingUpdate.deleteListingForUser(listingId, userId);
-        res.json({ success: true, message: 'Listing deleted successfully' });
+        res.json({ success: true, message: "Listing deleted successfully" });
       } catch (err: any) {
         const msg = err.message ?? String(err);
-        if (msg === 'Listing not found') {
-          res.status(404).json({ success: false, error: 'Listing not found' });
+        if (msg === "Listing not found") {
+          res.status(404).json({ success: false, error: "Listing not found" });
         } else {
           res.status(403).json({
             success: false,
-            error: 'Cannot delete listing',
+            error: "Cannot delete listing",
             details: msg,
           });
         }
@@ -1004,44 +1371,45 @@ class ProductController {
     } catch (err) {
       res.status(500).json({
         success: false,
-        error: 'Unexpected error while deleting listing',
+        error: "Unexpected error while deleting listing",
         details: err instanceof Error ? err.message : String(err),
       });
     }
   }
 
-  // PATCH /api/products/listings/:listingId/availability
+  // PUT /api/products/listings/:listingId/availability
   async updateListingAvailability(req: Request, res: Response): Promise<void> {
     try {
       const listingId = Number(req.params.listingId);
       if (Number.isNaN(listingId)) {
-        res.status(400).json({ success: false, error: 'listingId must be a number' });
+        res.status(400).json({ success: false, error: "listingId must be a number" });
         return;
       }
 
       const { userId, status } = req.body || {};
+
       if (!userId) {
-        res.status(400).json({ success: false, error: 'userId is required in request body' });
+        res.status(400).json({ success: false, error: "userId is required in request body" });
         return;
       }
 
       const userIdNum = Number(userId);
       if (Number.isNaN(userIdNum)) {
-        res.status(400).json({ success: false, error: 'userId must be a number' });
+        res.status(400).json({ success: false, error: "userId must be a number" });
         return;
       }
 
-      const allowedStatuses: ListingStatus[] = ['available', 'reserved', 'sold'];
+      const allowedStatuses: ListingStatus[] = ["available", "reserved", "sold"];
       if (!status || !allowedStatuses.includes(status)) {
         res.status(400).json({
           success: false,
-          error: `Invalid status. Allowed: ${allowedStatuses.join(', ')}`,
+          error: `Invalid status. Allowed: ${allowedStatuses.join(", ")}`,
         });
         return;
       }
 
       try {
-        const updated = await ListingUpdate.updateListingForUser({
+        const updated = await ListingUpdate.updateListingAvailabilityForUser({
           listingId,
           userId: userIdNum,
           status,
@@ -1061,171 +1429,21 @@ class ProductController {
           },
         });
       } catch (err: any) {
-        res.status(403).json({
-          success: false,
-          error: 'Cannot update availability for this listing',
-          details: err.message ?? String(err),
-        });
-      }
-    } catch (err) {
-      res.status(500).json({
-        success: false,
-        error: 'Unexpected error while updating listing availability',
-        details: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  // GET /api/products/verify?serial=NIKE-AIR-001
-  async verifyProductBySerial(req: Request, res: Response): Promise<void> {
-    try {
-      const serial = req.query.serial as string | undefined;
-
-      if (!serial) {
-        res.status(400).json({
-          success: false,
-          error: "Missing 'serial' query parameter",
-          example: '/api/products/verify?serial=NIKE-AIR-001',
-        });
-        return;
-      }
-
-      const result = await ProductScan.findBySerial(serial);
-
-      if (!result) {
-        res.status(404).json({
-          success: false,
-          error: 'Product not found',
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        data: {
-          productId: result.productId,
-          productName: result.productName,
-          serialNumber: result.serialNumber,
-          batchNumber: result.batchNumber,
-          category: result.category,
-          manufactureDate: result.manufactureDate,
-          productDescription: result.productDescription,
-          status: result.status,
-          registeredOn: result.registeredOn,
-
-          manufacturer: result.manufacturer,
-          currentOwner: result.currentOwner,
-          
-          lifecycleStatus: result.lifecycleStatus,
-          blockchainStatus: result.blockchainStatus,
-          isAuthentic: result.isAuthentic,
-        },
-      });
-    } catch (err) {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to verify product',
-        details: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-    // GET /api/products/history?serial=NIKE-AIR-001
-  async getTransactionHistory(req: Request, res: Response) {
-    try {
-      const serial = req.query.serial as string | undefined;
-
-      if (!serial) {
-        res.status(400).json({
-          success: false,
-          error: "Missing 'serial' query parameter",
-        });
-        return;
-      }
-
-      const history = await ProductHistory.getBySerial(serial);
-
-      if (!history) {
-        res.status(404).json({
-          success: false,
-          error: 'Product not found',
-        });
-        return;
-      }
-
-      res.json({
-        success: true,
-        data: history,
-      });
-    } catch (err) {
-      res.status(500).json({
-        success: false,
-        error: 'Failed to fetch transaction history',
-        details: err instanceof Error ? err.message : String(err),
-      });
-    }
-  }
-
-  // DELETE /api/products/:productId?manufacturerId=2
-  async deleteProduct(req: Request, res: Response): Promise<void> {
-    try {
-      const productIdParam = req.params.productId;
-      const manufacturerIdParam = req.query.manufacturerId as string | undefined;
-
-      if (!productIdParam || !manufacturerIdParam) {
-        res.status(400).json({
-          success: false,
-          error: 'Missing required parameters',
-          details: {
-            path: 'productId (in URL path)',
-            query: 'manufacturerId (as query parameter)',
-            example: '/api/products/1?manufacturerId=2',
-          },
-        });
-        return;
-      }
-
-      const productId = Number(productIdParam);
-      const manufacturerId = Number(manufacturerIdParam);
-
-      if (Number.isNaN(productId) || Number.isNaN(manufacturerId)) {
-        res.status(400).json({
-          success: false,
-          error: 'productId and manufacturerId must be numbers',
-        });
-        return;
-      }
-
-      const result = await ProductDeletion.deleteProductIfAllowed(
-        productId,
-        manufacturerId
-      );
-
-      if (!result.success) {
-        // decide status code based on reason
-        if (result.reason === 'Product not found') {
-          res.status(404).json({
-            success: false,
-            error: result.reason,
-          });
+        const msg = err.message ?? String(err);
+        if (msg === "Listing not found") {
+          res.status(404).json({ success: false, error: "Listing not found" });
         } else {
-          res.status(409).json({
+          res.status(403).json({
             success: false,
-            error: 'Cannot delete product',
-            details: result.reason,
+            error: "Cannot update availability for this listing",
+            details: msg,
           });
         }
-        return;
       }
-
-      res.json({
-        success: true,
-        message: 'Product registration deleted successfully',
-      });
     } catch (err) {
       res.status(500).json({
         success: false,
-        error: 'Failed to delete product',
+        error: "Unexpected error while updating listing availability",
         details: err instanceof Error ? err.message : String(err),
       });
     }

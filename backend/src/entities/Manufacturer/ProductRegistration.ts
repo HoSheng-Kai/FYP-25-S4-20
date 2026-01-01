@@ -1,6 +1,6 @@
 // src/entities/ProductRegistration.ts
-import pool from "../schema/database";
-import { QrCodeService } from "../service/QrCodeService";
+import pool from "../../schema/database";
+import { QrCodeService } from "../../service/QrCodeService";
 
 export interface RegisterProductInput {
   manufacturerId: number;
