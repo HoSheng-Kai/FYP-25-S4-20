@@ -526,6 +526,176 @@ class DistributorController {
         }
     }
 
+    async getOwnershipHistory(req: Request, res: Response) {
+        const { product_id } = req.body;
+
+        if (!product_id) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required field: product_id"
+            });
+        }
+
+        try {
+            // 1. Get product from database
+            const product = await DistributorEntity.getProductById(product_id);
+            if (!product) {
+                return res.status(404).json({
+                    success: false,
+                    error: `Product not found: ${product_id}`
+                });
+            }
+
+            // 2. Get or derive product PDA
+            let productPda: PublicKey;
+
+            if (product.product_pda) {
+                productPda = new PublicKey(product.product_pda);
+            } else {
+                const manufacturer = await DistributorEntity.getUserById(product.registered_by);
+                if (!manufacturer) {
+                    return res.status(404).json({
+                        success: false,
+                        error: `Manufacturer not found for product ${product_id}`
+                    });
+                }
+                const manufacturerPubkey = new PublicKey(manufacturer.public_key);
+                const [derivedPda] = deriveProductPda(manufacturerPubkey, product.serial_no);
+                productPda = derivedPda;
+            }
+
+            // 3. Get all transaction signatures for this product PDA
+            const signatures = await connection.getSignaturesForAddress(productPda, {
+                limit: 1000
+            });
+
+            // 4. Instruction discriminators from IDL
+            const REGISTER_PRODUCT_DISCRIMINATOR = Buffer.from([224, 97, 195, 220, 124, 218, 78, 43]);
+            const PROPOSE_TRANSFER_DISCRIMINATOR = Buffer.from([140, 86, 133, 124, 253, 226, 251, 195]);
+            const EXECUTE_TRANSFER_DISCRIMINATOR = Buffer.from([233, 126, 160, 184, 235, 206, 31, 119]);
+
+            // 5. Fetch and parse each transaction to build ownership history
+            const ownershipHistory: {
+                owner: string;
+                owner_username: string | null;
+                event: string;
+                tx_hash: string;
+                block_time: Date | null;
+                slot: number;
+            }[] = [];
+
+            // Track current owner as we process transactions
+            let currentOwnerPubkey: string | null = null;
+
+            for (const sig of signatures.reverse()) { // oldest first
+                const tx = await connection.getTransaction(sig.signature, {
+                    commitment: "confirmed",
+                    maxSupportedTransactionVersion: 0
+                });
+
+                if (!tx || !tx.meta) continue;
+
+                const blockTime = tx.blockTime ? new Date(tx.blockTime * 1000) : null;
+                const accountKeys = tx.transaction.message.getAccountKeys();
+
+                // Get compiled instructions
+                const message = tx.transaction.message;
+                const instructions = message.compiledInstructions;
+
+                for (const ix of instructions) {
+                    const programId = accountKeys.get(ix.programIdIndex);
+                    if (!programId || programId.toBase58() !== PROGRAM_ID.toBase58()) continue;
+
+                    const ixData = Buffer.from(ix.data);
+                    const discriminator = ixData.subarray(0, 8);
+
+                    // Register Product: accounts = [product, manufacturer, system_program]
+                    if (discriminator.equals(REGISTER_PRODUCT_DISCRIMINATOR)) {
+                        const manufacturerIndex = ix.accountKeyIndexes[1];
+                        const manufacturerPubkey = accountKeys.get(manufacturerIndex)?.toBase58();
+
+                        if (manufacturerPubkey) {
+                            currentOwnerPubkey = manufacturerPubkey;
+                            const ownerInfo = await DistributorEntity.getUserByPublicKey(manufacturerPubkey);
+                            ownershipHistory.push({
+                                owner: manufacturerPubkey,
+                                owner_username: ownerInfo?.username || null,
+                                event: "registered",
+                                tx_hash: sig.signature,
+                                block_time: blockTime,
+                                slot: tx.slot
+                            });
+                        }
+                    }
+
+                    // Propose Transfer: accounts = [from_owner, product, to_owner, transfer_request, system_program]
+                    if (discriminator.equals(PROPOSE_TRANSFER_DISCRIMINATOR)) {
+                        const toOwnerIndex = ix.accountKeyIndexes[2];
+                        const toOwnerPubkey = accountKeys.get(toOwnerIndex)?.toBase58();
+
+                        if (toOwnerPubkey) {
+                            const ownerInfo = await DistributorEntity.getUserByPublicKey(toOwnerPubkey);
+                            ownershipHistory.push({
+                                owner: toOwnerPubkey,
+                                owner_username: ownerInfo?.username || null,
+                                event: "transfer_proposed",
+                                tx_hash: sig.signature,
+                                block_time: blockTime,
+                                slot: tx.slot
+                            });
+                        }
+                    }
+
+                    // Execute Transfer: accounts = [from_owner, product, transfer_request]
+                    // The new owner is already recorded in propose, mark transfer as complete
+                    if (discriminator.equals(EXECUTE_TRANSFER_DISCRIMINATOR)) {
+                        // Update the last "transfer_proposed" entry to "transferred"
+                        for (let i = ownershipHistory.length - 1; i >= 0; i--) {
+                            if (ownershipHistory[i].event === "transfer_proposed") {
+                                ownershipHistory[i].event = "transferred";
+                                ownershipHistory[i].tx_hash = sig.signature; // Update to execute tx
+                                ownershipHistory[i].block_time = blockTime;
+                                ownershipHistory[i].slot = tx.slot;
+                                currentOwnerPubkey = ownershipHistory[i].owner;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 6. Mark current owner
+            if (ownershipHistory.length > 0) {
+                const lastOwner = ownershipHistory[ownershipHistory.length - 1];
+                if (lastOwner.event === "registered" || lastOwner.event === "transferred") {
+                    lastOwner.event = lastOwner.event === "registered" ? "registered (current owner)" : "transferred (current owner)";
+                }
+            }
+
+            // Remove any pending "transfer_proposed" that weren't executed
+            const finalHistory = ownershipHistory.filter(h => h.event !== "transfer_proposed");
+
+            res.json({
+                success: true,
+                data: {
+                    product_id: product.product_id,
+                    serial_no: product.serial_no,
+                    product_pda: productPda.toBase58(),
+                    total_transactions: signatures.length,
+                    ownership_history: finalHistory
+                }
+            });
+
+        } catch (error: any) {
+            console.error("Get ownership history failed:", error);
+            res.status(500).json({
+                success: false,
+                error: "Failed to get ownership history",
+                details: error.message
+            });
+        }
+    }
+
     async checkOwnership(req: Request, res: Response) {
         const { product_id } = req.body;
 

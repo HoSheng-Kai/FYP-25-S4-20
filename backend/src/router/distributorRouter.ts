@@ -12,4 +12,7 @@ router.post('/update-ownership', DistributorController.updateOwnership.bind(Dist
 // Check ownership on blockchain
 router.post('/check-ownership', DistributorController.checkOwnership.bind(DistributorController));
 
+// Get ownership history from database
+router.post('/ownership-history', DistributorController.getOwnershipHistory.bind(DistributorController));
+
 export default router;
