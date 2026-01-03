@@ -43,11 +43,15 @@ VALUES
   ('admin_user','admin123','admin@example.com','admin',
    '5Jn1PsY9FYjYtpjfLaivRW5dSdkCsDxDnmkCn8MXkGFmnPA3NqFSoEww45mm4ukeFwvGFwG9akagGF2cLCofGsnp',
    'pR9HgGJrxkFTVebFhYAoq4URkLti4tph9f7Sxvgrpzc', TRUE, FALSE),
-   
+  
 -- unverify test case
-  ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
-   '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
-   '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so', FALSE, FALSE),
+--   ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
+--    '5X6x3cV94w94qjYR62UXLTAVA63Yt2V7dFY3RX41u4hWT1WAPgfh7WXv79ujJw5q9RBT4J7otvmq1PZ6xJHN2kVH',
+--    '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', FALSE, FALSE),
+
+  ('phantom_wallet_1','phantom_password','phantom@mail1.com','consumer',
+    '5X6x3cV94w94qjYR62UXLTAVA63Yt2V7dFY3RX41u4hWT1WAPgfh7WXv79ujJw5q9RBT4J7otvmq1PZ6xJHN2kVH',
+    '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE);
 
 --      ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
 --    '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
