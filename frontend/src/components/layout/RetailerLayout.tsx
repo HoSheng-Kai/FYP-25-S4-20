@@ -1,10 +1,4 @@
-// src/components/layout/ConsumerLayout.tsx
-// -----------------------------------------------------------------------------
-// Consumer layout with persistent sidebar.
-// All routes nested under /consumer/* render inside <Outlet />.
-// Sidebar links are RELATIVE so navigation stays within /consumer.
-// -----------------------------------------------------------------------------
-
+// src/components/layout/RetailerLayout.tsx
 import React from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -23,14 +17,14 @@ const activeStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.12)",
 };
 
-export default function ConsumerLayout() {
+export default function RetailerLayout() {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {
       await axios.post(`${USERS_API_BASE_URL}/logout-account`);
     } catch {
-      // ignore backend failure
+      // ignore
     } finally {
       localStorage.removeItem("isAuthenticated");
       localStorage.removeItem("username");
@@ -51,13 +45,13 @@ export default function ConsumerLayout() {
           position: "relative",
         }}
       >
-        <h2 style={{ marginBottom: 30 }}>Consumer</h2>
+        <h2 style={{ marginBottom: 30 }}>Retailer</h2>
 
         <nav>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
             <li>
               <NavLink
-                to="" // /consumer
+                to="" // /retailer
                 end
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
@@ -67,28 +61,10 @@ export default function ConsumerLayout() {
 
             <li>
               <NavLink
-                to="scan-qr" // /consumer/scan-qr
+                to="scan-qr" // /retailer/scan-qr
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
                 Scan QR
-              </NavLink>
-            </li>
-
-            <li>
-              <NavLink
-                to="marketplace" // /consumer/marketplace
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-              >
-                Marketplace
-              </NavLink>
-            </li>
-
-            <li>
-              <NavLink
-                to="my-listings" // /consumer/my-listings
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-              >
-                My Listings
               </NavLink>
             </li>
           </ul>

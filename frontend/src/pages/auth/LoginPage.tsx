@@ -10,9 +10,11 @@ type Role = "admin" | "manufacturer" | "distributor" | "retailer" | "consumer";
 type LoginResponse = {
   success: boolean;
   otp: number;
+
+  // backend may return role here
   role?: Role;
 
-  // ✅ add user id fields (backend might return either)
+  // backend might return either userId or userid
   userId?: number;
   userid?: number;
 
@@ -30,6 +32,32 @@ const isRole = (value: string | null): value is Role => {
   );
 };
 
+/**
+ * IMPORTANT:
+ * We redirect to the ROLE ROOT path now:
+ *  consumer -> /consumer
+ *  manufacturer -> /manufacturer
+ *  distributor -> /distributor
+ *  retailer -> /retailer
+ * This ensures the correct Layout + Sidebar is used.
+ */
+const roleToRootPath = (r: Role) => {
+  switch (r) {
+    case "admin":
+      return "/admin"; // if you don't have admin layout, change this
+    case "manufacturer":
+      return "/manufacturer";
+    case "distributor":
+      return "/distributor";
+    case "retailer":
+      return "/retailer";
+    case "consumer":
+      return "/consumer";
+    default:
+      return "/login";
+  }
+};
+
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -38,8 +66,6 @@ export default function LoginPage() {
   const [serverOtp, setServerOtp] = useState<number | null>(null);
   const [otpInput, setOtpInput] = useState("");
   const [role, setRole] = useState<Role | null>(null);
-
-  // ✅ store userId between steps
   const [userId, setUserId] = useState<number | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -53,34 +79,14 @@ export default function LoginPage() {
     const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
 
     if (isAuthenticated && isRole(existingRole)) {
-      redirectByRole(existingRole);
+      navigate(roleToRootPath(existingRole));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Central role-based routing
-  const redirectByRole = (r: Role) => {
-    switch (r) {
-      case "admin":
-        navigate("/AdminDashboardPage");
-        break;
-      case "manufacturer":
-        navigate("/ManufacturerDashboardPage");
-        break;
-      case "distributor":
-        navigate("/DistributorDashboardPage");
-        break;
-      case "retailer":
-        navigate("/RetailerDashboardPage");
-        break;
-      case "consumer":
-        navigate("/ConsumerDashboardPage");
-        break;
-      default:
-        navigate("/");
-    }
-  };
-
+  // ----------------------------
   // Step 1 — credentials login
+  // ----------------------------
   const handleCredentialsSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -89,10 +95,7 @@ export default function LoginPage() {
     try {
       const res = await axios.post<LoginResponse>(
         `${USERS_API_BASE_URL}/login-account`,
-        {
-          username,
-          password,
-        }
+        { username, password }
       );
 
       if (!res.data.success) {
@@ -105,17 +108,15 @@ export default function LoginPage() {
         return;
       }
 
-      // ✅ capture userId if backend returns it
       const idFromServer = res.data.userId ?? res.data.userid ?? null;
-      setUserId(idFromServer);
 
       setServerOtp(res.data.otp);
       setRole(res.data.role);
+      setUserId(idFromServer);
 
+      // Persist for OTP step (in case refresh happens)
       localStorage.setItem("pendingRole", res.data.role);
-
-      // ✅ store pending userId for OTP step (so refresh still works)
-      if (idFromServer != null) {
+      if (idFromServer != null && !Number.isNaN(idFromServer)) {
         localStorage.setItem("pendingUserId", String(idFromServer));
       } else {
         localStorage.removeItem("pendingUserId");
@@ -133,7 +134,9 @@ export default function LoginPage() {
     }
   };
 
+  // ----------------------------
   // Step 2 — OTP verification
+  // ----------------------------
   const handleOtpSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
@@ -144,14 +147,11 @@ export default function LoginPage() {
       return;
     }
 
+    // Recover role if state lost
     let finalRole: Role | null = role;
-
     if (!finalRole) {
       const stored = localStorage.getItem("pendingRole");
-      if (stored) {
-        finalRole = stored as Role;
-        setRole(finalRole);
-      }
+      if (isRole(stored)) finalRole = stored;
     }
 
     if (!finalRole) {
@@ -160,31 +160,31 @@ export default function LoginPage() {
       return;
     }
 
-    // ✅ recover pending userId if state is lost
+    // Recover userId if state lost
     let finalUserId: number | null = userId;
     if (finalUserId == null) {
       const storedUserId = localStorage.getItem("pendingUserId");
       finalUserId = storedUserId ? Number(storedUserId) : null;
-      setUserId(finalUserId);
     }
 
     if (parseInt(otpInput, 10) === serverOtp) {
+      // ✅ final session saved
       localStorage.setItem("isAuthenticated", "true");
       localStorage.setItem("username", username);
       localStorage.setItem("userRole", finalRole);
 
-      // ✅ IMPORTANT: store userId for NotificationBell + other pages
       if (finalUserId != null && !Number.isNaN(finalUserId)) {
         localStorage.setItem("userId", String(finalUserId));
       } else {
-        // keep it clean so you can detect issues
         localStorage.removeItem("userId");
       }
 
+      // cleanup
       localStorage.removeItem("pendingRole");
       localStorage.removeItem("pendingUserId");
 
-      redirectByRole(finalRole);
+      // ✅ redirect to ROLE ROOT (layout)
+      navigate(roleToRootPath(finalRole));
     } else {
       setError("Incorrect OTP. Please try again.");
     }
@@ -246,9 +246,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     className="auth-link-button"
-                    onClick={() =>
-                      alert("Forgot password flow not implemented yet.")
-                    }
+                    onClick={() => alert("Forgot password flow not implemented yet.")}
                   >
                     Forgot password?
                   </button>
@@ -257,11 +255,7 @@ export default function LoginPage() {
 
               {error && <p className="auth-error-text">{error}</p>}
 
-              <button
-                type="submit"
-                className="auth-submit"
-                disabled={isSubmitting}
-              >
+              <button type="submit" className="auth-submit" disabled={isSubmitting}>
                 {isSubmitting ? "Logging in..." : "Continue"}
               </button>
             </form>

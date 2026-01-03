@@ -1,8 +1,12 @@
-// src/components/layout/ConsumerLayout.tsx
+// src/components/layout/DistributorLayout.tsx
 // -----------------------------------------------------------------------------
-// Consumer layout with persistent sidebar.
-// All routes nested under /consumer/* render inside <Outlet />.
-// Sidebar links are RELATIVE so navigation stays within /consumer.
+// PURPOSE:
+// Persistent sidebar for all distributor routes under /distributor/*
+//
+// ROUTES:
+// - Dashboard          -> /distributor
+// - Scan QR            -> /distributor/scan-qr
+// - Transfer Ownership -> /distributor/transfer   ✅ separate page (no redirect)
 // -----------------------------------------------------------------------------
 
 import React from "react";
@@ -23,14 +27,14 @@ const activeStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.12)",
 };
 
-export default function ConsumerLayout() {
+export default function DistributorLayout() {
   const navigate = useNavigate();
 
   const handleLogout = async () => {
     try {
       await axios.post(`${USERS_API_BASE_URL}/logout-account`);
     } catch {
-      // ignore backend failure
+      // ignore
     } finally {
       localStorage.removeItem("isAuthenticated");
       localStorage.removeItem("username");
@@ -51,15 +55,18 @@ export default function ConsumerLayout() {
           position: "relative",
         }}
       >
-        <h2 style={{ marginBottom: 30 }}>Consumer</h2>
+        <h2 style={{ marginBottom: 30 }}>Distributor</h2>
 
         <nav>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
             <li>
               <NavLink
-                to="" // /consumer
+                to="" // /distributor
                 end
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+                style={({ isActive }) => ({
+                  ...linkBaseStyle,
+                  ...(isActive ? activeStyle : {}),
+                })}
               >
                 Dashboard
               </NavLink>
@@ -67,8 +74,11 @@ export default function ConsumerLayout() {
 
             <li>
               <NavLink
-                to="scan-qr" // /consumer/scan-qr
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+                to="scan-qr" // /distributor/scan-qr
+                style={({ isActive }) => ({
+                  ...linkBaseStyle,
+                  ...(isActive ? activeStyle : {}),
+                })}
               >
                 Scan QR
               </NavLink>
@@ -76,19 +86,13 @@ export default function ConsumerLayout() {
 
             <li>
               <NavLink
-                to="marketplace" // /consumer/marketplace
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+                to="transfer" // ✅ /distributor/transfer
+                style={({ isActive }) => ({
+                  ...linkBaseStyle,
+                  ...(isActive ? activeStyle : {}),
+                })}
               >
-                Marketplace
-              </NavLink>
-            </li>
-
-            <li>
-              <NavLink
-                to="my-listings" // /consumer/my-listings
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-              >
-                My Listings
+                Transfer Ownership
               </NavLink>
             </li>
           </ul>

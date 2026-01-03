@@ -125,7 +125,8 @@ export default function ManufacturerProductsPage() {
 
     try {
       const res = await axios.delete(
-        `${PRODUCTS_API_BASE_URL}/${productId}?manufacturerId=${manufacturerId}`
+        `${PRODUCTS_API_BASE_URL}/${productId}/draft`,
+        { data: { manufacturerId } }
       );
 
       if (res.data.success) {

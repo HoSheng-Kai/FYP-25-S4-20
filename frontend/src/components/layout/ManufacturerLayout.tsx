@@ -1,15 +1,11 @@
-// src/components/layout/ConsumerLayout.tsx
+// src/components/layout/ManufacturerLayout.tsx
 // -----------------------------------------------------------------------------
-// Consumer layout with persistent sidebar.
-// All routes nested under /consumer/* render inside <Outlet />.
-// Sidebar links are RELATIVE so navigation stays within /consumer.
+// Manufacturer layout with persistent sidebar.
+// Nested routes under /manufacturer/* render inside <Outlet />.
 // -----------------------------------------------------------------------------
 
 import React from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import axios from "axios";
-
-const USERS_API_BASE_URL = "http://localhost:3000/api/user";
 
 const linkBaseStyle: React.CSSProperties = {
   color: "white",
@@ -23,21 +19,15 @@ const activeStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.12)",
 };
 
-export default function ConsumerLayout() {
+export default function ManufacturerLayout() {
   const navigate = useNavigate();
 
-  const handleLogout = async () => {
-    try {
-      await axios.post(`${USERS_API_BASE_URL}/logout-account`);
-    } catch {
-      // ignore backend failure
-    } finally {
-      localStorage.removeItem("isAuthenticated");
-      localStorage.removeItem("username");
-      localStorage.removeItem("userRole");
-      localStorage.removeItem("userId");
-      navigate("/login");
-    }
+  const handleLogout = () => {
+    localStorage.removeItem("isAuthenticated");
+    localStorage.removeItem("username");
+    localStorage.removeItem("userRole");
+    localStorage.removeItem("userId");
+    navigate("/login");
   };
 
   return (
@@ -51,13 +41,14 @@ export default function ConsumerLayout() {
           position: "relative",
         }}
       >
-        <h2 style={{ marginBottom: 30 }}>Consumer</h2>
+        <h2 style={{ marginBottom: 30 }}>Manufacturer</h2>
 
+        {/* RELATIVE links => /manufacturer/... */}
         <nav>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
             <li>
               <NavLink
-                to="" // /consumer
+                to="" // /manufacturer
                 end
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
@@ -67,7 +58,7 @@ export default function ConsumerLayout() {
 
             <li>
               <NavLink
-                to="scan-qr" // /consumer/scan-qr
+                to="scan-qr" // /manufacturer/scan-qr
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
                 Scan QR
@@ -76,19 +67,19 @@ export default function ConsumerLayout() {
 
             <li>
               <NavLink
-                to="marketplace" // /consumer/marketplace
+                to="register" // /manufacturer/register
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
-                Marketplace
+                Register Product
               </NavLink>
             </li>
 
             <li>
               <NavLink
-                to="my-listings" // /consumer/my-listings
+                to="my-products" // /manufacturer/my-products
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
-                My Listings
+                My Products
               </NavLink>
             </li>
           </ul>
