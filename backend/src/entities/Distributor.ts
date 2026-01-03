@@ -153,6 +153,17 @@ class DistributorEntity {
                 data.created_on
             ]);
         }
+
+    static async getOwnershipHistory(product_id: number): Promise<any[]> {
+        const result = await pool.query(`
+            SELECT o.*, u.username
+            FROM ownership o
+            JOIN fyp_25_s4_20.users u ON o.owner_id = u.user_id
+            WHERE o.product_id = $1
+            ORDER BY o.start_on ASC
+        `, [product_id]);
+        return result.rows;
+    }
 }
 
 export default DistributorEntity;
