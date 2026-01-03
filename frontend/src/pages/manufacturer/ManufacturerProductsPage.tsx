@@ -10,7 +10,7 @@ type ProductRow = {
   productName: string | null;
   productStatus: "registered" | "verified" | "suspicious";
   lifecycleStatus: "active" | "transferred";
-  blockchainStatus: string; // on blockchain / pending
+  blockchainStatus: string; // on blockchain / pending / confirmed
   registeredOn: string;
   price: string | null;
   currency: string | null;
@@ -70,7 +70,6 @@ export default function ManufacturerProductsPage() {
   const [isEditLoading, setIsEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
-
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
 
   // fields
@@ -87,6 +86,24 @@ export default function ManufacturerProductsPage() {
     () => !Number.isNaN(manufacturerId) && manufacturerId > 0,
     [manufacturerId]
   );
+
+  // ----------------------
+  // HELPERS (BLOCKCHAIN IMMUTABILITY)
+  // ----------------------
+  const isOnChainConfirmed = (p: ProductRow) => {
+    const s = (p.blockchainStatus || "").toLowerCase();
+    return (
+      s.includes("confirmed") ||
+      s.includes("on blockchain") ||
+      s.includes("on-chain") ||
+      s.includes("onchain")
+    );
+  };
+
+  const safeDate = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
+  };
 
   // ----------------------
   // LOAD PRODUCTS
@@ -115,9 +132,15 @@ export default function ManufacturerProductsPage() {
   }, []);
 
   // ----------------------
-  // DELETE PRODUCT
+  // DELETE PRODUCT (draft only)
   // ----------------------
   const handleDelete = async (productId: number) => {
+    const row = products.find((x) => x.productId === productId);
+    if (row && isOnChainConfirmed(row)) {
+      alert("Cannot delete a product that is confirmed on blockchain.");
+      return;
+    }
+
     const confirmDelete = window.confirm(
       "Are you sure you want to delete this product? This cannot be undone."
     );
@@ -142,7 +165,9 @@ export default function ManufacturerProductsPage() {
   };
 
   // ----------------------
-  // OPEN EDIT MODAL (prefill via backend)
+  // OPEN EDIT MODAL
+  // - If on-chain confirmed: show immutable message (frontend-only fix)
+  // - Else: fetch /edit and allow updates
   // ----------------------
   const openEditModal = async (productId: number) => {
     if (!canEdit) {
@@ -150,6 +175,31 @@ export default function ManufacturerProductsPage() {
       return;
     }
 
+    const row = products.find((x) => x.productId === productId);
+
+    // BLOCKCHAIN CONFIRMED -> NO /edit CALL
+    if (row && isOnChainConfirmed(row)) {
+      setIsEditOpen(true);
+      setIsEditLoading(false);
+      setEditSuccess(null);
+      setEditingProductId(productId);
+
+      setEditError(
+        "This product is already confirmed on blockchain and cannot be edited (immutable)."
+      );
+
+      // Prefill what we can from list row
+      setEditSerial(row.serialNumber ?? "");
+      setEditName(row.productName ?? "");
+      setEditCategory(row.category ?? "");
+      setEditBatch("");
+      setEditMfgDate("");
+      setEditDescription("");
+      setQrImageUrl(null);
+      return;
+    }
+
+    // Draft / not-confirmed -> allow edit
     setIsEditOpen(true);
     setIsEditLoading(true);
     setEditError(null);
@@ -212,10 +262,18 @@ export default function ManufacturerProductsPage() {
   };
 
   // ----------------------
-  // UPDATE PRODUCT + GENERATE NEW QR (backend already regenerates)
+  // UPDATE PRODUCT + GENERATE NEW QR
+  // (draft only)
   // ----------------------
   const handleUpdateProduct = async () => {
     if (!editingProductId) return;
+
+    const row = products.find((x) => x.productId === editingProductId);
+    if (row && isOnChainConfirmed(row)) {
+      setEditError("This product is confirmed on blockchain and cannot be updated.");
+      return;
+    }
+
     if (!canEdit) {
       setEditError("Manufacturer ID missing. Please login again.");
       return;
@@ -252,13 +310,11 @@ export default function ManufacturerProductsPage() {
 
       setEditSuccess("Updated successfully. New QR code generated.");
 
-      // refresh QR image (use backend url if returned, otherwise fall back)
       const newQr =
         res.data.data.qrImageUrl ??
         `${PRODUCTS_API_BASE_URL}/${editingProductId}/qrcode`;
       setQrImageUrl(withNoCache(newQr));
 
-      // refresh table
       await loadProducts();
     } catch (err: any) {
       setEditError(
@@ -312,68 +368,109 @@ export default function ManufacturerProductsPage() {
         </thead>
 
         <tbody>
-          {products.map((p) => (
-            <tr key={p.productId}>
-              <td style={td}>{p.serialNumber}</td>
-              <td style={td}>{p.productName || "—"}</td>
-              <td style={td}>{p.category || "—"}</td>
-              <td style={td}>{new Date(p.registeredOn).toLocaleDateString()}</td>
+          {products.map((p) => {
+            const locked = isOnChainConfirmed(p);
 
-              <td style={td}>
-                <span
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    textTransform: "capitalize",
-                    background:
-                      p.productStatus === "verified"
-                        ? "#d4f5d4"
-                        : p.productStatus === "registered"
-                        ? "#dbeafe"
-                        : "#fee2e2",
-                    color:
-                      p.productStatus === "verified"
-                        ? "#1b6e1b"
-                        : p.productStatus === "registered"
-                        ? "#1d4ed8"
-                        : "#b91c1c",
-                  }}
-                >
-                  {p.productStatus}
-                </span>
-              </td>
+            return (
+              <tr key={p.productId}>
+                {/* FIXED: show productId in Product ID column */}
+                <td style={td}>{p.productId}</td>
+                <td style={td}>{p.productName || "—"}</td>
+                <td style={td}>{p.category || "—"}</td>
+                <td style={td}>{safeDate(p.registeredOn)}</td>
 
-              <td style={td}>
-                {/* VIEW (eye icon) */}
-                <button
-                  onClick={() => navigate(`/manufacturer/products/${p.productId}`)}
-                  style={iconBtn}
-                  title="View"
-                >
-                  👁
-                </button>
+                <td style={td}>
+                  <span
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      textTransform: "capitalize",
+                      background:
+                        p.productStatus === "verified"
+                          ? "#d4f5d4"
+                          : p.productStatus === "registered"
+                          ? "#dbeafe"
+                          : "#fee2e2",
+                      color:
+                        p.productStatus === "verified"
+                          ? "#1b6e1b"
+                          : p.productStatus === "registered"
+                          ? "#1d4ed8"
+                          : "#b91c1c",
+                    }}
+                  >
+                    {p.productStatus}
+                  </span>
 
-                {/* EDIT (pencil icon) */}
-                <button
-                  onClick={() => void openEditModal(p.productId)}
-                  style={iconBtn}
-                  title="Edit"
-                >
-                  ✏️
-                </button>
+                  {/* Optional: small blockchain tag */}
+                  {p.blockchainStatus && (
+                    <span
+                      style={{
+                        marginLeft: 10,
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        fontSize: 12,
+                        background: locked ? "#e5e7eb" : "#fff7ed",
+                        color: locked ? "#374151" : "#9a3412",
+                      }}
+                      title="Blockchain status"
+                    >
+                      {p.blockchainStatus}
+                    </span>
+                  )}
+                </td>
 
-                {/* DELETE (trash icon) */}
-                <button
-                  onClick={() => handleDelete(p.productId)}
-                  style={{ ...iconBtn, color: "red" }}
-                  title="Delete"
-                >
-                  🗑
-                </button>
-              </td>
-            </tr>
-          ))}
+                <td style={td}>
+                  {/* VIEW (eye icon) */}
+                  <button
+                    onClick={() => navigate(`/manufacturer/products/${p.productId}`)}
+                    style={iconBtn}
+                    title="View"
+                  >
+                    👁
+                  </button>
+
+                  {/* EDIT (pencil icon) - disabled if on-chain confirmed */}
+                  <button
+                    onClick={() => void openEditModal(p.productId)}
+                    style={{
+                      ...iconBtn,
+                      opacity: locked ? 0.4 : 1,
+                      cursor: locked ? "not-allowed" : "pointer",
+                    }}
+                    title={
+                      locked
+                        ? "Product is already on blockchain and cannot be edited"
+                        : "Edit"
+                    }
+                    disabled={locked}
+                  >
+                    ✏️
+                  </button>
+
+                  {/* DELETE (trash icon) - disabled if on-chain confirmed */}
+                  <button
+                    onClick={() => handleDelete(p.productId)}
+                    style={{
+                      ...iconBtn,
+                      color: "red",
+                      opacity: locked ? 0.4 : 1,
+                      cursor: locked ? "not-allowed" : "pointer",
+                    }}
+                    title={
+                      locked
+                        ? "Product is already on blockchain and cannot be deleted"
+                        : "Delete"
+                    }
+                    disabled={locked}
+                  >
+                    🗑
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
@@ -405,16 +502,8 @@ export default function ManufacturerProductsPage() {
               </button>
             </div>
 
-            {editError && (
-              <div style={alertError}>
-                {editError}
-              </div>
-            )}
-            {editSuccess && (
-              <div style={alertSuccess}>
-                {editSuccess}
-              </div>
-            )}
+            {editError && <div style={alertError}>{editError}</div>}
+            {editSuccess && <div style={alertSuccess}>{editSuccess}</div>}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <Field label="Product Name *">
@@ -423,6 +512,7 @@ export default function ManufacturerProductsPage() {
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="e.g. iPhone 15 Pro Max"
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -432,6 +522,7 @@ export default function ManufacturerProductsPage() {
                   value={editCategory}
                   onChange={(e) => setEditCategory(e.target.value)}
                   placeholder="e.g. Electronics"
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -441,6 +532,7 @@ export default function ManufacturerProductsPage() {
                   value={editBatch}
                   onChange={(e) => setEditBatch(e.target.value)}
                   placeholder="e.g. BATCH-2024-A1"
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -450,6 +542,7 @@ export default function ManufacturerProductsPage() {
                   value={editSerial}
                   onChange={(e) => setEditSerial(e.target.value)}
                   placeholder="e.g. IMEI: 3569..."
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -459,6 +552,7 @@ export default function ManufacturerProductsPage() {
                   type="date"
                   value={editMfgDate}
                   onChange={(e) => setEditMfgDate(e.target.value)}
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -474,6 +568,7 @@ export default function ManufacturerProductsPage() {
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="e.g. 256GB, Titanium Blue, Factory Sealed"
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
             </div>
@@ -486,12 +581,19 @@ export default function ManufacturerProductsPage() {
                 A new unique QR code will be automatically generated and tied to this product
                 when you save your changes.
               </div>
+
               {qrImageUrl && (
                 <div style={{ marginTop: 12, textAlign: "center" }}>
                   <img
                     src={qrImageUrl}
                     alt="QR Code"
-                    style={{ width: 140, height: 140, borderRadius: 12, background: "white", padding: 8 }}
+                    style={{
+                      width: 140,
+                      height: 140,
+                      borderRadius: 12,
+                      background: "white",
+                      padding: 8,
+                    }}
                   />
                 </div>
               )}
@@ -511,7 +613,15 @@ export default function ManufacturerProductsPage() {
                 type="button"
                 onClick={() => void handleUpdateProduct()}
                 style={btnPrimary}
-                disabled={isEditLoading}
+                disabled={
+                  isEditLoading ||
+                  !!(editError && editError.toLowerCase().includes("immutable"))
+                }
+                title={
+                  editError && editError.toLowerCase().includes("immutable")
+                    ? "On-chain product cannot be updated"
+                    : "Update"
+                }
               >
                 {isEditLoading ? "Updating..." : "Update & Generate New QR Code"}
               </button>
@@ -530,13 +640,7 @@ function withNoCache(url: string) {
   return `${url}${sep}ts=${Date.now()}`;
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{label}</div>

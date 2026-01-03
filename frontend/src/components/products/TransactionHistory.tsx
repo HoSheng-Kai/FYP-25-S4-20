@@ -1,70 +1,69 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { PRODUCTS_API_BASE_URL } from "../../config/api";
 import "../../styles/transaction-history.css";
 
-type Role =
-  | "manufacturer"
-  | "distributor"
-  | "retailer"
-  | "consumer"
-  | "admin"
-  | string;
-
-type TransactionEventType = "manufactured" | "shipped" | "transferred" | "sold";
-
-type TransactionEvent = {
-  type: TransactionEventType;
-  from: {
-    user_id: number | null;
-    username: string | null;
-    role: Role | null;
-  } | null;
-  to: {
-    user_id: number;
-    username: string;
-    role: Role;
-  };
-  dateTime: string; // ISO string
-  location: string | null;
-  txHash: string | null;
-  blockSlot: number | null;
+type HistoryUser = {
+  userId: number;
+  username: string;
+  publicKey: string;
 };
 
-type ProductHistory = {
-  product_id: number;
-  serial_no: string;
-  model: string | null;
-  status: string;
-  registered_on: string;
-  registered_by: {
-    user_id: number;
-    username: string;
-    role_id: string;
-  } | null;
-  events: TransactionEvent[];
+type HistoryItem = {
+  txHash: string;
+  prevTxHash: string | null;
+  event: "TRANSFER" | "MINT" | "REGISTER" | string;
+  blockSlot: number | null;
+  createdOn: string; // ISO
+  from: HistoryUser | null;
+  to: HistoryUser | null;
+};
+
+type HistoryProduct = {
+  productId: number;
+  serialNo: string;
+  productName: string | null;
+  productPda: string | null;
+  txHash: string | null;
 };
 
 type HistoryResponse = {
   success: boolean;
-  data: ProductHistory;
+  data?: {
+    product: HistoryProduct;
+    history: HistoryItem[];
+  };
   error?: string;
   details?: string;
 };
 
 type TransactionHistoryProps = {
-  /** Product serial, e.g. "NIKE-AIR-001". If omitted, we show a placeholder message. */
   serial?: string;
+};
+
+const safeDateTime = (iso?: string | null) => {
+  if (!iso) return "Unknown";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? String(iso) : d.toLocaleString();
+};
+
+const labelForEvent = (ev: string) => {
+  const e = (ev || "").toUpperCase();
+  if (e === "TRANSFER") return "Transferred";
+  if (e === "MINT") return "Minted";
+  if (e === "REGISTER") return "Registered";
+  return ev;
 };
 
 export default function TransactionHistory({ serial }: TransactionHistoryProps) {
   const [loading, setLoading] = useState(false);
-  const [history, setHistory] = useState<ProductHistory | null>(null);
+  const [payload, setPayload] = useState<HistoryResponse["data"] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!serial) {
-      setHistory(null);
+      setPayload(null);
+      setError(null);
       return;
     }
 
@@ -78,54 +77,47 @@ export default function TransactionHistory({ serial }: TransactionHistoryProps) 
           { params: { serial } }
         );
 
-        if (!res.data.success) {
-          setError(res.data.error || "Failed to load transaction history");
-          setHistory(null);
+        if (!res.data.success || !res.data.data) {
+          setError(
+            res.data.details || res.data.error || "Failed to load transaction history"
+          );
+          setPayload(null);
           return;
         }
 
-        setHistory(res.data.data);
+        setPayload(res.data.data);
       } catch (err: any) {
         setError(
-          err?.response?.data?.error ||
-            err?.response?.data?.details ||
+          err?.response?.data?.details ||
+            err?.response?.data?.error ||
+            err?.message ||
             "Failed to load transaction history"
         );
-        setHistory(null);
+        setPayload(null);
       } finally {
         setLoading(false);
       }
     };
 
     fetchHistory();
-  }, [serial, PRODUCTS_API_BASE_URL]);
+  }, [serial]);
 
-  const formatDateTime = (iso: string) => {
-    const d = new Date(iso);
-    if (Number.isNaN(d.getTime())) return iso;
-    return d.toLocaleString();
-  };
+  const product = payload?.product ?? null;
 
-  const formatRole = (role: Role | null) => {
-    if (!role) return "-";
-    const lower = String(role).toLowerCase();
-    return lower.charAt(0).toUpperCase() + lower.slice(1);
-  };
+  // ✅ normalize to timeline items used by UI
+  const events = useMemo(() => {
+    const raw = payload?.history;
+    if (!Array.isArray(raw)) return [];
 
-  const formatEventLabel = (type: TransactionEventType) => {
-    switch (type) {
-      case "manufactured":
-        return "Manufactured / Registered";
-      case "shipped":
-        return "Shipped";
-      case "transferred":
-        return "Transferred";
-      case "sold":
-        return "Sold";
-      default:
-        return type;
-    }
-  };
+    return raw.map((h) => ({
+      type: labelForEvent(h.event),
+      from: h.from ? h.from.username : null,
+      to: h.to ? h.to.username : null,
+      dateTime: h.createdOn,
+      txHash: h.txHash,
+      blockSlot: h.blockSlot,
+    }));
+  }, [payload]);
 
   if (!serial) {
     return (
@@ -153,7 +145,7 @@ export default function TransactionHistory({ serial }: TransactionHistoryProps) 
     );
   }
 
-  if (!history) {
+  if (!payload || !product) {
     return (
       <div className="tx-card">
         <p className="tx-muted">No history found for this product.</p>
@@ -161,106 +153,67 @@ export default function TransactionHistory({ serial }: TransactionHistoryProps) 
     );
   }
 
-  const { model, serial_no, status, registered_on, registered_by, events } =
-    history;
-
   return (
     <div className="tx-wrapper">
       {/* Header card */}
       <div className="tx-header-card">
         <div>
-          <h2 className="tx-product-title">{model || "Unknown Product"}</h2>
+          <h2 className="tx-product-title">{product.productName || "Unknown Product"}</h2>
           <p className="tx-product-subtitle">
-            Product ID: <span className="tx-mono">{serial_no}</span>
+            Product ID: <span className="tx-mono">{product.serialNo}</span>
           </p>
           <p className="tx-product-meta">
-            Registered on{" "}
-            {registered_on ? formatDateTime(registered_on) : "Unknown"}
-            {registered_by && (
-              <>
-                {" "}
-                • Registered by{" "}
-                <strong>{registered_by.username}</strong>{" "}
-                ({formatRole(registered_by.role_id)})
-              </>
-            )}
+            Blockchain Tx:{" "}
+            <span className="tx-mono">{product.txHash ?? "—"}</span>
           </p>
         </div>
-        <div
-          className={`tx-status-pill ${
-            status === "verified"
-              ? "tx-status-verified"
-              : status === "suspicious"
-              ? "tx-status-suspicious"
-              : "tx-status-registered"
-          }`}
-        >
-          {status}
+
+        <div className="tx-status-pill tx-status-registered">
+          On-chain
         </div>
       </div>
 
       {/* Timeline */}
       <section className="tx-section">
         <h3 className="tx-section-title">Product Journey Timeline</h3>
+
         {events.length === 0 ? (
           <p className="tx-muted">No transaction events recorded.</p>
         ) : (
           <ol className="tx-timeline">
             {events.map((ev, index) => (
-              <li key={`${ev.type}-${ev.dateTime}-${index}`} className="tx-step">
-                <div
-                  className={`tx-step-icon tx-step-icon-${
-                    ev.type === "manufactured"
-                      ? "blue"
-                      : ev.type === "shipped"
-                      ? "purple"
-                      : ev.type === "sold"
-                      ? "green"
-                      : "gray"
-                  }`}
-                >
-                  {index + 1}
-                </div>
+              <li key={`${ev.txHash}-${index}`} className="tx-step">
+                <div className="tx-step-icon tx-step-icon-gray">{index + 1}</div>
+
                 <div className="tx-step-content">
                   <div className="tx-step-header">
-                    <span className="tx-step-title">
-                      {formatEventLabel(ev.type)}
-                    </span>
+                    <span className="tx-step-title">{ev.type}</span>
                     <span className="tx-step-step">Step {index + 1}</span>
                   </div>
 
                   <div className="tx-step-body">
                     <div className="tx-step-row">
                       <span className="tx-label">From</span>
-                      <span className="tx-value">
-                        {ev.from?.username
-                          ? `${ev.from.username} (${formatRole(
-                              ev.from.role
-                            )})`
-                          : "—"}
-                      </span>
+                      <span className="tx-value">{ev.from ?? "—"}</span>
                     </div>
+
                     <div className="tx-step-row">
                       <span className="tx-label">To</span>
-                      <span className="tx-value">
-                        {ev.to.username} ({formatRole(ev.to.role)})
-                      </span>
+                      <span className="tx-value">{ev.to ?? "—"}</span>
                     </div>
+
                     <div className="tx-step-row">
                       <span className="tx-label">Date / Time</span>
-                      <span className="tx-value">
-                        {formatDateTime(ev.dateTime)}
+                      <span className="tx-value">{safeDateTime(ev.dateTime)}</span>
+                    </div>
+
+                    <div className="tx-step-row">
+                      <span className="tx-label">Blockchain Tx</span>
+                      <span className="tx-value tx-mono">
+                        {ev.txHash}
+                        {ev.blockSlot != null && ` · slot ${ev.blockSlot}`}
                       </span>
                     </div>
-                    {ev.txHash && (
-                      <div className="tx-step-row">
-                        <span className="tx-label">Blockchain Tx</span>
-                        <span className="tx-value tx-mono">
-                          {ev.txHash}
-                          {ev.blockSlot != null && ` · slot ${ev.blockSlot}`}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </div>
               </li>
@@ -272,6 +225,7 @@ export default function TransactionHistory({ serial }: TransactionHistoryProps) 
       {/* Table view */}
       <section className="tx-section">
         <h3 className="tx-section-title">Transaction Table View</h3>
+
         {events.length === 0 ? (
           <p className="tx-muted">No transactions to display.</p>
         ) : (
@@ -288,23 +242,14 @@ export default function TransactionHistory({ serial }: TransactionHistoryProps) 
               </thead>
               <tbody>
                 {events.map((ev, index) => (
-                  <tr key={`${ev.type}-${ev.dateTime}-${index}`}>
-                    <td>{formatEventLabel(ev.type)}</td>
-                    <td>
-                      {ev.from?.username
-                        ? `${ev.from.username} (${formatRole(ev.from.role)})`
-                        : "—"}
-                    </td>
-                    <td>
-                      {ev.to.username} ({formatRole(ev.to.role)})
-                    </td>
-                    <td>{formatDateTime(ev.dateTime)}</td>
+                  <tr key={`${ev.txHash}-${index}`}>
+                    <td>{ev.type}</td>
+                    <td>{ev.from ?? "—"}</td>
+                    <td>{ev.to ?? "—"}</td>
+                    <td>{safeDateTime(ev.dateTime)}</td>
                     <td className="tx-mono">
-                      {ev.txHash
-                        ? ev.blockSlot != null
-                          ? `${ev.txHash} · slot ${ev.blockSlot}`
-                          : ev.txHash
-                        : "—"}
+                      {ev.txHash}
+                      {ev.blockSlot != null && ` · slot ${ev.blockSlot}`}
                     </td>
                   </tr>
                 ))}
