@@ -49,7 +49,7 @@ VALUES
 --    '5X6x3cV94w94qjYR62UXLTAVA63Yt2V7dFY3RX41u4hWT1WAPgfh7WXv79ujJw5q9RBT4J7otvmq1PZ6xJHN2kVH',
 --    '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', FALSE, FALSE),
 
-  ('phantom_wallet_1','phantom_password','phantom@mail1.com','consumer',
+  ('phantom_wallet_1','phantom_password','phantom@mail1.com','manufacturer',
     '5X6x3cV94w94qjYR62UXLTAVA63Yt2V7dFY3RX41u4hWT1WAPgfh7WXv79ujJw5q9RBT4J7otvmq1PZ6xJHN2kVH',
     '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE);
 
