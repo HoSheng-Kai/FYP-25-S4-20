@@ -67,6 +67,18 @@ export default function RetailerLayout() {
                 Scan QR
               </NavLink>
             </li>
+
+            <li>
+              <NavLink
+                to="products"
+                style={({ isActive }) => ({
+                  ...linkBaseStyle,
+                  ...(isActive ? activeStyle : {}),
+                })}
+              >
+                My Products
+              </NavLink>
+            </li>
           </ul>
         </nav>
 

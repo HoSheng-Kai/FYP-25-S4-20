@@ -1,6 +1,6 @@
 import { useState } from "react";
 import axios from "axios";
-import { PRODUCTS_API_BASE_URL } from "../../config/api";
+import { DISTRIBUTOR_API_BASE_URL, PRODUCTS_API_BASE_URL } from "../../config/api"; // ✅ add distributor base
 
 export default function RegisterProductPage() {
   const manufacturerId = Number(localStorage.getItem("userId"));
@@ -20,7 +20,6 @@ export default function RegisterProductPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const loadQr = (id: number) => {
-    // bust cache with ts
     setQrUrl(`${PRODUCTS_API_BASE_URL}/${id}/qrcode?ts=${Date.now()}`);
   };
 
@@ -40,17 +39,20 @@ export default function RegisterProductPage() {
 
     setLoading(true);
     try {
-      const res = await axios.post(`${PRODUCTS_API_BASE_URL}/register`, {
-        manufacturerId,
-        serialNo: serialNo.trim(),
-        productName: productName.trim() || null,
-        batchNo: batchNo.trim() || null,
+      // ✅ Use DistributorController.registerProduct so it creates ownership + blockchain_node too
+      // NOTE: make sure your backend route matches "/register-product"
+      const res = await axios.post(`${DISTRIBUTOR_API_BASE_URL}/register-product`, {
+        manufacturer_id: manufacturerId,
+        serial_no: serialNo.trim(),
+        product_name: productName.trim() || null,
+        batch_no: batchNo.trim() || null,
         category: category.trim() || null,
-        manufactureDate: manufactureDate || null,
+        manufacture_date: manufactureDate || null,
         description: description.trim() || null,
       });
 
-      const newProductId = res.data?.data?.product?.product_id;
+      // ✅ DistributorController returns: { success: true, data: { product_id, ... } }
+      const newProductId = res.data?.data?.product_id;
       if (!newProductId) {
         setError("Registered, but product_id was not returned by backend.");
         return;
@@ -58,7 +60,14 @@ export default function RegisterProductPage() {
 
       setProductId(newProductId);
       loadQr(newProductId);
-      setSuccess("Product registered. QR code generated.");
+
+      // optional: show ownership info if you want
+      const ownerUsername = res.data?.data?.initial_owner?.username;
+      setSuccess(
+        ownerUsername
+          ? `Product registered. Initial ownership created for ${ownerUsername}. QR code generated.`
+          : "Product registered. Initial ownership created. QR code generated."
+      );
     } catch (err: any) {
       setError(err.response?.data?.error || "Failed to register product.");
     } finally {
@@ -95,6 +104,8 @@ export default function RegisterProductPage() {
   };
 
   return (
+    // ... keep your existing JSX and styles unchanged ...
+    // (no changes needed below this point)
     <div style={page}>
       <div style={container}>
         {/* LEFT CARD */}
@@ -108,7 +119,6 @@ export default function RegisterProductPage() {
           <div style={sectionTitle}>Product Information</div>
           <div style={sectionHint}>Enter the details of the product you want to register.</div>
 
-          {/* Grid like your screenshot */}
           <div style={grid2}>
             <div>
               <label style={label}>Serial Number *</label>
@@ -163,10 +173,7 @@ export default function RegisterProductPage() {
                 onChange={(e) => setManufactureDate(e.target.value)}
               />
             </div>
-
-            <div>
-              {/* empty right column like screenshot spacing */}
-            </div>
+            <div />
           </div>
 
           <div style={{ marginTop: 12 }}>

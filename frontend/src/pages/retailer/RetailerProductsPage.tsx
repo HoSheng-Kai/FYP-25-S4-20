@@ -2,17 +2,19 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
+/** =========================
+ * Backend response for "products-by-user"
+ * ========================= */
 type BackendProduct = {
   product_id: number;
   serial_no: string;
   model: string | null;
   category: string | null;
-  status: string | null;
+  status: string | null; // e.g. 'registered' | 'verified' | 'suspicious'
   product_pda: string | null;
   tx_hash: string | null;
   track: boolean | null;
 
-  // optional fields from your query
   owned_since?: string | null;
   relationship?: string | null; // 'owner' | 'manufacturer' | null
 };
@@ -29,17 +31,21 @@ type GetProductsByUserResponse = {
   details?: string;
 };
 
+/** =========================
+ * Your UI types
+ * ========================= */
 type ProductRow = {
   productId: number;
   serialNumber: string;
-  productName: string | null;
   category?: string | null;
-  productStatus: string;
+  productName: string | null;
+  productStatus: "registered" | "verified" | "suspicious";
   lifecycleStatus: "active" | "transferred";
-  blockchainStatus: string;
+  blockchainStatus: string; // pending / confirmed
   registeredOn: string;
+
   track: boolean;
-  relationship?: string | null;
+  relationship?: "owner" | "manufacturer" | null;
 };
 
 type TransferResult = {
@@ -48,75 +54,37 @@ type TransferResult = {
   message: string;
 };
 
-export default function DistributorProductsPage() {
+type FilterMode = "all" | "owned" | "registered";
+
+export default function RetailerProductsPage() {
   const navigate = useNavigate();
 
-  const distributorId = Number(localStorage.getItem("userId"));
+  const retailerId = Number(localStorage.getItem("userId"));
 
-  const [products, setProducts] = useState<ProductRow[]>([]);
+  // ✅ keep full list, table shows filtered
+  const [allProducts, setAllProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // ✅ filter
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
 
   // ======================
   // OWNERSHIP TRANSFER STATE
   // ======================
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const anySelected = selectedIds.size > 0;
-
-  const selectedProducts = useMemo(
-    () => products.filter((p) => selectedIds.has(p.productId)),
-    [products, selectedIds]
-  );
-
-  const allSelected = useMemo(() => {
-    if (products.length === 0) return false;
-    return products.every((p) => selectedIds.has(p.productId));
-  }, [products, selectedIds]);
-
-  const toggleSelected = (productId: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(productId)) next.delete(productId);
-      else next.add(productId);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    setSelectedIds(() => {
-      if (allSelected) return new Set();
-      return new Set(products.map((p) => p.productId));
-    });
-  };
-
-  const clearSelected = () => setSelectedIds(new Set());
 
   // Modal
   const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [recipientUserId, setRecipientUserId] = useState("");
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
-  const [transferResults, setTransferResults] = useState<TransferResult[] | null>(null);
+  const [transferResults, setTransferResults] = useState<TransferResult[] | null>(
+    null
+  );
 
-  // ✅ Your backend route (adjust if your prefix differs)
   const GET_BY_USER_URL = "http://localhost:3000/api/distributors/products-by-user";
   const TRANSFER_URL = "http://localhost:3000/api/distributors/update-ownership";
-
-  const openTransferModal = () => {
-    if (!anySelected) return;
-    setIsTransferOpen(true);
-    setRecipientUserId("");
-    setTransferError(null);
-    setTransferResults(null);
-  };
-
-  const closeTransferModal = () => {
-    if (transferLoading) return;
-    setIsTransferOpen(false);
-    setRecipientUserId("");
-    setTransferError(null);
-    setTransferResults(null);
-  };
 
   // ----------------------
   // HELPERS
@@ -131,24 +99,109 @@ export default function DistributorProductsPage() {
     );
   };
 
+  const isTransferEligible = (p: ProductRow) => {
+    // Must be confirmed AND still owned by current user
+    return isOnChainConfirmed(p) && p.lifecycleStatus !== "transferred" && p.track;
+  };
+
   const safeDate = (iso: string) => {
     if (!iso) return "—";
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
   };
 
+  const normalizeStatus = (
+    s: string | null | undefined
+  ): ProductRow["productStatus"] => {
+    const v = (s || "").toLowerCase();
+    if (v === "verified") return "verified";
+    if (v === "suspicious") return "suspicious";
+    return "registered";
+  };
+
+  // ✅ filtered list
+  const products = useMemo(() => {
+    if (filterMode === "owned") {
+      return allProducts.filter((p) => p.relationship === "owner");
+    }
+    if (filterMode === "registered") {
+      return allProducts.filter((p) => p.relationship === "manufacturer");
+    }
+    return allProducts;
+  }, [allProducts, filterMode]);
+
+  // ✅ clear hidden selections when filter changes
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(products.map((p) => p.productId));
+      const next = new Set<number>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterMode, products.length]);
+
   // ----------------------
-  // LOAD PRODUCTS (POST -> matches your backend)
+  // Selection helpers (eligible-only)
+  // ----------------------
+  const selectedProducts = useMemo(
+    () => products.filter((p) => selectedIds.has(p.productId)),
+    [products, selectedIds]
+  );
+
+  const selectedEligibleProducts = useMemo(
+    () => selectedProducts.filter(isTransferEligible),
+    [selectedProducts]
+  );
+
+  const anyEligibleSelected = selectedEligibleProducts.length > 0;
+
+  const allSelected = useMemo(() => {
+    const eligible = products.filter(isTransferEligible);
+    if (eligible.length === 0) return false;
+    return eligible.every((p) => selectedIds.has(p.productId));
+  }, [products, selectedIds]);
+
+  const toggleSelected = (productId: number) => {
+    const row = products.find((x) => x.productId === productId);
+    if (row && !isTransferEligible(row)) return;
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const eligibleIds = products.filter(isTransferEligible).map((p) => p.productId);
+      const allEligibleSelected =
+        eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
+
+      if (allEligibleSelected) return new Set();
+      return new Set(eligibleIds);
+    });
+  };
+
+  const clearSelected = () => setSelectedIds(new Set());
+
+  // ----------------------
+  // LOAD PRODUCTS
   // ----------------------
   const loadProducts = async () => {
     try {
-      if (!distributorId || Number.isNaN(distributorId)) {
-        setError("Distributor ID missing. Please login again.");
+      if (!retailerId || Number.isNaN(retailerId)) {
+        setError("Retailer ID missing. Please login again.");
         return;
       }
 
       const res = await axios.post<GetProductsByUserResponse>(GET_BY_USER_URL, {
-        user_id: distributorId,
+        user_id: retailerId,
       });
 
       if (!res.data.success || !res.data.data) {
@@ -158,30 +211,29 @@ export default function DistributorProductsPage() {
 
       const raw = res.data.data.products || [];
 
-      // Map backend format -> UI format
       const mapped: ProductRow[] = raw.map((p) => {
-        const blockchainStatus =
-          p.tx_hash && p.product_pda ? "confirmed" : "pending";
+        const confirmed = !!(p.tx_hash && p.product_pda);
 
-        // if you don’t have a registered_on column in your query,
-        // use owned_since or show —
-        const registeredOn = (p.owned_since as string) || "";
+        const relationship = (p.relationship as any) ?? null;
+
+        const lifecycleStatus: ProductRow["lifecycleStatus"] =
+          relationship === "owner" ? "active" : "transferred";
 
         return {
           productId: p.product_id,
           serialNumber: p.serial_no,
           productName: p.model ?? null,
           category: p.category ?? null,
-          productStatus: p.status ?? "unknown",
-          lifecycleStatus: p.relationship === "owner" ? "active" : "transferred",
-          blockchainStatus,
-          registeredOn,
+          productStatus: normalizeStatus(p.status),
+          lifecycleStatus,
+          blockchainStatus: confirmed ? "confirmed" : "pending",
+          registeredOn: p.owned_since || "",
           track: p.track !== false,
-          relationship: p.relationship ?? null,
+          relationship,
         };
       });
 
-      setProducts(mapped);
+      setAllProducts(mapped);
       setError(null);
     } catch (err: any) {
       setError(
@@ -200,11 +252,30 @@ export default function DistributorProductsPage() {
   }, []);
 
   // ----------------------
+  // Transfer Modal open/close
+  // ----------------------
+  const openTransferModal = () => {
+    if (!anyEligibleSelected) return;
+    setIsTransferOpen(true);
+    setRecipientUserId("");
+    setTransferError(null);
+    setTransferResults(null);
+  };
+
+  const closeTransferModal = () => {
+    if (transferLoading) return;
+    setIsTransferOpen(false);
+    setRecipientUserId("");
+    setTransferError(null);
+    setTransferResults(null);
+  };
+
+  // ----------------------
   // TRANSFER
   // ----------------------
   const handleConfirmTransfer = async () => {
-    if (!distributorId || Number.isNaN(distributorId)) {
-      setTransferError("Distributor ID missing. Please login again.");
+    if (!retailerId || Number.isNaN(retailerId)) {
+      setTransferError("Retailer ID missing. Please login again.");
       return;
     }
 
@@ -214,8 +285,10 @@ export default function DistributorProductsPage() {
       return;
     }
 
-    if (selectedProducts.length === 0) {
-      setTransferError("No products selected.");
+    if (selectedEligibleProducts.length === 0) {
+      setTransferError(
+        "No transferable products selected. (Products must be on-chain confirmed, tracked, and still owned by you.)"
+      );
       return;
     }
 
@@ -226,10 +299,10 @@ export default function DistributorProductsPage() {
     try {
       const results: TransferResult[] = [];
 
-      for (const p of selectedProducts) {
+      for (const p of selectedEligibleProducts) {
         try {
           const res = await axios.post(TRANSFER_URL, {
-            from_user_id: distributorId,
+            from_user_id: retailerId,
             to_user_id: toId,
             product_id: p.productId,
           });
@@ -277,18 +350,44 @@ export default function DistributorProductsPage() {
 
   return (
     <div style={{ padding: "40px" }}>
-      {/* Header row + button on right */}
+      {/* Header + filter pills */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 20,
+          marginBottom: 16,
+          gap: 16,
+          flexWrap: "wrap",
         }}
       >
         <h1 style={{ margin: 0 }}>My Products</h1>
 
-        {anySelected && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <FilterPill
+            active={filterMode === "all"}
+            onClick={() => setFilterMode("all")}
+            label="All"
+            subtitle={`${allProducts.length}`}
+          />
+          <FilterPill
+            active={filterMode === "owned"}
+            onClick={() => setFilterMode("owned")}
+            label="Owned"
+            subtitle={`${allProducts.filter((p) => p.relationship === "owner").length}`}
+          />
+          <FilterPill
+            active={filterMode === "registered"}
+            onClick={() => setFilterMode("registered")}
+            label="Registered by me"
+            subtitle={`${allProducts.filter((p) => p.relationship === "manufacturer").length}`}
+          />
+        </div>
+      </div>
+
+      {/* Transfer button */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        {anyEligibleSelected && (
           <button
             type="button"
             onClick={openTransferModal}
@@ -337,22 +436,22 @@ export default function DistributorProductsPage() {
                 type="checkbox"
                 checked={allSelected}
                 onChange={toggleSelectAll}
-                aria-label="Select all products"
+                aria-label="Select all transferable products"
               />
             </th>
-
             <th style={th}>Product ID</th>
             <th style={th}>Product Name</th>
             <th style={th}>Category</th>
             <th style={th}>Owned Since</th>
-            <th style={th}>Blockchain</th>
+            <th style={th}>Status</th>
             <th style={th}>Actions</th>
           </tr>
         </thead>
 
         <tbody>
           {products.map((p) => {
-            const locked = !isOnChainConfirmed(p);
+            const locked = isOnChainConfirmed(p);
+            const eligible = isTransferEligible(p);
 
             return (
               <tr key={p.productId}>
@@ -361,6 +460,7 @@ export default function DistributorProductsPage() {
                     type="checkbox"
                     checked={selectedIds.has(p.productId)}
                     onChange={() => toggleSelected(p.productId)}
+                    disabled={!eligible}
                     aria-label={`Select product ${p.productId}`}
                   />
                 </td>
@@ -374,37 +474,64 @@ export default function DistributorProductsPage() {
                   <span
                     style={{
                       padding: "4px 10px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      textTransform: "capitalize",
+                      background:
+                        p.productStatus === "verified"
+                          ? "#d4f5d4"
+                          : p.productStatus === "registered"
+                          ? "#dbeafe"
+                          : "#fee2e2",
+                      color:
+                        p.productStatus === "verified"
+                          ? "#1b6e1b"
+                          : p.productStatus === "registered"
+                          ? "#1d4ed8"
+                          : "#b91c1c",
+                    }}
+                  >
+                    {p.productStatus}
+                  </span>
+
+                  <span
+                    style={{
+                      marginLeft: 10,
+                      padding: "4px 10px",
                       borderRadius: "999px",
                       fontSize: 12,
-                      background: isOnChainConfirmed(p) ? "#e5e7eb" : "#fff7ed",
-                      color: isOnChainConfirmed(p) ? "#374151" : "#9a3412",
+                      background: locked ? "#e5e7eb" : "#fff7ed",
+                      color: locked ? "#374151" : "#9a3412",
                     }}
                     title="Blockchain status"
                   >
                     {p.blockchainStatus}
                   </span>
+
+                  {!p.track && (
+                    <span
+                      style={{
+                        marginLeft: 10,
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        fontSize: 12,
+                        background: "#f3f4f6",
+                        color: "#374151",
+                      }}
+                      title="Tracking ended"
+                    >
+                      tracking ended
+                    </span>
+                  )}
                 </td>
 
                 <td style={td}>
                   <button
-                    onClick={() => navigate(`/distributor/products/${p.productId}`)}
+                    onClick={() => navigate(`/retailer/products/${p.productId}`)}
                     style={iconBtn}
                     title="View"
                   >
                     👁
-                  </button>
-
-                  <button
-                    onClick={openTransferModal}
-                    style={{
-                      ...iconBtn,
-                      opacity: locked ? 0.4 : 1,
-                      cursor: locked ? "not-allowed" : "pointer",
-                    }}
-                    disabled={locked}
-                    title={locked ? "Product not confirmed on-chain" : "Transfer"}
-                  >
-                    🔁
                   </button>
                 </td>
               </tr>
@@ -414,7 +541,9 @@ export default function DistributorProductsPage() {
       </table>
 
       {products.length === 0 && (
-        <p style={{ marginTop: 20, opacity: 0.6 }}>No products found.</p>
+        <p style={{ marginTop: 20, opacity: 0.6 }}>
+          No products found for this filter.
+        </p>
       )}
 
       {/* =======================
@@ -450,7 +579,7 @@ export default function DistributorProductsPage() {
 
             <div style={{ marginBottom: 14 }}>
               <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-                Selected Products ({selectedProducts.length})
+                Selected Transferable Products ({selectedEligibleProducts.length})
               </div>
 
               <div
@@ -463,7 +592,7 @@ export default function DistributorProductsPage() {
                   background: "#f9fafb",
                 }}
               >
-                {selectedProducts.map((p) => (
+                {selectedEligibleProducts.map((p) => (
                   <div
                     key={p.productId}
                     style={{
@@ -486,7 +615,13 @@ export default function DistributorProductsPage() {
 
                     <button
                       type="button"
-                      onClick={() => toggleSelected(p.productId)}
+                      onClick={() => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          next.delete(p.productId);
+                          return next;
+                        });
+                      }}
                       disabled={transferLoading}
                       style={{
                         border: "none",
@@ -502,9 +637,9 @@ export default function DistributorProductsPage() {
                   </div>
                 ))}
 
-                {selectedProducts.length === 0 && (
+                {selectedEligibleProducts.length === 0 && (
                   <div style={{ fontSize: 13, color: "#6b7280" }}>
-                    No products selected.
+                    No transferable products selected.
                   </div>
                 )}
               </div>
@@ -518,7 +653,7 @@ export default function DistributorProductsPage() {
                 style={input}
                 value={recipientUserId}
                 onChange={(e) => setRecipientUserId(e.target.value)}
-                placeholder="e.g. 6 (sports_retailer)"
+                placeholder="e.g. 7 (fashion_retailer)"
                 disabled={transferLoading}
               />
             </div>
@@ -568,7 +703,7 @@ export default function DistributorProductsPage() {
                 type="button"
                 onClick={() => void handleConfirmTransfer()}
                 style={btnPrimary}
-                disabled={transferLoading || selectedProducts.length === 0}
+                disabled={transferLoading || selectedEligibleProducts.length === 0}
               >
                 {transferLoading ? "Transferring..." : "Confirm Transfer"}
               </button>
@@ -577,6 +712,57 @@ export default function DistributorProductsPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/* ----------------- Filter pill component ----------------- */
+
+function FilterPill({
+  active,
+  onClick,
+  label,
+  subtitle,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  subtitle?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: active ? "1px solid #111827" : "1px solid #e5e7eb",
+        background: active ? "#111827" : "white",
+        color: active ? "white" : "#111827",
+        borderRadius: 999,
+        padding: "8px 12px",
+        cursor: "pointer",
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        fontWeight: 700,
+        fontSize: 13,
+      }}
+      title={label}
+    >
+      {label}
+      {subtitle !== undefined && (
+        <span
+          style={{
+            background: active ? "rgba(255,255,255,0.18)" : "#f3f4f6",
+            color: active ? "white" : "#111827",
+            borderRadius: 999,
+            padding: "2px 8px",
+            fontSize: 12,
+            fontWeight: 800,
+          }}
+        >
+          {subtitle}
+        </span>
+      )}
+    </button>
   );
 }
 
