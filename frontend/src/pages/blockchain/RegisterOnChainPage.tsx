@@ -3,6 +3,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { SystemProgram } from "@solana/web3.js";
 import axios from "axios";
+import { API_ROOT } from "../../config/api";
 import { Buffer } from "buffer";
 
 import { getProvider, getProgram } from "../../lib/anchorClient";
@@ -18,12 +19,12 @@ type ProductMetadata = {
   description?: string;
 };
 
-const API_BASE = "http://localhost:3000";
+const API_BASE = API_ROOT.replace(/\/api\s*$/, "");
 
-export default function RegisterProductPage() {
+export default function RegisterOnChainPage() {
   const wallet = useWallet();
 
-  const [manufacturerId, setManufacturerId] = useState<number>(2);
+  const [manufacturerId] = useState<number>(() => Number(localStorage.getItem("userId")) || 0);
 
   const [serialNo, setSerialNo] = useState("");
   const [productName, setProductName] = useState("");

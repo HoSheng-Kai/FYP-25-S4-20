@@ -32,12 +32,13 @@ export interface ListingRow {
   created_on: Date; // you can treat this as updatedOn if you don't add updated_on column
 }
 
-export class ListingUpdate {
-  /**
-   * Load a listing for editing, enforcing:
-   *  - user is the seller
-   *  - user is CURRENT owner (ownership.end_on IS NULL)
-   */
+export class ConsumerProductListing {
+
+  // ======================================================
+  // Load a listing for editing, enforcing:
+  //  - user is the seller
+  //  - user is CURRENT owner (ownership.end_on IS NULL)
+  // ======================================================
   static async getListingForUser(
   listingId: number,
   userId: number
@@ -112,9 +113,123 @@ export class ListingUpdate {
     }
   }
 
-  /**
-   * Update listing fields (price / currency / status) for a user.
-   */
+  // ======================================================
+  // CREATE a new listing for a product, enforcing:
+  //  - user is CURRENT owner (ownership.end_on IS NULL) if ownership exists
+  //  - user becomes seller_id
+  //  - prevent duplicate active listing (latest listing is available/reserved)
+  // ======================================================
+  static async createListingForUser(args: {
+    productId: number;
+    userId: number;
+    price: number;
+    currency: string; // 'SGD' | 'USD' | 'EUR'
+    status?: ListingStatus; // default 'available'
+  }): Promise<ListingRow> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const status: ListingStatus = args.status ?? "available";
+
+      // 1) Ensure product exists
+      const prodRes = await client.query(
+        `
+        SELECT product_id, serial_no, model
+        FROM fyp_25_s4_20.product
+        WHERE product_id = $1
+        FOR UPDATE;
+        `,
+        [args.productId]
+      );
+
+      if (prodRes.rows.length === 0) {
+        throw new Error("Product not found");
+      }
+
+      // 2) Ownership enforcement IF ownership exists
+      const ownershipRes = await client.query(
+        `
+        SELECT owner_id
+        FROM fyp_25_s4_20.ownership
+        WHERE product_id = $1
+          AND end_on IS NULL
+        LIMIT 1;
+        `,
+        [args.productId]
+      );
+
+      if (ownershipRes.rows.length > 0) {
+        const currentOwnerId = ownershipRes.rows[0].owner_id;
+        if (currentOwnerId !== args.userId) {
+          throw new Error("You do not own this product and cannot list it");
+        }
+      }
+
+      // 3) Prevent duplicate active listing
+      const latestListing = await client.query(
+        `
+        SELECT status
+        FROM fyp_25_s4_20.product_listing
+        WHERE product_id = $1
+        ORDER BY created_on DESC
+        LIMIT 1;
+        `,
+        [args.productId]
+      );
+
+      if (latestListing.rows.length > 0) {
+        const latestStatus = latestListing.rows[0].status as ListingStatus;
+        if (latestStatus === "available" || latestStatus === "reserved") {
+          throw new Error("Active listing already exists for this product");
+        }
+      }
+
+      // 4) Insert new listing
+      const ins = await client.query(
+        `
+        INSERT INTO fyp_25_s4_20.product_listing
+          (product_id, seller_id, price, currency, status)
+        VALUES
+          ($1, $2, $3, $4::fyp_25_s4_20.currency, $5::fyp_25_s4_20.availability)
+        RETURNING
+          listing_id,
+          product_id,
+          price,
+          currency::text AS currency,
+          status::text AS status,
+          created_on;
+        `,
+        [args.productId, args.userId, args.price, args.currency, status]
+      );
+
+      const row = ins.rows[0];
+
+      await client.query("COMMIT");
+
+      return {
+        listing_id: row.listing_id,
+        product_id: row.product_id,
+        serial_no: prodRes.rows[0].serial_no,
+        model: prodRes.rows[0].model,
+        price: row.price,
+        currency: row.currency,
+        status: row.status as ListingStatus,
+        created_on: row.created_on,
+      };
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {}
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  // ======================================================
+  // Update listing fields (price / currency / status) for a user.
+  // ======================================================
   static async updateListingForUser(
     input: UpdateListingInput
   ): Promise<ListingForEdit> {
@@ -227,9 +342,9 @@ export class ListingUpdate {
     return r.rows[0] as ListingForEdit;
   }
 
-  /**
-   * Delete a listing for the user, with permission checks.
-   */
+  // ======================================================
+  // Delete a listing for the user, with permission checks.
+  // ======================================================
   static async deleteListingForUser(listingId: number, userId: number): Promise<void> {
     // Delete only if the listing belongs to this user
     const del = await pool.query(

@@ -10,7 +10,7 @@ type ProductRow = {
   productName: string | null;
   productStatus: "registered" | "verified" | "suspicious";
   lifecycleStatus: "active" | "transferred";
-  blockchainStatus: string; // on blockchain / pending
+  blockchainStatus: string; // on blockchain / pending / confirmed
   registeredOn: string;
   price: string | null;
   currency: string | null;
@@ -57,6 +57,12 @@ type UpdateResponse = {
   details?: string;
 };
 
+type TransferResult = {
+  productId: number;
+  ok: boolean;
+  message: string;
+};
+
 export default function ManufacturerProductsPage() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -70,7 +76,6 @@ export default function ManufacturerProductsPage() {
   const [isEditLoading, setIsEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [editSuccess, setEditSuccess] = useState<string | null>(null);
-
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
 
   // fields
@@ -87,6 +92,92 @@ export default function ManufacturerProductsPage() {
     () => !Number.isNaN(manufacturerId) && manufacturerId > 0,
     [manufacturerId]
   );
+
+  // ======================
+  // OWNERSHIP TRANSFER STATE
+  // ======================
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // Modal
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [recipientUserId, setRecipientUserId] = useState("");
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferResults, setTransferResults] = useState<TransferResult[] | null>(
+    null
+  );
+
+  const TRANSFER_URL = "http://localhost:3000/api/distributors/update-ownership";
+
+  // ----------------------
+  // HELPERS (BLOCKCHAIN IMMUTABILITY)
+  // ----------------------
+  const isOnChainConfirmed = (p: ProductRow) => {
+    const s = (p.blockchainStatus || "").toLowerCase();
+    return (
+      s.includes("confirmed") ||
+      s.includes("on blockchain") ||
+      s.includes("on-chain") ||
+      s.includes("onchain")
+    );
+  };
+
+  // ✅ NEW: transfer eligibility check
+  const isTransferEligible = (p: ProductRow) => {
+    // Must be confirmed on-chain AND still owned by manufacturer (not transferred away)
+    return isOnChainConfirmed(p) && p.lifecycleStatus !== "transferred";
+  };
+
+  const safeDate = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
+  };
+
+  // ----------------------
+  // Selection helpers (eligible-only)
+  // ----------------------
+  const selectedProducts = useMemo(
+    () => products.filter((p) => selectedIds.has(p.productId)),
+    [products, selectedIds]
+  );
+
+  const selectedEligibleProducts = useMemo(
+    () => selectedProducts.filter(isTransferEligible),
+    [selectedProducts]
+  );
+
+  const anyEligibleSelected = selectedEligibleProducts.length > 0;
+
+  const allSelected = useMemo(() => {
+    const eligible = products.filter(isTransferEligible);
+    if (eligible.length === 0) return false;
+    return eligible.every((p) => selectedIds.has(p.productId));
+  }, [products, selectedIds]);
+
+  const toggleSelected = (productId: number) => {
+    const row = products.find((x) => x.productId === productId);
+    if (row && !isTransferEligible(row)) return; // ✅ don't allow selecting ineligible
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const eligibleIds = products.filter(isTransferEligible).map((p) => p.productId);
+      const allEligibleSelected =
+        eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
+
+      if (allEligibleSelected) return new Set();
+      return new Set(eligibleIds);
+    });
+  };
+
+  const clearSelected = () => setSelectedIds(new Set());
 
   // ----------------------
   // LOAD PRODUCTS
@@ -115,9 +206,109 @@ export default function ManufacturerProductsPage() {
   }, []);
 
   // ----------------------
-  // DELETE PRODUCT
+  // Transfer Modal open/close
+  // ----------------------
+  const openTransferModal = () => {
+    if (!anyEligibleSelected) return;
+    setIsTransferOpen(true);
+    setRecipientUserId("");
+    setTransferError(null);
+    setTransferResults(null);
+  };
+
+  const closeTransferModal = () => {
+    if (transferLoading) return;
+    setIsTransferOpen(false);
+    setRecipientUserId("");
+    setTransferError(null);
+    setTransferResults(null);
+  };
+
+  const handleConfirmTransfer = async () => {
+    if (!manufacturerId || Number.isNaN(manufacturerId)) {
+      setTransferError("Manufacturer ID missing. Please login again.");
+      return;
+    }
+
+    const toId = Number(recipientUserId);
+    if (!toId || Number.isNaN(toId) || toId <= 0) {
+      setTransferError("Please enter a valid Recipient User ID.");
+      return;
+    }
+
+    // ✅ Safety net: only transfer eligible products
+    if (selectedEligibleProducts.length === 0) {
+      setTransferError(
+        "No transferable products selected. (Products must be on-chain confirmed and still owned by you.)"
+      );
+      return;
+    }
+
+    setTransferLoading(true);
+    setTransferError(null);
+    setTransferResults(null);
+
+    try {
+      const results: TransferResult[] = [];
+
+      // sequential for debugging/demo
+      for (const p of selectedEligibleProducts) {
+        try {
+          const res = await axios.post(TRANSFER_URL, {
+            from_user_id: manufacturerId,
+            to_user_id: toId,
+            product_id: p.productId,
+          });
+
+          if (res.data?.success) {
+            const exec = res.data?.data?.transactions?.execute;
+            results.push({
+              productId: p.productId,
+              ok: true,
+              message: exec ? `Transferred ✅ (execute: ${exec})` : "Transferred ✅",
+            });
+          } else {
+            results.push({
+              productId: p.productId,
+              ok: false,
+              message: res.data?.error || "Transfer failed",
+            });
+          }
+        } catch (err: any) {
+          results.push({
+            productId: p.productId,
+            ok: false,
+            message:
+              err?.response?.data?.details ||
+              err?.response?.data?.error ||
+              err.message ||
+              "Transfer failed",
+          });
+        }
+      }
+
+      setTransferResults(results);
+
+      const anyFail = results.some((r) => !r.ok);
+      if (!anyFail) {
+        await loadProducts();
+        clearSelected();
+      }
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+  // ----------------------
+  // DELETE PRODUCT (draft only)
   // ----------------------
   const handleDelete = async (productId: number) => {
+    const row = products.find((x) => x.productId === productId);
+    if (row && isOnChainConfirmed(row)) {
+      alert("Cannot delete a product that is confirmed on blockchain.");
+      return;
+    }
+
     const confirmDelete = window.confirm(
       "Are you sure you want to delete this product? This cannot be undone."
     );
@@ -125,11 +316,20 @@ export default function ManufacturerProductsPage() {
 
     try {
       const res = await axios.delete(
-        `${PRODUCTS_API_BASE_URL}/${productId}?manufacturerId=${manufacturerId}`
+        `${PRODUCTS_API_BASE_URL}/${productId}/draft`,
+        { data: { manufacturerId } }
       );
 
       if (res.data.success) {
         alert("Product deleted successfully.");
+
+        // remove from selection if it was selected
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(productId);
+          return next;
+        });
+
         loadProducts();
       } else {
         alert(res.data.error || "Failed to delete product.");
@@ -141,7 +341,7 @@ export default function ManufacturerProductsPage() {
   };
 
   // ----------------------
-  // OPEN EDIT MODAL (prefill via backend)
+  // OPEN EDIT MODAL
   // ----------------------
   const openEditModal = async (productId: number) => {
     if (!canEdit) {
@@ -149,6 +349,31 @@ export default function ManufacturerProductsPage() {
       return;
     }
 
+    const row = products.find((x) => x.productId === productId);
+
+    // BLOCKCHAIN CONFIRMED -> NO /edit CALL
+    if (row && isOnChainConfirmed(row)) {
+      setIsEditOpen(true);
+      setIsEditLoading(false);
+      setEditSuccess(null);
+      setEditingProductId(productId);
+
+      setEditError(
+        "This product is already confirmed on blockchain and cannot be edited (immutable)."
+      );
+
+      // Prefill what we can from list row
+      setEditSerial(row.serialNumber ?? "");
+      setEditName(row.productName ?? "");
+      setEditCategory(row.category ?? "");
+      setEditBatch("");
+      setEditMfgDate("");
+      setEditDescription("");
+      setQrImageUrl(null);
+      return;
+    }
+
+    // Draft / not-confirmed -> allow edit
     setIsEditOpen(true);
     setIsEditLoading(true);
     setEditError(null);
@@ -174,7 +399,6 @@ export default function ManufacturerProductsPage() {
       setEditCategory(d.category ?? "");
       setEditDescription(d.productDescription ?? "");
 
-      // Convert to yyyy-mm-dd for input[type=date]
       const mfg = d.manufactureDate ? new Date(d.manufactureDate) : null;
       setEditMfgDate(
         mfg && !Number.isNaN(mfg.getTime())
@@ -211,10 +435,17 @@ export default function ManufacturerProductsPage() {
   };
 
   // ----------------------
-  // UPDATE PRODUCT + GENERATE NEW QR (backend already regenerates)
+  // UPDATE PRODUCT + GENERATE NEW QR
   // ----------------------
   const handleUpdateProduct = async () => {
     if (!editingProductId) return;
+
+    const row = products.find((x) => x.productId === editingProductId);
+    if (row && isOnChainConfirmed(row)) {
+      setEditError("This product is confirmed on blockchain and cannot be updated.");
+      return;
+    }
+
     if (!canEdit) {
       setEditError("Manufacturer ID missing. Please login again.");
       return;
@@ -235,7 +466,7 @@ export default function ManufacturerProductsPage() {
         productName: editName.trim() || null,
         batchNo: editBatch.trim() || null,
         category: editCategory.trim() || null,
-        manufactureDate: editMfgDate || null, // yyyy-mm-dd
+        manufactureDate: editMfgDate || null,
         description: editDescription.trim() || null,
       };
 
@@ -251,13 +482,11 @@ export default function ManufacturerProductsPage() {
 
       setEditSuccess("Updated successfully. New QR code generated.");
 
-      // refresh QR image (use backend url if returned, otherwise fall back)
       const newQr =
         res.data.data.qrImageUrl ??
         `${PRODUCTS_API_BASE_URL}/${editingProductId}/qrcode`;
       setQrImageUrl(withNoCache(newQr));
 
-      // refresh table
       await loadProducts();
     } catch (err: any) {
       setEditError(
@@ -274,7 +503,35 @@ export default function ManufacturerProductsPage() {
 
   return (
     <div style={{ padding: "40px" }}>
-      <h1 style={{ marginBottom: "20px" }}>My Products</h1>
+      {/* Header row + button on right */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 20,
+        }}
+      >
+        <h1 style={{ margin: 0 }}>My Products</h1>
+
+        {anyEligibleSelected && (
+          <button
+            type="button"
+            onClick={openTransferModal}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "none",
+              background: "#111827",
+              color: "white",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            Ownership Transfer
+          </button>
+        )}
+      </div>
 
       {error && (
         <div
@@ -301,6 +558,17 @@ export default function ManufacturerProductsPage() {
       >
         <thead style={{ background: "#e9ecef" }}>
           <tr>
+            {/* ✅ checkbox column */}
+            <th style={{ ...th, width: 46 }}>
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+                aria-label="Select all transferable products"
+                title="Select all transferable products"
+              />
+            </th>
+
             <th style={th}>Product ID</th>
             <th style={th}>Product Name</th>
             <th style={th}>Category</th>
@@ -311,73 +579,310 @@ export default function ManufacturerProductsPage() {
         </thead>
 
         <tbody>
-          {products.map((p) => (
-            <tr key={p.productId}>
-              <td style={td}>{p.serialNumber}</td>
-              <td style={td}>{p.productName || "—"}</td>
-              <td style={td}>{p.category || "—"}</td>
-              <td style={td}>{new Date(p.registeredOn).toLocaleDateString()}</td>
+          {products.map((p) => {
+            const locked = isOnChainConfirmed(p);
+            const eligible = isTransferEligible(p);
 
-              <td style={td}>
-                <span
-                  style={{
-                    padding: "4px 10px",
-                    borderRadius: "8px",
-                    fontSize: "12px",
-                    textTransform: "capitalize",
-                    background:
-                      p.productStatus === "verified"
-                        ? "#d4f5d4"
-                        : p.productStatus === "registered"
-                        ? "#dbeafe"
-                        : "#fee2e2",
-                    color:
-                      p.productStatus === "verified"
-                        ? "#1b6e1b"
-                        : p.productStatus === "registered"
-                        ? "#1d4ed8"
-                        : "#b91c1c",
-                  }}
-                >
-                  {p.productStatus}
-                </span>
-              </td>
+            return (
+              <tr key={p.productId}>
+                {/* ✅ row checkbox (disabled if not eligible) */}
+                <td style={td}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(p.productId)}
+                    onChange={() => toggleSelected(p.productId)}
+                    disabled={!eligible}
+                    aria-label={`Select product ${p.productId}`}
+                    title={
+                      !locked
+                        ? "Cannot transfer: product not confirmed on-chain"
+                        : p.lifecycleStatus === "transferred"
+                        ? "Cannot transfer: you are no longer the current owner"
+                        : "Transfer eligible"
+                    }
+                  />
+                </td>
 
-              <td style={td}>
-                {/* VIEW (eye icon) */}
-                <button
-                  onClick={() => navigate(`/manufacturer/products/${p.productId}`)}
-                  style={iconBtn}
-                  title="View"
-                >
-                  👁
-                </button>
+                <td style={td}>{p.productId}</td>
+                <td style={td}>{p.productName || "—"}</td>
+                <td style={td}>{p.category || "—"}</td>
+                <td style={td}>{safeDate(p.registeredOn)}</td>
 
-                {/* EDIT (pencil icon) */}
-                <button
-                  onClick={() => void openEditModal(p.productId)}
-                  style={iconBtn}
-                  title="Edit"
-                >
-                  ✏️
-                </button>
+                <td style={td}>
+                  <span
+                    style={{
+                      padding: "4px 10px",
+                      borderRadius: "8px",
+                      fontSize: "12px",
+                      textTransform: "capitalize",
+                      background:
+                        p.productStatus === "verified"
+                          ? "#d4f5d4"
+                          : p.productStatus === "registered"
+                          ? "#dbeafe"
+                          : "#fee2e2",
+                      color:
+                        p.productStatus === "verified"
+                          ? "#1b6e1b"
+                          : p.productStatus === "registered"
+                          ? "#1d4ed8"
+                          : "#b91c1c",
+                    }}
+                  >
+                    {p.productStatus}
+                  </span>
 
-                {/* DELETE (trash icon) */}
-                <button
-                  onClick={() => handleDelete(p.productId)}
-                  style={{ ...iconBtn, color: "red" }}
-                  title="Delete"
-                >
-                  🗑
-                </button>
-              </td>
-            </tr>
-          ))}
+                  {p.blockchainStatus && (
+                    <span
+                      style={{
+                        marginLeft: 10,
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        fontSize: 12,
+                        background: locked ? "#e5e7eb" : "#fff7ed",
+                        color: locked ? "#374151" : "#9a3412",
+                      }}
+                      title="Blockchain status"
+                    >
+                      {p.blockchainStatus}
+                    </span>
+                  )}
+
+                  {/* optional hint for transferred rows */}
+                  {p.lifecycleStatus === "transferred" && (
+                    <span
+                      style={{
+                        marginLeft: 10,
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        fontSize: 12,
+                        background: "#fee2e2",
+                        color: "#b91c1c",
+                      }}
+                      title="This product has been transferred away from you"
+                    >
+                      transferred
+                    </span>
+                  )}
+                </td>
+
+                <td style={td}>
+                  <button
+                    onClick={() => navigate(`/manufacturer/products/${p.productId}`)}
+                    style={iconBtn}
+                    title="View"
+                  >
+                    👁
+                  </button>
+
+                  <button
+                    onClick={() => void openEditModal(p.productId)}
+                    style={{
+                      ...iconBtn,
+                      opacity: locked ? 0.4 : 1,
+                      cursor: locked ? "not-allowed" : "pointer",
+                    }}
+                    title={
+                      locked
+                        ? "Product is already on blockchain and cannot be edited"
+                        : "Edit"
+                    }
+                    disabled={locked}
+                  >
+                    ✏️
+                  </button>
+
+                  <button
+                    onClick={() => handleDelete(p.productId)}
+                    style={{
+                      ...iconBtn,
+                      color: "red",
+                      opacity: locked ? 0.4 : 1,
+                      cursor: locked ? "not-allowed" : "pointer",
+                    }}
+                    title={
+                      locked
+                        ? "Product is already on blockchain and cannot be deleted"
+                        : "Delete"
+                    }
+                    disabled={locked}
+                  >
+                    🗑
+                  </button>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
       {products.length === 0 && (
         <p style={{ marginTop: 20, opacity: 0.6 }}>No products found.</p>
+      )}
+
+      {/* =======================
+          OWNERSHIP TRANSFER MODAL
+      ======================== */}
+      {isTransferOpen && (
+        <div style={modalOverlay} onMouseDown={closeTransferModal}>
+          <div
+            style={{ ...modalCard, maxWidth: 620 }}
+            onMouseDown={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div style={modalHeader}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Ownership Transfer</h2>
+                <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
+                  Transfer selected products to another user.
+                </p>
+              </div>
+
+              <button
+                style={modalCloseBtn}
+                onClick={closeTransferModal}
+                type="button"
+                disabled={transferLoading}
+              >
+                ✕
+              </button>
+            </div>
+
+            {transferError && <div style={alertError}>{transferError}</div>}
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+                Selected Transferable Products ({selectedEligibleProducts.length})
+              </div>
+
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 10,
+                  maxHeight: 170,
+                  overflow: "auto",
+                  background: "#f9fafb",
+                }}
+              >
+                {selectedEligibleProducts.map((p) => (
+                  <div
+                    key={p.productId}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 6px",
+                      borderBottom: "1px solid #eee",
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ fontSize: 13 }}>
+                      <div style={{ fontWeight: 700 }}>{p.productName || "—"}</div>
+                      <div style={{ color: "#6b7280" }}>
+                        ID: <span style={{ fontFamily: "monospace" }}>{p.productId}</span>{" "}
+                        • Serial:{" "}
+                        <span style={{ fontFamily: "monospace" }}>
+                          {p.serialNumber}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleSelected(p.productId)}
+                      disabled={transferLoading}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        color: "#b91c1c",
+                        fontWeight: 700,
+                      }}
+                      title="Remove from selection"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+
+                {selectedEligibleProducts.length === 0 && (
+                  <div style={{ fontSize: 13, color: "#6b7280" }}>
+                    No transferable products selected.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                Recipient User ID
+              </div>
+              <input
+                style={input}
+                value={recipientUserId}
+                onChange={(e) => setRecipientUserId(e.target.value)}
+                placeholder="e.g. 4 (global_distributor)"
+                disabled={transferLoading}
+              />
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
+                Enter the destination/recipient <b>userId</b> in your system.
+              </div>
+            </div>
+
+            {transferResults && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+                  Transfer Results
+                </div>
+                <div
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 12,
+                    padding: 10,
+                    background: "white",
+                    maxHeight: 160,
+                    overflow: "auto",
+                  }}
+                >
+                  {transferResults.map((r) => (
+                    <div
+                      key={r.productId}
+                      style={{
+                        fontSize: 13,
+                        padding: "6px 0",
+                        color: r.ok ? "#116a2b" : "#a11",
+                      }}
+                    >
+                      Product {r.productId}: {r.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ ...modalFooter, justifyContent: "space-between" }}>
+              <button
+                type="button"
+                onClick={closeTransferModal}
+                style={btnSecondary}
+                disabled={transferLoading}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleConfirmTransfer()}
+                style={btnPrimary}
+                disabled={transferLoading || selectedEligibleProducts.length === 0}
+              >
+                {transferLoading ? "Transferring..." : "Confirm Transfer"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* =======================
@@ -404,16 +909,8 @@ export default function ManufacturerProductsPage() {
               </button>
             </div>
 
-            {editError && (
-              <div style={alertError}>
-                {editError}
-              </div>
-            )}
-            {editSuccess && (
-              <div style={alertSuccess}>
-                {editSuccess}
-              </div>
-            )}
+            {editError && <div style={alertError}>{editError}</div>}
+            {editSuccess && <div style={alertSuccess}>{editSuccess}</div>}
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
               <Field label="Product Name *">
@@ -422,6 +919,7 @@ export default function ManufacturerProductsPage() {
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
                   placeholder="e.g. iPhone 15 Pro Max"
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -431,6 +929,7 @@ export default function ManufacturerProductsPage() {
                   value={editCategory}
                   onChange={(e) => setEditCategory(e.target.value)}
                   placeholder="e.g. Electronics"
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -440,6 +939,7 @@ export default function ManufacturerProductsPage() {
                   value={editBatch}
                   onChange={(e) => setEditBatch(e.target.value)}
                   placeholder="e.g. BATCH-2024-A1"
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -449,6 +949,7 @@ export default function ManufacturerProductsPage() {
                   value={editSerial}
                   onChange={(e) => setEditSerial(e.target.value)}
                   placeholder="e.g. IMEI: 3569..."
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -458,6 +959,7 @@ export default function ManufacturerProductsPage() {
                   type="date"
                   value={editMfgDate}
                   onChange={(e) => setEditMfgDate(e.target.value)}
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
 
@@ -473,6 +975,7 @@ export default function ManufacturerProductsPage() {
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="e.g. 256GB, Titanium Blue, Factory Sealed"
+                  disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
             </div>
@@ -485,12 +988,19 @@ export default function ManufacturerProductsPage() {
                 A new unique QR code will be automatically generated and tied to this product
                 when you save your changes.
               </div>
+
               {qrImageUrl && (
                 <div style={{ marginTop: 12, textAlign: "center" }}>
                   <img
                     src={qrImageUrl}
                     alt="QR Code"
-                    style={{ width: 140, height: 140, borderRadius: 12, background: "white", padding: 8 }}
+                    style={{
+                      width: 140,
+                      height: 140,
+                      borderRadius: 12,
+                      background: "white",
+                      padding: 8,
+                    }}
                   />
                 </div>
               )}
@@ -510,7 +1020,15 @@ export default function ManufacturerProductsPage() {
                 type="button"
                 onClick={() => void handleUpdateProduct()}
                 style={btnPrimary}
-                disabled={isEditLoading}
+                disabled={
+                  isEditLoading ||
+                  !!(editError && editError.toLowerCase().includes("immutable"))
+                }
+                title={
+                  editError && editError.toLowerCase().includes("immutable")
+                    ? "On-chain product cannot be updated"
+                    : "Update"
+                }
               >
                 {isEditLoading ? "Updating..." : "Update & Generate New QR Code"}
               </button>
@@ -529,13 +1047,7 @@ function withNoCache(url: string) {
   return `${url}${sep}ts=${Date.now()}`;
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{label}</div>
