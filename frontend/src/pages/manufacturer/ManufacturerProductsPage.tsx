@@ -3,6 +3,38 @@ import axios from "axios";
 import { PRODUCTS_API_BASE_URL } from "../../config/api";
 import { useNavigate } from "react-router-dom";
 
+/** =========================
+ * Backend response for "products-by-user"
+ * ========================= */
+type BackendProduct = {
+  product_id: number;
+  serial_no: string;
+  model: string | null;
+  category: string | null;
+  status: string | null; // e.g. 'registered' | 'verified' | 'suspicious'
+  product_pda: string | null;
+  tx_hash: string | null;
+  track: boolean | null;
+
+  owned_since?: string | null;
+  relationship?: string | null; // 'owner' | 'manufacturer' | null
+};
+
+type GetProductsByUserResponse = {
+  success: boolean;
+  data?: {
+    user_id: number;
+    username: string;
+    total_products: number;
+    products: BackendProduct[];
+  };
+  error?: string;
+  details?: string;
+};
+
+/** =========================
+ * Your UI types
+ * ========================= */
 type ProductRow = {
   productId: number;
   serialNumber: string;
@@ -16,6 +48,9 @@ type ProductRow = {
   currency: string | null;
   listingStatus: string | null;
   listingCreatedOn: string | null;
+
+  // ✅ keep relationship so we can filter UI
+  relationship?: "owner" | "manufacturer" | null;
 };
 
 type EditProductData = {
@@ -63,13 +98,20 @@ type TransferResult = {
   message: string;
 };
 
+type FilterMode = "all" | "owned" | "registered";
+
 export default function ManufacturerProductsPage() {
   const navigate = useNavigate();
-  const [products, setProducts] = useState<ProductRow[]>([]);
+
+  // ✅ Keep a full list in memory, and show filtered list in table
+  const [allProducts, setAllProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const manufacturerId = Number(localStorage.getItem("userId"));
+
+  // ✅ Filter UI
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
 
   // ---------- EDIT MODAL STATE ----------
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -108,6 +150,7 @@ export default function ManufacturerProductsPage() {
   );
 
   const TRANSFER_URL = "http://localhost:3000/api/distributors/update-ownership";
+  const GET_BY_USER_URL = "http://localhost:3000/api/distributors/products-by-user";
 
   // ----------------------
   // HELPERS (BLOCKCHAIN IMMUTABILITY)
@@ -122,16 +165,50 @@ export default function ManufacturerProductsPage() {
     );
   };
 
-  // ✅ NEW: transfer eligibility check
+  // ✅ transfer eligibility check
   const isTransferEligible = (p: ProductRow) => {
-    // Must be confirmed on-chain AND still owned by manufacturer (not transferred away)
     return isOnChainConfirmed(p) && p.lifecycleStatus !== "transferred";
   };
 
   const safeDate = (iso: string) => {
+    if (!iso) return "—";
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
   };
+
+  const normalizeStatus = (
+    s: string | null | undefined
+  ): ProductRow["productStatus"] => {
+    const v = (s || "").toLowerCase();
+    if (v === "verified") return "verified";
+    if (v === "suspicious") return "suspicious";
+    return "registered";
+  };
+
+  // ✅ Build the list shown in the table
+  const products = useMemo(() => {
+    if (filterMode === "owned") {
+      return allProducts.filter((p) => p.relationship === "owner");
+    }
+    if (filterMode === "registered") {
+      return allProducts.filter((p) => p.relationship === "manufacturer");
+    }
+    return allProducts;
+  }, [allProducts, filterMode]);
+
+  // ✅ Clear invalid selections when filter changes (prevents hidden selected items)
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(products.map((p) => p.productId));
+      const next = new Set<number>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterMode, products.length]);
 
   // ----------------------
   // Selection helpers (eligible-only)
@@ -156,7 +233,7 @@ export default function ManufacturerProductsPage() {
 
   const toggleSelected = (productId: number) => {
     const row = products.find((x) => x.productId === productId);
-    if (row && !isTransferEligible(row)) return; // ✅ don't allow selecting ineligible
+    if (row && !isTransferEligible(row)) return;
 
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -180,21 +257,62 @@ export default function ManufacturerProductsPage() {
   const clearSelected = () => setSelectedIds(new Set());
 
   // ----------------------
-  // LOAD PRODUCTS
+  // LOAD PRODUCTS (owned OR registered_by)
   // ----------------------
   const loadProducts = async () => {
     try {
-      const res = await axios.get(
-        `${PRODUCTS_API_BASE_URL}/manufacturer/${manufacturerId}/listings`
-      );
-
-      if (res.data.success) {
-        setProducts(res.data.data);
-      } else {
-        setError("Failed to load products.");
+      if (!manufacturerId || Number.isNaN(manufacturerId)) {
+        setError("Manufacturer ID missing. Please login again.");
+        return;
       }
-    } catch (err) {
-      setError("Error fetching products.");
+
+      const res = await axios.post<GetProductsByUserResponse>(GET_BY_USER_URL, {
+        user_id: manufacturerId,
+      });
+
+      if (!res.data.success || !res.data.data) {
+        setError(res.data.error || "Failed to load products.");
+        return;
+      }
+
+      const raw = res.data.data.products || [];
+
+      const mapped: ProductRow[] = raw.map((p) => {
+        const confirmed = !!(p.tx_hash && p.product_pda);
+
+        const relationship = (p.relationship as any) ?? null;
+
+        const lifecycleStatus: ProductRow["lifecycleStatus"] =
+          relationship === "owner" ? "active" : "transferred";
+
+        // We only have owned_since from that query, so show it here
+        const registeredOn = p.owned_since || "";
+
+        return {
+          productId: p.product_id,
+          serialNumber: p.serial_no,
+          productName: p.model ?? null,
+          category: p.category ?? null,
+          productStatus: normalizeStatus(p.status),
+          lifecycleStatus,
+          blockchainStatus: confirmed ? "confirmed" : "pending",
+          registeredOn,
+          price: null,
+          currency: null,
+          listingStatus: null,
+          listingCreatedOn: null,
+          relationship,
+        };
+      });
+
+      setAllProducts(mapped);
+      setError(null);
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.error ||
+          err?.response?.data?.details ||
+          "Error fetching products."
+      );
     } finally {
       setLoading(false);
     }
@@ -236,7 +354,6 @@ export default function ManufacturerProductsPage() {
       return;
     }
 
-    // ✅ Safety net: only transfer eligible products
     if (selectedEligibleProducts.length === 0) {
       setTransferError(
         "No transferable products selected. (Products must be on-chain confirmed and still owned by you.)"
@@ -251,7 +368,6 @@ export default function ManufacturerProductsPage() {
     try {
       const results: TransferResult[] = [];
 
-      // sequential for debugging/demo
       for (const p of selectedEligibleProducts) {
         try {
           const res = await axios.post(TRANSFER_URL, {
@@ -315,15 +431,13 @@ export default function ManufacturerProductsPage() {
     if (!confirmDelete) return;
 
     try {
-      const res = await axios.delete(
-        `${PRODUCTS_API_BASE_URL}/${productId}/draft`,
-        { data: { manufacturerId } }
-      );
+      const res = await axios.delete(`${PRODUCTS_API_BASE_URL}/${productId}/draft`, {
+        data: { manufacturerId },
+      });
 
       if (res.data.success) {
         alert("Product deleted successfully.");
 
-        // remove from selection if it was selected
         setSelectedIds((prev) => {
           const next = new Set(prev);
           next.delete(productId);
@@ -351,7 +465,6 @@ export default function ManufacturerProductsPage() {
 
     const row = products.find((x) => x.productId === productId);
 
-    // BLOCKCHAIN CONFIRMED -> NO /edit CALL
     if (row && isOnChainConfirmed(row)) {
       setIsEditOpen(true);
       setIsEditLoading(false);
@@ -362,7 +475,6 @@ export default function ManufacturerProductsPage() {
         "This product is already confirmed on blockchain and cannot be edited (immutable)."
       );
 
-      // Prefill what we can from list row
       setEditSerial(row.serialNumber ?? "");
       setEditName(row.productName ?? "");
       setEditCategory(row.category ?? "");
@@ -373,7 +485,6 @@ export default function ManufacturerProductsPage() {
       return;
     }
 
-    // Draft / not-confirmed -> allow edit
     setIsEditOpen(true);
     setIsEditLoading(true);
     setEditError(null);
@@ -401,9 +512,7 @@ export default function ManufacturerProductsPage() {
 
       const mfg = d.manufactureDate ? new Date(d.manufactureDate) : null;
       setEditMfgDate(
-        mfg && !Number.isNaN(mfg.getTime())
-          ? mfg.toISOString().slice(0, 10)
-          : ""
+        mfg && !Number.isNaN(mfg.getTime()) ? mfg.toISOString().slice(0, 10) : ""
       );
 
       setQrImageUrl(d.qrImageUrl ? withNoCache(d.qrImageUrl) : null);
@@ -483,8 +592,7 @@ export default function ManufacturerProductsPage() {
       setEditSuccess("Updated successfully. New QR code generated.");
 
       const newQr =
-        res.data.data.qrImageUrl ??
-        `${PRODUCTS_API_BASE_URL}/${editingProductId}/qrcode`;
+        res.data.data.qrImageUrl ?? `${PRODUCTS_API_BASE_URL}/${editingProductId}/qrcode`;
       setQrImageUrl(withNoCache(newQr));
 
       await loadProducts();
@@ -503,17 +611,43 @@ export default function ManufacturerProductsPage() {
 
   return (
     <div style={{ padding: "40px" }}>
-      {/* Header row + button on right */}
+      {/* Header row + filter pills */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 20,
+          marginBottom: 16,
+          gap: 16,
+          flexWrap: "wrap",
         }}
       >
         <h1 style={{ margin: 0 }}>My Products</h1>
 
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <FilterPill
+            active={filterMode === "all"}
+            onClick={() => setFilterMode("all")}
+            label="All"
+            subtitle={`${allProducts.length}`}
+          />
+          <FilterPill
+            active={filterMode === "owned"}
+            onClick={() => setFilterMode("owned")}
+            label="Owned"
+            subtitle={`${allProducts.filter((p) => p.relationship === "owner").length}`}
+          />
+          <FilterPill
+            active={filterMode === "registered"}
+            onClick={() => setFilterMode("registered")}
+            label="Registered by me"
+            subtitle={`${allProducts.filter((p) => p.relationship === "manufacturer").length}`}
+          />
+        </div>
+      </div>
+
+      {/* Transfer button row */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
         {anyEligibleSelected && (
           <button
             type="button"
@@ -558,21 +692,20 @@ export default function ManufacturerProductsPage() {
       >
         <thead style={{ background: "#e9ecef" }}>
           <tr>
-            {/* ✅ checkbox column */}
             <th style={{ ...th, width: 46 }}>
               <input
                 type="checkbox"
                 checked={allSelected}
                 onChange={toggleSelectAll}
                 aria-label="Select all transferable products"
-                title="Select all transferable products"
+                title="Select all transferable products (in this filter)"
               />
             </th>
 
             <th style={th}>Product ID</th>
             <th style={th}>Product Name</th>
             <th style={th}>Category</th>
-            <th style={th}>Registered On</th>
+            <th style={th}>Registered/Owned Since</th>
             <th style={th}>Status</th>
             <th style={th}>Actions</th>
           </tr>
@@ -585,7 +718,6 @@ export default function ManufacturerProductsPage() {
 
             return (
               <tr key={p.productId}>
-                {/* ✅ row checkbox (disabled if not eligible) */}
                 <td style={td}>
                   <input
                     type="checkbox"
@@ -648,7 +780,6 @@ export default function ManufacturerProductsPage() {
                     </span>
                   )}
 
-                  {/* optional hint for transferred rows */}
                   {p.lifecycleStatus === "transferred" && (
                     <span
                       style={{
@@ -717,7 +848,9 @@ export default function ManufacturerProductsPage() {
       </table>
 
       {products.length === 0 && (
-        <p style={{ marginTop: 20, opacity: 0.6 }}>No products found.</p>
+        <p style={{ marginTop: 20, opacity: 0.6 }}>
+          No products found for this filter.
+        </p>
       )}
 
       {/* =======================
@@ -783,9 +916,7 @@ export default function ManufacturerProductsPage() {
                       <div style={{ color: "#6b7280" }}>
                         ID: <span style={{ fontFamily: "monospace" }}>{p.productId}</span>{" "}
                         • Serial:{" "}
-                        <span style={{ fontFamily: "monospace" }}>
-                          {p.serialNumber}
-                        </span>
+                        <span style={{ fontFamily: "monospace" }}>{p.serialNumber}</span>
                       </div>
                     </div>
 
@@ -826,9 +957,6 @@ export default function ManufacturerProductsPage() {
                 placeholder="e.g. 4 (global_distributor)"
                 disabled={transferLoading}
               />
-              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
-                Enter the destination/recipient <b>userId</b> in your system.
-              </div>
             </div>
 
             {transferResults && (
@@ -886,7 +1014,7 @@ export default function ManufacturerProductsPage() {
       )}
 
       {/* =======================
-          EDIT PRODUCT MODAL
+          EDIT PRODUCT MODAL (unchanged)
       ======================== */}
       {isEditOpen && (
         <div style={modalOverlay} onMouseDown={closeEditModal}>
@@ -1053,6 +1181,55 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
       <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>{label}</div>
       {children}
     </div>
+  );
+}
+
+function FilterPill({
+  active,
+  onClick,
+  label,
+  subtitle,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  subtitle?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: active ? "1px solid #111827" : "1px solid #e5e7eb",
+        background: active ? "#111827" : "white",
+        color: active ? "white" : "#111827",
+        borderRadius: 999,
+        padding: "8px 12px",
+        cursor: "pointer",
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        fontWeight: 700,
+        fontSize: 13,
+      }}
+      title={label}
+    >
+      {label}
+      {subtitle !== undefined && (
+        <span
+          style={{
+            background: active ? "rgba(255,255,255,0.18)" : "#f3f4f6",
+            color: active ? "white" : "#111827",
+            borderRadius: 999,
+            padding: "2px 8px",
+            fontSize: 12,
+            fontWeight: 800,
+          }}
+        >
+          {subtitle}
+        </span>
+      )}
+    </button>
   );
 }
 
