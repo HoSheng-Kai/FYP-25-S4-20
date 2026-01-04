@@ -28,7 +28,7 @@ class DistributorEntity {
 
     static async getCurrentOwnership(productId: number): Promise<ownership | null> {
         const result = await pool.query(
-            `SELECT * FROM ownership WHERE product_id = $1 AND end_on IS NULL LIMIT 1`,
+            `SELECT * FROM fyp_25_s4_20.ownership WHERE product_id = $1 AND end_on IS NULL LIMIT 1`,
             [productId]
         );
         return result.rows[0] || null;
@@ -89,7 +89,7 @@ class DistributorEntity {
     : Promise<blockchain_node | null>{
         const result = await pool.query(`
         SELECT *
-        FROM blockchain_node
+        FROM fyp_25_s4_20.blockchain_node
         WHERE product_id = $1
         ORDER BY block_slot DESC, created_on DESC
         LIMIT 1
@@ -102,7 +102,7 @@ class DistributorEntity {
     : Promise<ownership | null>{
         const result = await pool.query(
             `SELECT *
-            FROM ownership 
+            FROM fyp_25_s4_20.ownership
             WHERE tx_hash = $1
             LIMIT 1`,
             [tx_hash]
@@ -113,7 +113,7 @@ class DistributorEntity {
 
     static async updateOwnership(ownership: ownership): Promise<void> {
         await pool.query(`
-            UPDATE ownership
+            UPDATE fyp_25_s4_20.ownership
             SET owner_id = $1,
                 owner_public_key = $2,
                 product_id = $3,
@@ -134,8 +134,8 @@ class DistributorEntity {
     
     static async createOwnership(ownership: ownership): Promise<void> {
         await pool.query(`
-            INSERT INTO ownership (
-                owner_id, owner_public_key, product_id, 
+            INSERT INTO fyp_25_s4_20.ownership (
+                owner_id, owner_public_key, product_id,
                 start_on, end_on, tx_hash
             )
             VALUES ($1, $2, $3, $4, $5, $6)
@@ -151,7 +151,7 @@ class DistributorEntity {
 
     static async createBlockchainNode(data: blockchain_node): Promise<void> {
             await pool.query(`
-                INSERT INTO blockchain_node (
+                INSERT INTO fyp_25_s4_20.blockchain_node (
                     tx_hash, prev_tx_hash, from_user_id, from_public_key,
                     to_user_id, to_public_key, product_id, block_slot, created_on
                 )
@@ -172,7 +172,7 @@ class DistributorEntity {
     static async getOwnershipHistory(product_id: number): Promise<any[]> {
         const result = await pool.query(`
             SELECT o.*, u.username
-            FROM ownership o
+            FROM fyp_25_s4_20.ownership o
             JOIN fyp_25_s4_20.users u ON o.owner_id = u.user_id
             WHERE o.product_id = $1
             ORDER BY o.start_on ASC
