@@ -76,6 +76,9 @@ router.put('/:productId', productController.updateProduct.bind(productController
 // Marketplace Page (Buyer View) – available products for sale
 router.get('/marketplace/listings', productController.getMarketplaceListings.bind(productController));
 
+// Create listing (sell product)
+router.post("/listings", productController.createListing.bind(productController));
+
 // Edit Listing Page – pre-fill data
 // GET /api/products/listings/:listingId/edit?userId=6
 router.get('/listings/:listingId/edit',productController.getListingForEdit.bind(productController));
