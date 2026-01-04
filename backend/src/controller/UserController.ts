@@ -75,7 +75,7 @@ class UserController {
       }
 
       // If not verified
-      if(!user.verified){
+      if(user.verified){
         res.json({
         success: false,
         error: 'User is not verified',
