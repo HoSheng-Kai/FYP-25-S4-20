@@ -15,4 +15,13 @@ router.post('/check-ownership', DistributorController.checkOwnership.bind(Distri
 // Get ownership history from database
 router.post('/ownership-history', DistributorController.getOwnershipHistory.bind(DistributorController));
 
+// Get all products for a user (owned or manufactured)
+router.post('/products-by-user', DistributorController.getProductsByUser.bind(DistributorController));
+
+// Cancel a pending transfer
+router.post('/cancel-transfer', DistributorController.cancelTransfer.bind(DistributorController));
+
+// End tracking for a product (no further transfers allowed)
+router.post('/end-tracking', DistributorController.endTracking.bind(DistributorController));
+
 export default router;

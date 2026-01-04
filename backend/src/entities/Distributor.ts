@@ -13,7 +13,22 @@ class DistributorEntity {
 
     static async getProductById(productId: number) {
         const result = await pool.query(
-            `SELECT product_id, serial_no, product_pda, registered_by, tx_hash FROM fyp_25_s4_20.product WHERE product_id = $1`,
+            `SELECT product_id, serial_no, product_pda, registered_by, tx_hash, track FROM fyp_25_s4_20.product WHERE product_id = $1`,
+            [productId]
+        );
+        return result.rows[0] || null;
+    }
+
+    static async endTracking(productId: number): Promise<void> {
+        await pool.query(
+            `UPDATE fyp_25_s4_20.product SET track = false WHERE product_id = $1`,
+            [productId]
+        );
+    }
+
+    static async getCurrentOwnership(productId: number): Promise<ownership | null> {
+        const result = await pool.query(
+            `SELECT * FROM ownership WHERE product_id = $1 AND end_on IS NULL LIMIT 1`,
             [productId]
         );
         return result.rows[0] || null;
@@ -162,6 +177,39 @@ class DistributorEntity {
             WHERE o.product_id = $1
             ORDER BY o.start_on ASC
         `, [product_id]);
+        return result.rows;
+    }
+
+    static async getProductsByUserId(userId: number): Promise<any[]> {
+        const result = await pool.query(`
+            SELECT
+                p.product_id,
+                p.serial_no,
+                p.model,
+                p.batch_no,
+                p.category,
+                p.manufacture_date,
+                p.description,
+                p.status,
+                p.product_pda,
+                p.tx_hash,
+                p.track,
+                p.registered_by,
+                o.ownership_id,
+                o.start_on AS owned_since,
+                CASE
+                    WHEN o.owner_id IS NOT NULL THEN 'owner'
+                    WHEN p.registered_by = $1 THEN 'manufacturer'
+                    ELSE NULL
+                END AS relationship
+            FROM fyp_25_s4_20.product p
+            LEFT JOIN fyp_25_s4_20.ownership o
+                ON o.product_id = p.product_id
+                AND o.owner_id = $1
+                AND o.end_on IS NULL
+            WHERE o.owner_id = $1 OR p.registered_by = $1
+            ORDER BY p.product_id DESC
+        `, [userId]);
         return result.rows;
     }
 }

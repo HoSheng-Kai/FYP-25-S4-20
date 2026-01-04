@@ -1,4 +1,5 @@
 import DistributorEntity from "../entities/Distributor";
+import { decrypt } from "../utils/encryption";
 import { Request, Response } from "express";
 import { connection, airdropSol } from "../schema/solana";
 import { PublicKey, Keypair } from '@solana/web3.js';
@@ -332,10 +333,24 @@ class DistributorController {
                 });
             }
 
+            // Check if product is still being tracked
+            if (product.track === false) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Product is no longer being tracked. Ownership transfers are not allowed."
+                });
+            }
 
             // 2. Create keypairs
+            // TODO: Decryption
+            // const fromPrivateKey = await decrypt(fromUser.private_key);
+            // const toPrivateKey = await decrypt(toUser.private_key);
+            // const fromKeypair = Keypair.fromSecretKey(bs58.decode(fromPrivateKey));
+            // const toKeypair = Keypair.fromSecretKey(bs58.decode(toPrivateKey));
+
             const fromKeypair = Keypair.fromSecretKey(bs58.decode(fromUser.private_key));
             const toKeypair = Keypair.fromSecretKey(bs58.decode(toUser.private_key));
+            
             const toPublicKey = new PublicKey(toUser.public_key);
 
 
@@ -802,6 +817,235 @@ class DistributorController {
             res.status(500).json({
                 success: false,
                 error: "Failed to check ownership",
+                details: error.message
+            });
+        }
+    }
+
+    async cancelTransfer(req: Request, res: Response) {
+        const { from_user_id, to_user_id, product_id, transfer_pda } = req.body;
+
+        if (!from_user_id || (!transfer_pda && (!to_user_id || !product_id))) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required fields: from_user_id and either transfer_pda OR (to_user_id + product_id)"
+            });
+        }
+
+        try {
+            // Get from_user
+            const fromUser = await DistributorEntity.getUserById(from_user_id);
+            if (!fromUser) {
+                return res.status(404).json({
+                    success: false,
+                    error: `User not found: ${from_user_id}`
+                });
+            }
+
+            const fromKeypair = Keypair.fromSecretKey(bs58.decode(fromUser.private_key));
+
+            // Determine transfer PDA
+            let transferPda: PublicKey;
+
+            if (transfer_pda) {
+                transferPda = new PublicKey(transfer_pda);
+            } else {
+                // Derive it from product + from + to
+                const toUser = await DistributorEntity.getUserById(to_user_id);
+                const product = await DistributorEntity.getProductById(product_id);
+
+                if (!toUser || !product) {
+                    return res.status(404).json({
+                        success: false,
+                        error: `Missing data: toUser=${!!toUser}, product=${!!product}`
+                    });
+                }
+
+                const productPda = new PublicKey(product.product_pda);
+                const toPublicKey = new PublicKey(toUser.public_key);
+                [transferPda] = deriveTransferPda(productPda, fromKeypair.publicKey, toPublicKey);
+            }
+
+            // Check if transfer exists
+            const existingTransfer = await connection.getAccountInfo(transferPda);
+            if (!existingTransfer) {
+                return res.status(404).json({
+                    success: false,
+                    error: "Transfer request not found on-chain",
+                    transfer_pda: transferPda.toBase58()
+                });
+            }
+
+            // Airdrop if needed
+            const minBalance = 0.01 * 1e9;
+            let balance = await connection.getBalance(fromKeypair.publicKey);
+            if (balance < minBalance) {
+                try {
+                    await airdropSol(fromUser.private_key, 0.1 * 1e9);
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                } catch (e: any) {}
+            }
+
+            // Create provider and program
+            const wallet = {
+                publicKey: fromKeypair.publicKey,
+                signTransaction: async (tx: any) => { tx.sign(fromKeypair); return tx; },
+                signAllTransactions: async (txs: any) => { txs.forEach((tx: any) => tx.sign(fromKeypair)); return txs; },
+            };
+            const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+            const program = new Program(idlJson as unknown as Idl, provider);
+
+            // Cancel the transfer
+            const tx = await program.methods
+                .cancelTransfer()
+                .accounts({
+                    fromOwner: fromKeypair.publicKey,
+                    transferRequest: transferPda,
+                })
+                .signers([fromKeypair])
+                .rpc();
+
+            res.json({
+                success: true,
+                data: {
+                    message: "Transfer cancelled successfully",
+                    transfer_pda: transferPda.toBase58(),
+                    tx_hash: tx
+                }
+            });
+
+        } catch (error: any) {
+            console.error("Cancel transfer failed:", error);
+            res.status(500).json({
+                success: false,
+                error: "Failed to cancel transfer",
+                details: error.message,
+                logs: error.logs || null
+            });
+        }
+    }
+
+    async getProductsByUser(req: Request, res: Response) {
+        const { user_id } = req.body;
+
+        if (!user_id) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required field: user_id"
+            });
+        }
+
+        try {
+            const user = await DistributorEntity.getUserById(user_id);
+            if (!user) {
+                return res.status(404).json({
+                    success: false,
+                    error: `User not found: ${user_id}`
+                });
+            }
+
+            const products = await DistributorEntity.getProductsByUserId(user_id);
+
+            res.json({
+                success: true,
+                data: {
+                    user_id: user_id,
+                    username: user.username,
+                    total_products: products.length,
+                    products: products
+                }
+            });
+
+        } catch (error: any) {
+            console.error("Get products by user failed:", error);
+            res.status(500).json({
+                success: false,
+                error: "Failed to get products",
+                details: error.message
+            });
+        }
+    }
+
+    async endTracking(req: Request, res: Response) {
+        const { product_id, reason } = req.body;
+
+        if (!product_id) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required field: product_id"
+            });
+        }
+
+        try {
+            // 1. Get product and verify it's currently being tracked
+            const product = await DistributorEntity.getProductById(product_id);
+            if (!product) {
+                return res.status(404).json({
+                    success: false,
+                    error: `Product not found: ${product_id}`
+                });
+            }
+
+            if (product.track === false) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Product is already not being tracked"
+                });
+            }
+
+            const currentDate = new Date();
+
+            // 2. End the current ownership if exists
+            const currentOwnership = await DistributorEntity.getCurrentOwnership(product_id);
+            if (currentOwnership) {
+                currentOwnership.end_on = currentDate;
+                await DistributorEntity.updateOwnership(currentOwnership);
+            }
+
+            // 3. Create a sentinel blockchain_node record to mark end of tracking
+            const latestBlock = await DistributorEntity.viewLatestBlockchainNode(product_id);
+            const sentinelTxHash = `END_TRACKING_${product_id}_${currentDate.getTime()}`;
+
+            // Use current owner info if available, otherwise use product's registered_by
+            const lastOwnerId = currentOwnership?.owner_id || product.registered_by;
+            const lastOwnerPublicKey = currentOwnership?.owner_public_key || null;
+
+            if (lastOwnerPublicKey) {
+                const sentinelNode: blockchain_node = {
+                    tx_hash: sentinelTxHash,
+                    prev_tx_hash: latestBlock?.tx_hash || null!,
+                    from_user_id: lastOwnerId,
+                    from_public_key: lastOwnerPublicKey,
+                    to_user_id: lastOwnerId,
+                    to_public_key: lastOwnerPublicKey,
+                    product_id: product_id,
+                    block_slot: 0, // Sentinel value - not on blockchain
+                    created_on: currentDate
+                };
+
+                await DistributorEntity.createBlockchainNode(sentinelNode);
+            }
+
+            // 4. Set track = false in product table
+            await DistributorEntity.endTracking(product_id);
+
+            res.json({
+                success: true,
+                data: {
+                    product_id: product_id,
+                    serial_no: product.serial_no,
+                    tracking_ended_on: currentDate,
+                    reason: reason || "No longer tracking",
+                    sentinel_tx_hash: lastOwnerPublicKey ? sentinelTxHash : null,
+                    message: "Product tracking has been ended. No further ownership transfers are allowed."
+                }
+            });
+
+        } catch (error: any) {
+            console.error("End tracking failed:", error);
+            res.status(500).json({
+                success: false,
+                error: "Failed to end tracking",
                 details: error.message
             });
         }

@@ -84,7 +84,12 @@ VALUES
 
   ('mike_consumer','mike123','mike@consumer.com','consumer',
    '4NcvkwnkyFBN79bJ643dBSJQ3oqTrpQ98hHqbn1RGoKoFVmdCcqdf1pKnTTApYdf5QmzohQ9phAwaf4RztzfBq25',
-   '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid', TRUE, FALSE);
+   '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid', TRUE, FALSE),
+   
+  ('phantom_wallet_1','phantom_password','phantom@mail1.com','consumer',
+   '5X6x3cV94w94qjYR62UXLTAVA63Yt2V7dFY3RX41u4hWT1WAPgfh7WXv79ujJw5q9RBT4J7otvmq1PZ6xJHN2kVH',
+   '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE);   
+
 
 -- ===========================
 -- Insert Products
@@ -213,6 +218,21 @@ VALUES (
         '2024-03-01',
         'Timeless tennis-inspired sneakers',
         '2024-03-05 15:20:00',
+        NULL,
+        NULL
+    ),
+    -- Product 9: For testing end-tracking feature
+    (
+        2,
+        'NIKE-ENDTRACK-001',
+        NULL,
+        'verified',
+        'Nike End Track Test',
+        'BATCH-2024-009',
+        'Footwear',
+        '2024-03-10',
+        'Test product for end-tracking feature - owned by global_distributor',
+        '2024-03-10 10:00:00',
         NULL,
         NULL
     );
