@@ -57,6 +57,12 @@ type UpdateResponse = {
   details?: string;
 };
 
+type TransferResult = {
+  productId: number;
+  ok: boolean;
+  message: string;
+};
+
 export default function ManufacturerProductsPage() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -87,6 +93,22 @@ export default function ManufacturerProductsPage() {
     [manufacturerId]
   );
 
+  // ======================
+  // OWNERSHIP TRANSFER STATE
+  // ======================
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+
+  // Modal
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [recipientUserId, setRecipientUserId] = useState("");
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferResults, setTransferResults] = useState<TransferResult[] | null>(
+    null
+  );
+
+  const TRANSFER_URL = "http://localhost:3000/api/distributors/update-ownership";
+
   // ----------------------
   // HELPERS (BLOCKCHAIN IMMUTABILITY)
   // ----------------------
@@ -100,10 +122,62 @@ export default function ManufacturerProductsPage() {
     );
   };
 
+  // ✅ NEW: transfer eligibility check
+  const isTransferEligible = (p: ProductRow) => {
+    // Must be confirmed on-chain AND still owned by manufacturer (not transferred away)
+    return isOnChainConfirmed(p) && p.lifecycleStatus !== "transferred";
+  };
+
   const safeDate = (iso: string) => {
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
   };
+
+  // ----------------------
+  // Selection helpers (eligible-only)
+  // ----------------------
+  const selectedProducts = useMemo(
+    () => products.filter((p) => selectedIds.has(p.productId)),
+    [products, selectedIds]
+  );
+
+  const selectedEligibleProducts = useMemo(
+    () => selectedProducts.filter(isTransferEligible),
+    [selectedProducts]
+  );
+
+  const anyEligibleSelected = selectedEligibleProducts.length > 0;
+
+  const allSelected = useMemo(() => {
+    const eligible = products.filter(isTransferEligible);
+    if (eligible.length === 0) return false;
+    return eligible.every((p) => selectedIds.has(p.productId));
+  }, [products, selectedIds]);
+
+  const toggleSelected = (productId: number) => {
+    const row = products.find((x) => x.productId === productId);
+    if (row && !isTransferEligible(row)) return; // ✅ don't allow selecting ineligible
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const eligibleIds = products.filter(isTransferEligible).map((p) => p.productId);
+      const allEligibleSelected =
+        eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
+
+      if (allEligibleSelected) return new Set();
+      return new Set(eligibleIds);
+    });
+  };
+
+  const clearSelected = () => setSelectedIds(new Set());
 
   // ----------------------
   // LOAD PRODUCTS
@@ -132,6 +206,100 @@ export default function ManufacturerProductsPage() {
   }, []);
 
   // ----------------------
+  // Transfer Modal open/close
+  // ----------------------
+  const openTransferModal = () => {
+    if (!anyEligibleSelected) return;
+    setIsTransferOpen(true);
+    setRecipientUserId("");
+    setTransferError(null);
+    setTransferResults(null);
+  };
+
+  const closeTransferModal = () => {
+    if (transferLoading) return;
+    setIsTransferOpen(false);
+    setRecipientUserId("");
+    setTransferError(null);
+    setTransferResults(null);
+  };
+
+  const handleConfirmTransfer = async () => {
+    if (!manufacturerId || Number.isNaN(manufacturerId)) {
+      setTransferError("Manufacturer ID missing. Please login again.");
+      return;
+    }
+
+    const toId = Number(recipientUserId);
+    if (!toId || Number.isNaN(toId) || toId <= 0) {
+      setTransferError("Please enter a valid Recipient User ID.");
+      return;
+    }
+
+    // ✅ Safety net: only transfer eligible products
+    if (selectedEligibleProducts.length === 0) {
+      setTransferError(
+        "No transferable products selected. (Products must be on-chain confirmed and still owned by you.)"
+      );
+      return;
+    }
+
+    setTransferLoading(true);
+    setTransferError(null);
+    setTransferResults(null);
+
+    try {
+      const results: TransferResult[] = [];
+
+      // sequential for debugging/demo
+      for (const p of selectedEligibleProducts) {
+        try {
+          const res = await axios.post(TRANSFER_URL, {
+            from_user_id: manufacturerId,
+            to_user_id: toId,
+            product_id: p.productId,
+          });
+
+          if (res.data?.success) {
+            const exec = res.data?.data?.transactions?.execute;
+            results.push({
+              productId: p.productId,
+              ok: true,
+              message: exec ? `Transferred ✅ (execute: ${exec})` : "Transferred ✅",
+            });
+          } else {
+            results.push({
+              productId: p.productId,
+              ok: false,
+              message: res.data?.error || "Transfer failed",
+            });
+          }
+        } catch (err: any) {
+          results.push({
+            productId: p.productId,
+            ok: false,
+            message:
+              err?.response?.data?.details ||
+              err?.response?.data?.error ||
+              err.message ||
+              "Transfer failed",
+          });
+        }
+      }
+
+      setTransferResults(results);
+
+      const anyFail = results.some((r) => !r.ok);
+      if (!anyFail) {
+        await loadProducts();
+        clearSelected();
+      }
+    } finally {
+      setTransferLoading(false);
+    }
+  };
+
+  // ----------------------
   // DELETE PRODUCT (draft only)
   // ----------------------
   const handleDelete = async (productId: number) => {
@@ -154,6 +322,14 @@ export default function ManufacturerProductsPage() {
 
       if (res.data.success) {
         alert("Product deleted successfully.");
+
+        // remove from selection if it was selected
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(productId);
+          return next;
+        });
+
         loadProducts();
       } else {
         alert(res.data.error || "Failed to delete product.");
@@ -166,8 +342,6 @@ export default function ManufacturerProductsPage() {
 
   // ----------------------
   // OPEN EDIT MODAL
-  // - If on-chain confirmed: show immutable message (frontend-only fix)
-  // - Else: fetch /edit and allow updates
   // ----------------------
   const openEditModal = async (productId: number) => {
     if (!canEdit) {
@@ -225,7 +399,6 @@ export default function ManufacturerProductsPage() {
       setEditCategory(d.category ?? "");
       setEditDescription(d.productDescription ?? "");
 
-      // Convert to yyyy-mm-dd for input[type=date]
       const mfg = d.manufactureDate ? new Date(d.manufactureDate) : null;
       setEditMfgDate(
         mfg && !Number.isNaN(mfg.getTime())
@@ -263,7 +436,6 @@ export default function ManufacturerProductsPage() {
 
   // ----------------------
   // UPDATE PRODUCT + GENERATE NEW QR
-  // (draft only)
   // ----------------------
   const handleUpdateProduct = async () => {
     if (!editingProductId) return;
@@ -294,7 +466,7 @@ export default function ManufacturerProductsPage() {
         productName: editName.trim() || null,
         batchNo: editBatch.trim() || null,
         category: editCategory.trim() || null,
-        manufactureDate: editMfgDate || null, // yyyy-mm-dd
+        manufactureDate: editMfgDate || null,
         description: editDescription.trim() || null,
       };
 
@@ -331,7 +503,35 @@ export default function ManufacturerProductsPage() {
 
   return (
     <div style={{ padding: "40px" }}>
-      <h1 style={{ marginBottom: "20px" }}>My Products</h1>
+      {/* Header row + button on right */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: 20,
+        }}
+      >
+        <h1 style={{ margin: 0 }}>My Products</h1>
+
+        {anyEligibleSelected && (
+          <button
+            type="button"
+            onClick={openTransferModal}
+            style={{
+              padding: "10px 14px",
+              borderRadius: 10,
+              border: "none",
+              background: "#111827",
+              color: "white",
+              cursor: "pointer",
+              fontWeight: 700,
+            }}
+          >
+            Ownership Transfer
+          </button>
+        )}
+      </div>
 
       {error && (
         <div
@@ -358,6 +558,17 @@ export default function ManufacturerProductsPage() {
       >
         <thead style={{ background: "#e9ecef" }}>
           <tr>
+            {/* ✅ checkbox column */}
+            <th style={{ ...th, width: 46 }}>
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={toggleSelectAll}
+                aria-label="Select all transferable products"
+                title="Select all transferable products"
+              />
+            </th>
+
             <th style={th}>Product ID</th>
             <th style={th}>Product Name</th>
             <th style={th}>Category</th>
@@ -370,10 +581,28 @@ export default function ManufacturerProductsPage() {
         <tbody>
           {products.map((p) => {
             const locked = isOnChainConfirmed(p);
+            const eligible = isTransferEligible(p);
 
             return (
               <tr key={p.productId}>
-                {/* FIXED: show productId in Product ID column */}
+                {/* ✅ row checkbox (disabled if not eligible) */}
+                <td style={td}>
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.has(p.productId)}
+                    onChange={() => toggleSelected(p.productId)}
+                    disabled={!eligible}
+                    aria-label={`Select product ${p.productId}`}
+                    title={
+                      !locked
+                        ? "Cannot transfer: product not confirmed on-chain"
+                        : p.lifecycleStatus === "transferred"
+                        ? "Cannot transfer: you are no longer the current owner"
+                        : "Transfer eligible"
+                    }
+                  />
+                </td>
+
                 <td style={td}>{p.productId}</td>
                 <td style={td}>{p.productName || "—"}</td>
                 <td style={td}>{p.category || "—"}</td>
@@ -403,7 +632,6 @@ export default function ManufacturerProductsPage() {
                     {p.productStatus}
                   </span>
 
-                  {/* Optional: small blockchain tag */}
                   {p.blockchainStatus && (
                     <span
                       style={{
@@ -419,10 +647,26 @@ export default function ManufacturerProductsPage() {
                       {p.blockchainStatus}
                     </span>
                   )}
+
+                  {/* optional hint for transferred rows */}
+                  {p.lifecycleStatus === "transferred" && (
+                    <span
+                      style={{
+                        marginLeft: 10,
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        fontSize: 12,
+                        background: "#fee2e2",
+                        color: "#b91c1c",
+                      }}
+                      title="This product has been transferred away from you"
+                    >
+                      transferred
+                    </span>
+                  )}
                 </td>
 
                 <td style={td}>
-                  {/* VIEW (eye icon) */}
                   <button
                     onClick={() => navigate(`/manufacturer/products/${p.productId}`)}
                     style={iconBtn}
@@ -431,7 +675,6 @@ export default function ManufacturerProductsPage() {
                     👁
                   </button>
 
-                  {/* EDIT (pencil icon) - disabled if on-chain confirmed */}
                   <button
                     onClick={() => void openEditModal(p.productId)}
                     style={{
@@ -449,7 +692,6 @@ export default function ManufacturerProductsPage() {
                     ✏️
                   </button>
 
-                  {/* DELETE (trash icon) - disabled if on-chain confirmed */}
                   <button
                     onClick={() => handleDelete(p.productId)}
                     style={{
@@ -476,6 +718,171 @@ export default function ManufacturerProductsPage() {
 
       {products.length === 0 && (
         <p style={{ marginTop: 20, opacity: 0.6 }}>No products found.</p>
+      )}
+
+      {/* =======================
+          OWNERSHIP TRANSFER MODAL
+      ======================== */}
+      {isTransferOpen && (
+        <div style={modalOverlay} onMouseDown={closeTransferModal}>
+          <div
+            style={{ ...modalCard, maxWidth: 620 }}
+            onMouseDown={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+          >
+            <div style={modalHeader}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18 }}>Ownership Transfer</h2>
+                <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
+                  Transfer selected products to another user.
+                </p>
+              </div>
+
+              <button
+                style={modalCloseBtn}
+                onClick={closeTransferModal}
+                type="button"
+                disabled={transferLoading}
+              >
+                ✕
+              </button>
+            </div>
+
+            {transferError && <div style={alertError}>{transferError}</div>}
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+                Selected Transferable Products ({selectedEligibleProducts.length})
+              </div>
+
+              <div
+                style={{
+                  border: "1px solid #e5e7eb",
+                  borderRadius: 12,
+                  padding: 10,
+                  maxHeight: 170,
+                  overflow: "auto",
+                  background: "#f9fafb",
+                }}
+              >
+                {selectedEligibleProducts.map((p) => (
+                  <div
+                    key={p.productId}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "8px 6px",
+                      borderBottom: "1px solid #eee",
+                      gap: 10,
+                    }}
+                  >
+                    <div style={{ fontSize: 13 }}>
+                      <div style={{ fontWeight: 700 }}>{p.productName || "—"}</div>
+                      <div style={{ color: "#6b7280" }}>
+                        ID: <span style={{ fontFamily: "monospace" }}>{p.productId}</span>{" "}
+                        • Serial:{" "}
+                        <span style={{ fontFamily: "monospace" }}>
+                          {p.serialNumber}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleSelected(p.productId)}
+                      disabled={transferLoading}
+                      style={{
+                        border: "none",
+                        background: "transparent",
+                        cursor: "pointer",
+                        color: "#b91c1c",
+                        fontWeight: 700,
+                      }}
+                      title="Remove from selection"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+
+                {selectedEligibleProducts.length === 0 && (
+                  <div style={{ fontSize: 13, color: "#6b7280" }}>
+                    No transferable products selected.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
+                Recipient User ID
+              </div>
+              <input
+                style={input}
+                value={recipientUserId}
+                onChange={(e) => setRecipientUserId(e.target.value)}
+                placeholder="e.g. 4 (global_distributor)"
+                disabled={transferLoading}
+              />
+              <div style={{ fontSize: 12, color: "#6b7280", marginTop: 6 }}>
+                Enter the destination/recipient <b>userId</b> in your system.
+              </div>
+            </div>
+
+            {transferResults && (
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
+                  Transfer Results
+                </div>
+                <div
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: 12,
+                    padding: 10,
+                    background: "white",
+                    maxHeight: 160,
+                    overflow: "auto",
+                  }}
+                >
+                  {transferResults.map((r) => (
+                    <div
+                      key={r.productId}
+                      style={{
+                        fontSize: 13,
+                        padding: "6px 0",
+                        color: r.ok ? "#116a2b" : "#a11",
+                      }}
+                    >
+                      Product {r.productId}: {r.message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div style={{ ...modalFooter, justifyContent: "space-between" }}>
+              <button
+                type="button"
+                onClick={closeTransferModal}
+                style={btnSecondary}
+                disabled={transferLoading}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void handleConfirmTransfer()}
+                style={btnPrimary}
+                disabled={transferLoading || selectedEligibleProducts.length === 0}
+              >
+                {transferLoading ? "Transferring..." : "Confirm Transfer"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* =======================

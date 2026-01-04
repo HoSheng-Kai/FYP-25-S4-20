@@ -4,9 +4,9 @@
 // Persistent sidebar for all distributor routes under /distributor/*
 //
 // ROUTES:
-// - Dashboard          -> /distributor
-// - Scan QR            -> /distributor/scan-qr
-// - Transfer Ownership -> /distributor/transfer   ✅ separate page (no redirect)
+// - Dashboard    -> /distributor
+// - Scan QR     -> /distributor/scan-qr
+// - My Products -> /distributor/products
 // -----------------------------------------------------------------------------
 
 import React from "react";
@@ -58,10 +58,18 @@ export default function DistributorLayout() {
         <h2 style={{ marginBottom: 30 }}>Distributor</h2>
 
         <nav>
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
+          <ul
+            style={{
+              listStyle: "none",
+              padding: 0,
+              margin: 0,
+              display: "grid",
+              gap: 10,
+            }}
+          >
             <li>
               <NavLink
-                to="" // /distributor
+                to=""
                 end
                 style={({ isActive }) => ({
                   ...linkBaseStyle,
@@ -74,7 +82,7 @@ export default function DistributorLayout() {
 
             <li>
               <NavLink
-                to="scan-qr" // /distributor/scan-qr
+                to="scan-qr"
                 style={({ isActive }) => ({
                   ...linkBaseStyle,
                   ...(isActive ? activeStyle : {}),
@@ -86,13 +94,13 @@ export default function DistributorLayout() {
 
             <li>
               <NavLink
-                to="transfer" // ✅ /distributor/transfer
+                to="products"
                 style={({ isActive }) => ({
                   ...linkBaseStyle,
                   ...(isActive ? activeStyle : {}),
                 })}
               >
-                Transfer Ownership
+                My Products
               </NavLink>
             </li>
           </ul>
