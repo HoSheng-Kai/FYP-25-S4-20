@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 
 type BackendProduct = {
   product_id: number;
@@ -12,7 +13,6 @@ type BackendProduct = {
   tx_hash: string | null;
   track: boolean | null;
 
-  // optional fields from your query
   owned_since?: string | null;
   relationship?: string | null; // 'owner' | 'manufacturer' | null
 };
@@ -36,87 +36,33 @@ type ProductRow = {
   category?: string | null;
   productStatus: string;
   lifecycleStatus: "active" | "transferred";
-  blockchainStatus: string;
-  registeredOn: string;
+  blockchainStatus: string; // pending / confirmed
+  registeredOn: string; // owned_since
   track: boolean;
-  relationship?: string | null;
+  relationship?: "owner" | "manufacturer" | null;
 };
 
-type TransferResult = {
-  productId: number;
-  ok: boolean;
-  message: string;
-};
+type FilterMode = "all" | "owned";
 
 export default function DistributorProductsPage() {
   const navigate = useNavigate();
-
   const distributorId = Number(localStorage.getItem("userId"));
 
-  const [products, setProducts] = useState<ProductRow[]>([]);
+  // ✅ keep full list, table shows filtered
+  const [allProducts, setAllProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ======================
-  // OWNERSHIP TRANSFER STATE
-  // ======================
+  // ✅ filter (only All / Owned)
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+
+  // ✅ selection
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const anySelected = selectedIds.size > 0;
 
-  const selectedProducts = useMemo(
-    () => products.filter((p) => selectedIds.has(p.productId)),
-    [products, selectedIds]
-  );
+  // ✅ shared transfer modal
+  const [transferOpen, setTransferOpen] = useState(false);
 
-  const allSelected = useMemo(() => {
-    if (products.length === 0) return false;
-    return products.every((p) => selectedIds.has(p.productId));
-  }, [products, selectedIds]);
-
-  const toggleSelected = (productId: number) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(productId)) next.delete(productId);
-      else next.add(productId);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    setSelectedIds(() => {
-      if (allSelected) return new Set();
-      return new Set(products.map((p) => p.productId));
-    });
-  };
-
-  const clearSelected = () => setSelectedIds(new Set());
-
-  // Modal
-  const [isTransferOpen, setIsTransferOpen] = useState(false);
-  const [recipientUserId, setRecipientUserId] = useState("");
-  const [transferLoading, setTransferLoading] = useState(false);
-  const [transferError, setTransferError] = useState<string | null>(null);
-  const [transferResults, setTransferResults] = useState<TransferResult[] | null>(null);
-
-  // ✅ Your backend route (adjust if your prefix differs)
   const GET_BY_USER_URL = "http://localhost:3000/api/distributors/products-by-user";
-  const TRANSFER_URL = "http://localhost:3000/api/distributors/update-ownership";
-
-  const openTransferModal = () => {
-    if (!anySelected) return;
-    setIsTransferOpen(true);
-    setRecipientUserId("");
-    setTransferError(null);
-    setTransferResults(null);
-  };
-
-  const closeTransferModal = () => {
-    if (transferLoading) return;
-    setIsTransferOpen(false);
-    setRecipientUserId("");
-    setTransferError(null);
-    setTransferResults(null);
-  };
 
   // ----------------------
   // HELPERS
@@ -131,11 +77,84 @@ export default function DistributorProductsPage() {
     );
   };
 
+  const isTransferEligible = (p: ProductRow) => {
+    // Must be confirmed AND still owned by current user AND still tracked
+    return isOnChainConfirmed(p) && p.lifecycleStatus !== "transferred" && p.track;
+  };
+
   const safeDate = (iso: string) => {
     if (!iso) return "—";
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
   };
+
+  // ✅ filtered list
+  const products = useMemo(() => {
+    if (filterMode === "owned") {
+      return allProducts.filter((p) => p.relationship === "owner");
+    }
+    return allProducts;
+  }, [allProducts, filterMode]);
+
+  // ✅ clear hidden selections when filter changes
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visibleIds = new Set(products.map((p) => p.productId));
+      const next = new Set<number>();
+      for (const id of prev) {
+        if (visibleIds.has(id)) next.add(id);
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterMode, products.length]);
+
+  // ----------------------
+  // Selection helpers (eligible-only)
+  // ----------------------
+  const selectedProducts = useMemo(
+    () => products.filter((p) => selectedIds.has(p.productId)),
+    [products, selectedIds]
+  );
+
+  const selectedEligibleProducts = useMemo(
+    () => selectedProducts.filter(isTransferEligible),
+    [selectedProducts]
+  );
+
+  const anyEligibleSelected = selectedEligibleProducts.length > 0;
+
+  const allSelected = useMemo(() => {
+    const eligible = products.filter(isTransferEligible);
+    if (eligible.length === 0) return false;
+    return eligible.every((p) => selectedIds.has(p.productId));
+  }, [products, selectedIds]);
+
+  const toggleSelected = (productId: number) => {
+    const row = products.find((x) => x.productId === productId);
+    if (row && !isTransferEligible(row)) return; // ✅ don't allow selecting ineligible
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const eligibleIds = products.filter(isTransferEligible).map((p) => p.productId);
+      const allEligibleSelected =
+        eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
+
+      if (allEligibleSelected) return new Set();
+      return new Set(eligibleIds);
+    });
+  };
+
+  const clearSelected = () => setSelectedIds(new Set());
 
   // ----------------------
   // LOAD PRODUCTS (POST -> matches your backend)
@@ -158,14 +177,12 @@ export default function DistributorProductsPage() {
 
       const raw = res.data.data.products || [];
 
-      // Map backend format -> UI format
       const mapped: ProductRow[] = raw.map((p) => {
-        const blockchainStatus =
-          p.tx_hash && p.product_pda ? "confirmed" : "pending";
+        const confirmed = !!(p.tx_hash && p.product_pda);
+        const relationship = (p.relationship as any) ?? null;
 
-        // if you don’t have a registered_on column in your query,
-        // use owned_since or show —
-        const registeredOn = (p.owned_since as string) || "";
+        const lifecycleStatus: ProductRow["lifecycleStatus"] =
+          relationship === "owner" ? "active" : "transferred";
 
         return {
           productId: p.product_id,
@@ -173,15 +190,15 @@ export default function DistributorProductsPage() {
           productName: p.model ?? null,
           category: p.category ?? null,
           productStatus: p.status ?? "unknown",
-          lifecycleStatus: p.relationship === "owner" ? "active" : "transferred",
-          blockchainStatus,
-          registeredOn,
+          lifecycleStatus,
+          blockchainStatus: confirmed ? "confirmed" : "pending",
+          registeredOn: p.owned_since || "",
           track: p.track !== false,
-          relationship: p.relationship ?? null,
+          relationship,
         };
       });
 
-      setProducts(mapped);
+      setAllProducts(mapped);
       setError(null);
     } catch (err: any) {
       setError(
@@ -199,96 +216,47 @@ export default function DistributorProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ----------------------
-  // TRANSFER
-  // ----------------------
-  const handleConfirmTransfer = async () => {
-    if (!distributorId || Number.isNaN(distributorId)) {
-      setTransferError("Distributor ID missing. Please login again.");
-      return;
-    }
-
-    const toId = Number(recipientUserId);
-    if (!toId || Number.isNaN(toId) || toId <= 0) {
-      setTransferError("Please enter a valid Recipient User ID.");
-      return;
-    }
-
-    if (selectedProducts.length === 0) {
-      setTransferError("No products selected.");
-      return;
-    }
-
-    setTransferLoading(true);
-    setTransferError(null);
-    setTransferResults(null);
-
-    try {
-      const results: TransferResult[] = [];
-
-      for (const p of selectedProducts) {
-        try {
-          const res = await axios.post(TRANSFER_URL, {
-            from_user_id: distributorId,
-            to_user_id: toId,
-            product_id: p.productId,
-          });
-
-          if (res.data?.success) {
-            const exec = res.data?.data?.transactions?.execute;
-            results.push({
-              productId: p.productId,
-              ok: true,
-              message: exec ? `Transferred ✅ (execute: ${exec})` : "Transferred ✅",
-            });
-          } else {
-            results.push({
-              productId: p.productId,
-              ok: false,
-              message: res.data?.error || "Transfer failed",
-            });
-          }
-        } catch (err: any) {
-          results.push({
-            productId: p.productId,
-            ok: false,
-            message:
-              err?.response?.data?.details ||
-              err?.response?.data?.error ||
-              err.message ||
-              "Transfer failed",
-          });
-        }
-      }
-
-      setTransferResults(results);
-
-      const anyFail = results.some((r) => !r.ok);
-      if (!anyFail) {
-        await loadProducts();
-        clearSelected();
-      }
-    } finally {
-      setTransferLoading(false);
-    }
+  const openTransferModal = () => {
+    if (!anyEligibleSelected) return;
+    setTransferOpen(true);
   };
 
   if (loading) return <p style={{ padding: 20 }}>Loading products...</p>;
 
   return (
     <div style={{ padding: "40px" }}>
-      {/* Header row + button on right */}
+      {/* Header + filter pills */}
       <div
         style={{
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          marginBottom: 20,
+          marginBottom: 16,
+          gap: 16,
+          flexWrap: "wrap",
         }}
       >
         <h1 style={{ margin: 0 }}>My Products</h1>
 
-        {anySelected && (
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <FilterPill
+            active={filterMode === "all"}
+            onClick={() => setFilterMode("all")}
+            label="All"
+            subtitle={`${allProducts.length}`}
+          />
+          <FilterPill
+            active={filterMode === "owned"}
+            onClick={() => setFilterMode("owned")}
+            label="Owned"
+            subtitle={`${allProducts.filter((p) => p.relationship === "owner").length}`}
+          />
+        </div>
+      </div>
+
+      {/* Transfer button (opens modal) */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+        {anyEligibleSelected && (
           <button
             type="button"
             onClick={openTransferModal}
@@ -301,8 +269,9 @@ export default function DistributorProductsPage() {
               cursor: "pointer",
               fontWeight: 700,
             }}
+            title="Transfer selected products"
           >
-            Ownership Transfer
+            Transfer Ownership
           </button>
         )}
       </div>
@@ -337,7 +306,8 @@ export default function DistributorProductsPage() {
                 type="checkbox"
                 checked={allSelected}
                 onChange={toggleSelectAll}
-                aria-label="Select all products"
+                aria-label="Select all transferable products"
+                title="Select all transferable products"
               />
             </th>
 
@@ -353,6 +323,7 @@ export default function DistributorProductsPage() {
         <tbody>
           {products.map((p) => {
             const locked = !isOnChainConfirmed(p);
+            const eligible = isTransferEligible(p);
 
             return (
               <tr key={p.productId}>
@@ -361,7 +332,17 @@ export default function DistributorProductsPage() {
                     type="checkbox"
                     checked={selectedIds.has(p.productId)}
                     onChange={() => toggleSelected(p.productId)}
+                    disabled={!eligible}
                     aria-label={`Select product ${p.productId}`}
+                    title={
+                      locked
+                        ? "Cannot transfer: product not confirmed on-chain"
+                        : !p.track
+                        ? "Cannot transfer: tracking ended"
+                        : p.lifecycleStatus === "transferred"
+                        ? "Cannot transfer: you are no longer the current owner"
+                        : "Transfer eligible"
+                    }
                   />
                 </td>
 
@@ -383,6 +364,38 @@ export default function DistributorProductsPage() {
                   >
                     {p.blockchainStatus}
                   </span>
+
+                  {!p.track && (
+                    <span
+                      style={{
+                        marginLeft: 10,
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        fontSize: 12,
+                        background: "#f3f4f6",
+                        color: "#374151",
+                      }}
+                      title="Tracking ended"
+                    >
+                      tracking ended
+                    </span>
+                  )}
+
+                  {p.lifecycleStatus === "transferred" && (
+                    <span
+                      style={{
+                        marginLeft: 10,
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        fontSize: 12,
+                        background: "#fee2e2",
+                        color: "#b91c1c",
+                      }}
+                      title="This product is no longer owned by you"
+                    >
+                      transferred
+                    </span>
+                  )}
                 </td>
 
                 <td style={td}>
@@ -393,19 +406,6 @@ export default function DistributorProductsPage() {
                   >
                     👁
                   </button>
-
-                  <button
-                    onClick={openTransferModal}
-                    style={{
-                      ...iconBtn,
-                      opacity: locked ? 0.4 : 1,
-                      cursor: locked ? "not-allowed" : "pointer",
-                    }}
-                    disabled={locked}
-                    title={locked ? "Product not confirmed on-chain" : "Transfer"}
-                  >
-                    🔁
-                  </button>
                 </td>
               </tr>
             );
@@ -414,169 +414,81 @@ export default function DistributorProductsPage() {
       </table>
 
       {products.length === 0 && (
-        <p style={{ marginTop: 20, opacity: 0.6 }}>No products found.</p>
+        <p style={{ marginTop: 20, opacity: 0.6 }}>
+          No products found for this filter.
+        </p>
       )}
 
       {/* =======================
-          OWNERSHIP TRANSFER MODAL
+          TRANSFER OWNERSHIP MODAL
       ======================== */}
-      {isTransferOpen && (
-        <div style={modalOverlay} onMouseDown={closeTransferModal}>
-          <div
-            style={{ ...modalCard, maxWidth: 620 }}
-            onMouseDown={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div style={modalHeader}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 18 }}>Ownership Transfer</h2>
-                <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
-                  Transfer selected products to another user.
-                </p>
-              </div>
-
-              <button
-                style={modalCloseBtn}
-                onClick={closeTransferModal}
-                type="button"
-                disabled={transferLoading}
-              >
-                ✕
-              </button>
-            </div>
-
-            {transferError && <div style={alertError}>{transferError}</div>}
-
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-                Selected Products ({selectedProducts.length})
-              </div>
-
-              <div
-                style={{
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 12,
-                  padding: 10,
-                  maxHeight: 170,
-                  overflow: "auto",
-                  background: "#f9fafb",
-                }}
-              >
-                {selectedProducts.map((p) => (
-                  <div
-                    key={p.productId}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "8px 6px",
-                      borderBottom: "1px solid #eee",
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ fontSize: 13 }}>
-                      <div style={{ fontWeight: 700 }}>{p.productName || "—"}</div>
-                      <div style={{ color: "#6b7280" }}>
-                        ID: <span style={{ fontFamily: "monospace" }}>{p.productId}</span>{" "}
-                        • Serial:{" "}
-                        <span style={{ fontFamily: "monospace" }}>{p.serialNumber}</span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => toggleSelected(p.productId)}
-                      disabled={transferLoading}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        cursor: "pointer",
-                        color: "#b91c1c",
-                        fontWeight: 700,
-                      }}
-                      title="Remove from selection"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-
-                {selectedProducts.length === 0 && (
-                  <div style={{ fontSize: 13, color: "#6b7280" }}>
-                    No products selected.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-                Recipient User ID
-              </div>
-              <input
-                style={input}
-                value={recipientUserId}
-                onChange={(e) => setRecipientUserId(e.target.value)}
-                placeholder="e.g. 6 (sports_retailer)"
-                disabled={transferLoading}
-              />
-            </div>
-
-            {transferResults && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-                  Transfer Results
-                </div>
-                <div
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 12,
-                    padding: 10,
-                    background: "white",
-                    maxHeight: 160,
-                    overflow: "auto",
-                  }}
-                >
-                  {transferResults.map((r) => (
-                    <div
-                      key={r.productId}
-                      style={{
-                        fontSize: 13,
-                        padding: "6px 0",
-                        color: r.ok ? "#116a2b" : "#a11",
-                      }}
-                    >
-                      Product {r.productId}: {r.message}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ ...modalFooter, justifyContent: "space-between" }}>
-              <button
-                type="button"
-                onClick={closeTransferModal}
-                style={btnSecondary}
-                disabled={transferLoading}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void handleConfirmTransfer()}
-                style={btnPrimary}
-                disabled={transferLoading || selectedProducts.length === 0}
-              >
-                {transferLoading ? "Transferring..." : "Confirm Transfer"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TransferOwnershipModal
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        fromUserId={distributorId}
+        selectedProductIds={selectedEligibleProducts.map((p) => p.productId)}
+        title="Ownership Transfer"
+        onTransferred={async (results) => {
+          const anyFail = results.some((r) => !r.ok);
+          if (!anyFail) {
+            await loadProducts();
+            clearSelected();
+            setTransferOpen(false);
+          }
+        }}
+      />
     </div>
+  );
+}
+
+/* ----------------- Filter pill component ----------------- */
+
+function FilterPill({
+  active,
+  onClick,
+  label,
+  subtitle,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  subtitle?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        border: active ? "1px solid #111827" : "1px solid #e5e7eb",
+        background: active ? "#111827" : "white",
+        color: active ? "white" : "#111827",
+        borderRadius: 999,
+        padding: "8px 12px",
+        cursor: "pointer",
+        display: "flex",
+        gap: 8,
+        alignItems: "center",
+        fontWeight: 700,
+        fontSize: 13,
+      }}
+      title={label}
+    >
+      {label}
+      {subtitle !== undefined && (
+        <span
+          style={{
+            background: active ? "rgba(255,255,255,0.18)" : "#f3f4f6",
+            color: active ? "white" : "#111827",
+            borderRadius: 999,
+            padding: "2px 8px",
+            fontSize: 12,
+            fontWeight: 800,
+          }}
+        >
+          {subtitle}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -602,84 +514,4 @@ const iconBtn: React.CSSProperties = {
   cursor: "pointer",
   fontSize: "18px",
   marginRight: "10px",
-};
-
-const modalOverlay: React.CSSProperties = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.35)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 18,
-  zIndex: 9999,
-};
-
-const modalCard: React.CSSProperties = {
-  width: "100%",
-  maxWidth: 520,
-  background: "white",
-  borderRadius: 14,
-  boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
-  padding: 18,
-};
-
-const modalHeader: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 12,
-  marginBottom: 14,
-};
-
-const modalCloseBtn: React.CSSProperties = {
-  border: "none",
-  background: "transparent",
-  cursor: "pointer",
-  fontSize: 18,
-  lineHeight: 1,
-};
-
-const input: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #d1d5db",
-  fontSize: 14,
-  outline: "none",
-};
-
-const modalFooter: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 10,
-  marginTop: 14,
-};
-
-const btnSecondary: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "1px solid #d1d5db",
-  background: "white",
-  cursor: "pointer",
-  fontWeight: 600,
-};
-
-const btnPrimary: React.CSSProperties = {
-  padding: "10px 14px",
-  borderRadius: 10,
-  border: "none",
-  background: "#111827",
-  color: "white",
-  cursor: "pointer",
-  fontWeight: 700,
-};
-
-const alertError: React.CSSProperties = {
-  background: "#ffe6e6",
-  color: "#a11",
-  padding: "10px 12px",
-  borderRadius: 10,
-  fontSize: 13,
-  marginBottom: 10,
 };
