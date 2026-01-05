@@ -656,36 +656,35 @@ class ProductController {
         [txHash, manufacturerId, manufacturerPubKey, productId, Number(blockSlot ?? 0)]
       );
 
-      // active ownership (manufacturer becomes current owner on register)
-      let ownershipRow: any = null;
-
-      const ownershipIns = await client.query(
+      // 1) If an active ownership row already exists, keep it (idempotent)
+      const existingActive = await client.query(
         `
-        INSERT INTO fyp_25_s4_20.ownership (
-          owner_id, owner_public_key, product_id, start_on, end_on, tx_hash
-        )
-        VALUES ($1, $2, $3, NOW(), NULL, $4)
-        ON CONFLICT ON CONSTRAINT unique_active_ownership
-        DO NOTHING
-        RETURNING ownership_id, owner_id, product_id, start_on, end_on, tx_hash;
+        SELECT ownership_id, owner_id, owner_public_key, product_id, start_on, end_on, tx_hash
+        FROM fyp_25_s4_20.ownership
+        WHERE product_id = $1 AND end_on IS NULL
+        LIMIT 1;
         `,
-        [manufacturerId, manufacturerPubKey, productId, txHash]
+        [productId]
       );
 
-      if (ownershipIns.rows.length > 0) {
-        ownershipRow = ownershipIns.rows[0];
-      } else {
-        const existingActive = await client.query(
+      let ownershipRow = existingActive.rows[0] ?? null;
+
+      if (!ownershipRow) {
+        // 2) No active ownership yet → insert new active ownership
+        const ins = await client.query(
           `
-          SELECT ownership_id, owner_id, product_id, start_on, end_on, tx_hash
-          FROM fyp_25_s4_20.ownership
-          WHERE product_id = $1 AND end_on IS NULL
-          LIMIT 1;
+          INSERT INTO fyp_25_s4_20.ownership
+            (owner_id, owner_public_key, product_id, start_on, end_on, tx_hash)
+          VALUES
+            ($1, $2, $3, NOW(), NULL, $4)
+          RETURNING ownership_id, owner_id, owner_public_key, product_id, start_on, end_on, tx_hash;
           `,
-          [productId]
+          [manufacturerId, manufacturerPubKey, productId, txHash]
         );
-        ownershipRow = existingActive.rows[0] ?? null;
+
+        ownershipRow = ins.rows[0];
       }
+
 
       // notification (idempotent)
       try {
