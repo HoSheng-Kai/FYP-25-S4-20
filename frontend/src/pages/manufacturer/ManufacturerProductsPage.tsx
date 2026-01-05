@@ -1,7 +1,9 @@
+// src/pages/manufacturer/ManufacturerProductsPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { PRODUCTS_API_BASE_URL } from "../../config/api";
 import { useNavigate } from "react-router-dom";
+import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 
 /** =========================
  * Backend response for "products-by-user"
@@ -11,10 +13,12 @@ type BackendProduct = {
   serial_no: string;
   model: string | null;
   category: string | null;
-  status: string | null; // e.g. 'registered' | 'verified' | 'suspicious'
+  status: string | null; // 'registered' | 'verified' | 'suspicious'
   product_pda: string | null;
   tx_hash: string | null;
   track: boolean | null;
+
+  stage?: string | null; // 'draft' | 'confirmed' | 'onchain'
 
   owned_since?: string | null;
   relationship?: string | null; // 'owner' | 'manufacturer' | null
@@ -42,15 +46,17 @@ type ProductRow = {
   productName: string | null;
   productStatus: "registered" | "verified" | "suspicious";
   lifecycleStatus: "active" | "transferred";
-  blockchainStatus: string; // on blockchain / pending / confirmed
+  blockchainStatus: string; // pending / confirmed
   registeredOn: string;
+
   price: string | null;
   currency: string | null;
   listingStatus: string | null;
   listingCreatedOn: string | null;
 
-  // ✅ keep relationship so we can filter UI
   relationship?: "owner" | "manufacturer" | null;
+
+  stage?: string | null;
 };
 
 type EditProductData = {
@@ -59,11 +65,11 @@ type EditProductData = {
   productName: string | null;
   batchNumber: string | null;
   category: string | null;
-  manufactureDate: string | null; // ISO string/date
+  manufactureDate: string | null;
   productDescription: string | null;
   status: string;
   registeredOn: string;
-  qrImageUrl?: string; // optional
+  qrImageUrl?: string;
 };
 
 type GetEditResponse = {
@@ -92,26 +98,30 @@ type UpdateResponse = {
   details?: string;
 };
 
-type TransferResult = {
-  productId: number;
-  ok: boolean;
-  message: string;
-};
-
-type FilterMode = "all" | "owned" | "registered";
+type FilterMode = "all" | "owned";
 
 export default function ManufacturerProductsPage() {
   const navigate = useNavigate();
 
-  // ✅ Keep a full list in memory, and show filtered list in table
+  const manufacturerId = Number(localStorage.getItem("userId"));
   const [allProducts, setAllProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const manufacturerId = Number(localStorage.getItem("userId"));
-
-  // ✅ Filter UI
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+
+  const canEdit = useMemo(
+    () => !Number.isNaN(manufacturerId) && manufacturerId > 0,
+    [manufacturerId]
+  );
+
+  // ======================
+  // TRANSFER SELECTION + SHARED MODAL
+  // ======================
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [transferOpen, setTransferOpen] = useState(false);
+
+  const GET_BY_USER_URL = "http://localhost:3000/api/distributors/products-by-user";
 
   // ---------- EDIT MODAL STATE ----------
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -127,33 +137,10 @@ export default function ManufacturerProductsPage() {
   const [editCategory, setEditCategory] = useState("");
   const [editMfgDate, setEditMfgDate] = useState(""); // yyyy-mm-dd
   const [editDescription, setEditDescription] = useState("");
-
   const [qrImageUrl, setQrImageUrl] = useState<string | null>(null);
 
-  const canEdit = useMemo(
-    () => !Number.isNaN(manufacturerId) && manufacturerId > 0,
-    [manufacturerId]
-  );
-
-  // ======================
-  // OWNERSHIP TRANSFER STATE
-  // ======================
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
-  // Modal
-  const [isTransferOpen, setIsTransferOpen] = useState(false);
-  const [recipientUserId, setRecipientUserId] = useState("");
-  const [transferLoading, setTransferLoading] = useState(false);
-  const [transferError, setTransferError] = useState<string | null>(null);
-  const [transferResults, setTransferResults] = useState<TransferResult[] | null>(
-    null
-  );
-
-  const TRANSFER_URL = "http://localhost:3000/api/distributors/update-ownership";
-  const GET_BY_USER_URL = "http://localhost:3000/api/distributors/products-by-user";
-
   // ----------------------
-  // HELPERS (BLOCKCHAIN IMMUTABILITY)
+  // HELPERS
   // ----------------------
   const isOnChainConfirmed = (p: ProductRow) => {
     const s = (p.blockchainStatus || "").toLowerCase();
@@ -165,7 +152,14 @@ export default function ManufacturerProductsPage() {
     );
   };
 
-  // ✅ transfer eligibility check
+  // ✅ register eligible: stage === confirmed AND not yet on chain
+  const isRegisterOnChainEligible = (p: ProductRow) => {
+    if (isOnChainConfirmed(p)) return false;
+    const stage = (p.stage || "").toLowerCase();
+    return stage === "confirmed";
+  };
+
+  // ✅ transfer eligible: on-chain confirmed + still owned by you
   const isTransferEligible = (p: ProductRow) => {
     return isOnChainConfirmed(p) && p.lifecycleStatus !== "transferred";
   };
@@ -185,18 +179,15 @@ export default function ManufacturerProductsPage() {
     return "registered";
   };
 
-  // ✅ Build the list shown in the table
+  // ✅ filtered list for the table
   const products = useMemo(() => {
     if (filterMode === "owned") {
       return allProducts.filter((p) => p.relationship === "owner");
     }
-    if (filterMode === "registered") {
-      return allProducts.filter((p) => p.relationship === "manufacturer");
-    }
     return allProducts;
   }, [allProducts, filterMode]);
 
-  // ✅ Clear invalid selections when filter changes (prevents hidden selected items)
+  // ✅ Clear hidden selections when filter changes
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
@@ -257,7 +248,7 @@ export default function ManufacturerProductsPage() {
   const clearSelected = () => setSelectedIds(new Set());
 
   // ----------------------
-  // LOAD PRODUCTS (owned OR registered_by)
+  // LOAD PRODUCTS
   // ----------------------
   const loadProducts = async () => {
     try {
@@ -279,14 +270,12 @@ export default function ManufacturerProductsPage() {
 
       const mapped: ProductRow[] = raw.map((p) => {
         const confirmed = !!(p.tx_hash && p.product_pda);
-
         const relationship = (p.relationship as any) ?? null;
 
         const lifecycleStatus: ProductRow["lifecycleStatus"] =
-          relationship === "owner" ? "active" : "transferred";
-
-        // We only have owned_since from that query, so show it here
-        const registeredOn = p.owned_since || "";
+          relationship === "owner" || relationship === "manufacturer"
+            ? "active"
+            : "transferred";
 
         return {
           productId: p.product_id,
@@ -296,12 +285,13 @@ export default function ManufacturerProductsPage() {
           productStatus: normalizeStatus(p.status),
           lifecycleStatus,
           blockchainStatus: confirmed ? "confirmed" : "pending",
-          registeredOn,
+          registeredOn: p.owned_since || "",
           price: null,
           currency: null,
           listingStatus: null,
           listingCreatedOn: null,
           relationship,
+          stage: p.stage ?? null,
         };
       });
 
@@ -323,96 +313,9 @@ export default function ManufacturerProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ----------------------
-  // Transfer Modal open/close
-  // ----------------------
   const openTransferModal = () => {
     if (!anyEligibleSelected) return;
-    setIsTransferOpen(true);
-    setRecipientUserId("");
-    setTransferError(null);
-    setTransferResults(null);
-  };
-
-  const closeTransferModal = () => {
-    if (transferLoading) return;
-    setIsTransferOpen(false);
-    setRecipientUserId("");
-    setTransferError(null);
-    setTransferResults(null);
-  };
-
-  const handleConfirmTransfer = async () => {
-    if (!manufacturerId || Number.isNaN(manufacturerId)) {
-      setTransferError("Manufacturer ID missing. Please login again.");
-      return;
-    }
-
-    const toId = Number(recipientUserId);
-    if (!toId || Number.isNaN(toId) || toId <= 0) {
-      setTransferError("Please enter a valid Recipient User ID.");
-      return;
-    }
-
-    if (selectedEligibleProducts.length === 0) {
-      setTransferError(
-        "No transferable products selected. (Products must be on-chain confirmed and still owned by you.)"
-      );
-      return;
-    }
-
-    setTransferLoading(true);
-    setTransferError(null);
-    setTransferResults(null);
-
-    try {
-      const results: TransferResult[] = [];
-
-      for (const p of selectedEligibleProducts) {
-        try {
-          const res = await axios.post(TRANSFER_URL, {
-            from_user_id: manufacturerId,
-            to_user_id: toId,
-            product_id: p.productId,
-          });
-
-          if (res.data?.success) {
-            const exec = res.data?.data?.transactions?.execute;
-            results.push({
-              productId: p.productId,
-              ok: true,
-              message: exec ? `Transferred ✅ (execute: ${exec})` : "Transferred ✅",
-            });
-          } else {
-            results.push({
-              productId: p.productId,
-              ok: false,
-              message: res.data?.error || "Transfer failed",
-            });
-          }
-        } catch (err: any) {
-          results.push({
-            productId: p.productId,
-            ok: false,
-            message:
-              err?.response?.data?.details ||
-              err?.response?.data?.error ||
-              err.message ||
-              "Transfer failed",
-          });
-        }
-      }
-
-      setTransferResults(results);
-
-      const anyFail = results.some((r) => !r.ok);
-      if (!anyFail) {
-        await loadProducts();
-        clearSelected();
-      }
-    } finally {
-      setTransferLoading(false);
-    }
+    setTransferOpen(true);
   };
 
   // ----------------------
@@ -592,7 +495,8 @@ export default function ManufacturerProductsPage() {
       setEditSuccess("Updated successfully. New QR code generated.");
 
       const newQr =
-        res.data.data.qrImageUrl ?? `${PRODUCTS_API_BASE_URL}/${editingProductId}/qrcode`;
+        res.data.data.qrImageUrl ??
+        `${PRODUCTS_API_BASE_URL}/${editingProductId}/qrcode`;
       setQrImageUrl(withNoCache(newQr));
 
       await loadProducts();
@@ -637,17 +541,11 @@ export default function ManufacturerProductsPage() {
             label="Owned"
             subtitle={`${allProducts.filter((p) => p.relationship === "owner").length}`}
           />
-          <FilterPill
-            active={filterMode === "registered"}
-            onClick={() => setFilterMode("registered")}
-            label="Registered by me"
-            subtitle={`${allProducts.filter((p) => p.relationship === "manufacturer").length}`}
-          />
         </div>
       </div>
 
       {/* Transfer button row */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10 }}>
         {anyEligibleSelected && (
           <button
             type="button"
@@ -662,7 +560,7 @@ export default function ManufacturerProductsPage() {
               fontWeight: 700,
             }}
           >
-            Ownership Transfer
+            Transfer Ownership
           </button>
         )}
       </div>
@@ -714,7 +612,8 @@ export default function ManufacturerProductsPage() {
         <tbody>
           {products.map((p) => {
             const locked = isOnChainConfirmed(p);
-            const eligible = isTransferEligible(p);
+            const transferEligible = isTransferEligible(p);
+            const registerEligible = isRegisterOnChainEligible(p);
 
             return (
               <tr key={p.productId}>
@@ -723,7 +622,7 @@ export default function ManufacturerProductsPage() {
                     type="checkbox"
                     checked={selectedIds.has(p.productId)}
                     onChange={() => toggleSelected(p.productId)}
-                    disabled={!eligible}
+                    disabled={!transferEligible}
                     aria-label={`Select product ${p.productId}`}
                     title={
                       !locked
@@ -780,6 +679,23 @@ export default function ManufacturerProductsPage() {
                     </span>
                   )}
 
+                  {/* Optional: show stage pill to help you debug */}
+                  {p.stage && (
+                    <span
+                      style={{
+                        marginLeft: 10,
+                        padding: "4px 10px",
+                        borderRadius: "999px",
+                        fontSize: 12,
+                        background: "#f3f4f6",
+                        color: "#111827",
+                      }}
+                      title="DB Stage"
+                    >
+                      {p.stage}
+                    </span>
+                  )}
+
                   {p.lifecycleStatus === "transferred" && (
                     <span
                       style={{
@@ -804,6 +720,26 @@ export default function ManufacturerProductsPage() {
                     title="View"
                   >
                     👁
+                  </button>
+
+                  {/* ✅ Register on-chain button */}
+                  <button
+                    onClick={() =>
+                      navigate(`/manufacturer/register?productId=${p.productId}`)
+                    }
+                    style={{
+                      ...iconBtn,
+                      opacity: registerEligible ? 1 : 0.35,
+                      cursor: registerEligible ? "pointer" : "not-allowed",
+                    }}
+                    title={
+                      registerEligible
+                        ? "Register this confirmed draft on the blockchain"
+                        : "Only confirmed drafts (not yet on-chain) can be registered"
+                    }
+                    disabled={!registerEligible}
+                  >
+                    ⛓️
                   </button>
 
                   <button
@@ -854,167 +790,26 @@ export default function ManufacturerProductsPage() {
       )}
 
       {/* =======================
-          OWNERSHIP TRANSFER MODAL
+          TRANSFER OWNERSHIP MODAL
       ======================== */}
-      {isTransferOpen && (
-        <div style={modalOverlay} onMouseDown={closeTransferModal}>
-          <div
-            style={{ ...modalCard, maxWidth: 620 }}
-            onMouseDown={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-modal="true"
-          >
-            <div style={modalHeader}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 18 }}>Ownership Transfer</h2>
-                <p style={{ margin: "4px 0 0", fontSize: 13, color: "#6b7280" }}>
-                  Transfer selected products to another user.
-                </p>
-              </div>
-
-              <button
-                style={modalCloseBtn}
-                onClick={closeTransferModal}
-                type="button"
-                disabled={transferLoading}
-              >
-                ✕
-              </button>
-            </div>
-
-            {transferError && <div style={alertError}>{transferError}</div>}
-
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-                Selected Transferable Products ({selectedEligibleProducts.length})
-              </div>
-
-              <div
-                style={{
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 12,
-                  padding: 10,
-                  maxHeight: 170,
-                  overflow: "auto",
-                  background: "#f9fafb",
-                }}
-              >
-                {selectedEligibleProducts.map((p) => (
-                  <div
-                    key={p.productId}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "8px 6px",
-                      borderBottom: "1px solid #eee",
-                      gap: 10,
-                    }}
-                  >
-                    <div style={{ fontSize: 13 }}>
-                      <div style={{ fontWeight: 700 }}>{p.productName || "—"}</div>
-                      <div style={{ color: "#6b7280" }}>
-                        ID: <span style={{ fontFamily: "monospace" }}>{p.productId}</span>{" "}
-                        • Serial:{" "}
-                        <span style={{ fontFamily: "monospace" }}>{p.serialNumber}</span>
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => toggleSelected(p.productId)}
-                      disabled={transferLoading}
-                      style={{
-                        border: "none",
-                        background: "transparent",
-                        cursor: "pointer",
-                        color: "#b91c1c",
-                        fontWeight: 700,
-                      }}
-                      title="Remove from selection"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-
-                {selectedEligibleProducts.length === 0 && (
-                  <div style={{ fontSize: 13, color: "#6b7280" }}>
-                    No transferable products selected.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>
-                Recipient User ID
-              </div>
-              <input
-                style={input}
-                value={recipientUserId}
-                onChange={(e) => setRecipientUserId(e.target.value)}
-                placeholder="e.g. 4 (global_distributor)"
-                disabled={transferLoading}
-              />
-            </div>
-
-            {transferResults && (
-              <div style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>
-                  Transfer Results
-                </div>
-                <div
-                  style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 12,
-                    padding: 10,
-                    background: "white",
-                    maxHeight: 160,
-                    overflow: "auto",
-                  }}
-                >
-                  {transferResults.map((r) => (
-                    <div
-                      key={r.productId}
-                      style={{
-                        fontSize: 13,
-                        padding: "6px 0",
-                        color: r.ok ? "#116a2b" : "#a11",
-                      }}
-                    >
-                      Product {r.productId}: {r.message}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div style={{ ...modalFooter, justifyContent: "space-between" }}>
-              <button
-                type="button"
-                onClick={closeTransferModal}
-                style={btnSecondary}
-                disabled={transferLoading}
-              >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                onClick={() => void handleConfirmTransfer()}
-                style={btnPrimary}
-                disabled={transferLoading || selectedEligibleProducts.length === 0}
-              >
-                {transferLoading ? "Transferring..." : "Confirm Transfer"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TransferOwnershipModal
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        fromUserId={manufacturerId}
+        selectedProductIds={selectedEligibleProducts.map((p) => p.productId)}
+        title="Ownership Transfer"
+        onTransferred={async (results) => {
+          const anyFail = results.some((r) => !r.ok);
+          if (!anyFail) {
+            await loadProducts();
+            clearSelected();
+            setTransferOpen(false);
+          }
+        }}
+      />
 
       {/* =======================
-          EDIT PRODUCT MODAL (unchanged)
+          EDIT PRODUCT MODAL
       ======================== */}
       {isEditOpen && (
         <div style={modalOverlay} onMouseDown={closeEditModal}>

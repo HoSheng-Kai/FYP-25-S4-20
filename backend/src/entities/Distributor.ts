@@ -194,6 +194,7 @@ class DistributorEntity {
                 p.product_pda,
                 p.tx_hash,
                 p.track,
+                p.stage,
                 p.registered_by,
                 o.ownership_id,
                 o.start_on AS owned_since,
