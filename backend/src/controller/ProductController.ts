@@ -7,7 +7,7 @@ import { ProductHistory, ProductHistoryResult } from '../entities/ProductHistory
 // import { ProductQr } from '../entities/ProductQr';
 import { ProductUpdate } from '../entities/ProductUpdate';
 import { ManufacturerProductListing } from '../entities/Manufacturer/ManufacturerProductListing';
-import { MarketplaceListing } from '../entities/Manufacturer/MarketplaceListing';
+import { MarketplaceListing } from '../entities/Users/MarketplaceListing';
 import { ConsumerProductListing, ListingStatus } from '../entities/Users/ConsumerProductListing';
 import { QrCodeService } from '../service/QrCodeService';
 
@@ -417,7 +417,7 @@ class ProductController {
     }
   }
 
-   // POST /api/products/:productId/metadata-final
+  // POST /api/products/:productId/metadata-final
   async storeMetadataAfterConfirm(req: Request, res: Response) {
     try {
       const productId = Number(req.params.productId);
@@ -510,7 +510,7 @@ class ProductController {
     const client = await pool.connect();
     try {
       const productId = Number(req.params.productId);
-      const { manufacturerId, txHash, productPda } = (req.body || {}) as any;
+      const { manufacturerId, txHash, productPda, blockSlot } = (req.body || {}) as any;
 
       if (!productId || !manufacturerId || !txHash) {
         res.status(400).json({
@@ -548,8 +548,8 @@ class ProductController {
         return;
       }
 
-      // ✅ Must be confirmed before on-chain
-      if (prod.stage !== "confirmed" && !prod.tx_hash) {
+      // must be confirmed draft before on-chain
+      if ((prod.tx_hash == null || prod.tx_hash === "") && prod.stage !== "confirmed") {
         await client.query("ROLLBACK");
         res.status(409).json({
           success: false,
@@ -560,12 +560,17 @@ class ProductController {
       }
 
       // idempotent confirm
-      if (prod.tx_hash) {
+      if (prod.tx_hash && prod.tx_hash !== "") {
         if (prod.tx_hash === txHash) {
           await client.query("COMMIT");
           res.status(200).json({
             success: true,
-            data: { productId, txHash: prod.tx_hash, productPda: prod.product_pda, alreadyConfirmed: true },
+            data: {
+              productId,
+              txHash: prod.tx_hash,
+              productPda: prod.product_pda,
+              alreadyConfirmed: true,
+            },
           });
           return;
         }
@@ -579,7 +584,28 @@ class ProductController {
         return;
       }
 
-      // ✅ set on-chain + lock stage
+      // prevent ux_product_tx_hash collision
+      const dup = await client.query(
+        `
+        SELECT product_id, serial_no
+        FROM fyp_25_s4_20.product
+        WHERE tx_hash = $1
+          AND product_id <> $2
+        LIMIT 1;
+        `,
+        [txHash, productId]
+      );
+
+      if (dup.rows.length > 0) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          success: false,
+          error: "txHash already used",
+          details: `txHash already linked to product_id=${dup.rows[0].product_id} (${dup.rows[0].serial_no})`,
+        });
+        return;
+      }
+
       const updated = await client.query(
         `
         UPDATE fyp_25_s4_20.product
@@ -592,9 +618,77 @@ class ProductController {
         [txHash, productPda ?? null, productId]
       );
 
-      // ✅ notification (idempotent via UNIQUE constraint notification_user_product_tx_uniq)
+      const serialNo = updated.rows[0]?.serial_no ?? "";
+
+      const u = await client.query(
+        `
+        SELECT public_key
+        FROM fyp_25_s4_20.users
+        WHERE user_id = $1
+        LIMIT 1;
+        `,
+        [manufacturerId]
+      );
+
+      const manufacturerPubKey: string | null = u.rows[0]?.public_key ?? null;
+      if (!manufacturerPubKey) {
+        await client.query("ROLLBACK");
+        res.status(409).json({
+          success: false,
+          error: "Manufacturer public_key missing",
+          details: "users.public_key is required for blockchain_node and ownership.",
+        });
+        return;
+      }
+
+      await client.query(
+        `
+        INSERT INTO fyp_25_s4_20.blockchain_node (
+          tx_hash, prev_tx_hash,
+          from_user_id, from_public_key,
+          to_user_id, to_public_key,
+          product_id, block_slot, created_on,
+          event
+        )
+        VALUES ($1, NULL, $2, $3, $2, $3, $4, $5, NOW(), 'REGISTER')
+        ON CONFLICT (tx_hash) DO NOTHING;
+        `,
+        [txHash, manufacturerId, manufacturerPubKey, productId, Number(blockSlot ?? 0)]
+      );
+
+      // active ownership (manufacturer becomes current owner on register)
+      let ownershipRow: any = null;
+
+      const ownershipIns = await client.query(
+        `
+        INSERT INTO fyp_25_s4_20.ownership (
+          owner_id, owner_public_key, product_id, start_on, end_on, tx_hash
+        )
+        VALUES ($1, $2, $3, NOW(), NULL, $4)
+        ON CONFLICT ON CONSTRAINT unique_active_ownership
+        DO NOTHING
+        RETURNING ownership_id, owner_id, product_id, start_on, end_on, tx_hash;
+        `,
+        [manufacturerId, manufacturerPubKey, productId, txHash]
+      );
+
+      if (ownershipIns.rows.length > 0) {
+        ownershipRow = ownershipIns.rows[0];
+      } else {
+        const existingActive = await client.query(
+          `
+          SELECT ownership_id, owner_id, product_id, start_on, end_on, tx_hash
+          FROM fyp_25_s4_20.ownership
+          WHERE product_id = $1 AND end_on IS NULL
+          LIMIT 1;
+          `,
+          [productId]
+        );
+        ownershipRow = existingActive.rows[0] ?? null;
+      }
+
+      // notification (idempotent)
       try {
-        const serialNo = updated.rows[0]?.serial_no ?? "";
         await client.query(
           `
           INSERT INTO fyp_25_s4_20.notification
@@ -607,7 +701,7 @@ class ProductController {
           [
             manufacturerId,
             "Product Registration",
-            `Your product ${serialNo} has been successfully registered on the blockchain. tx=${txHash}`,
+            `Your product ${serialNo} has been successfully registered on the blockchain.`,
             productId,
             txHash,
           ]
@@ -617,9 +711,28 @@ class ProductController {
       }
 
       await client.query("COMMIT");
-      res.status(200).json({ success: true, data: { product: updated.rows[0], confirmed: true } });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          product: updated.rows[0],
+          ownership: ownershipRow
+            ? {
+                ownershipId: ownershipRow.ownership_id,
+                ownerId: ownershipRow.owner_id,
+                productId: ownershipRow.product_id,
+                startOn: ownershipRow.start_on,
+                endOn: ownershipRow.end_on,
+                txHash: ownershipRow.tx_hash,
+              }
+            : null,
+          confirmed: true,
+        },
+      });
     } catch (err) {
-      try { await client.query("ROLLBACK"); } catch {}
+      try {
+        await client.query("ROLLBACK");
+      } catch {}
       res.status(500).json({
         success: false,
         error: "Failed to confirm product on blockchain",
@@ -920,7 +1033,6 @@ class ProductController {
       });
     }
   }
-
 
   // GET /api/products/:productId/edit?manufacturerId=2
   async getProductForEdit(req: Request, res: Response): Promise<void> {

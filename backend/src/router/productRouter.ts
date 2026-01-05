@@ -16,18 +16,6 @@ router.get('/verify', productController.verifyProductBySerial.bind(productContro
 // GET /api/products/history?serial=NIKE-AIR-001
 router.get('/history', productController.getTransactionHistory.bind(productController));
 
-// // Example:
-// // POST /api/products/register
-// router.post('/register', productController.registerProduct.bind(productController));
-
-// // Example:
-// // DELETE /api/products/cancel-by-serial
-// router.delete("/cancel-by-serial", productController.cancelBySerial.bind(productController));
-
-
-// // (optional, but recommended) if user cancels Phantom, cleanup pending record:
-// router.delete("/:productId/cancel", productController.cancelPendingById.bind(productController));
-
 // READ product listings for a manufacturer (includes products without listing)
 router.get('/manufacturer/:manufacturerId/listings', productController.getManufacturerProductListings.bind(productController));
 
