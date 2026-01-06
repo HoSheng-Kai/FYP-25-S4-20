@@ -31,7 +31,7 @@ type EditProductData = {
   status: string;
   registeredOn: string;
   qrImageUrl?: string;
-  // ✅ optional if you add it on backend edit endpoint
+
   stage?: string | null;
   txHash?: string | null;
   productPda?: string | null;
@@ -46,11 +46,162 @@ type GetEditResponse = {
 
 const API_BASE = API_ROOT.replace(/\/api\s*$/, "");
 
+const styles: Record<string, React.CSSProperties> = {
+  page: {
+    maxWidth: 980,
+    margin: "28px auto",
+    padding: "0 16px 32px",
+  },
+  headerRow: {
+    display: "flex",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 16,
+    marginBottom: 14,
+  },
+  titleWrap: { minWidth: 0 },
+  h1: { fontSize: 26, margin: 0, fontWeight: 800, letterSpacing: -0.2 },
+  subtitle: { marginTop: 6, color: "#6b7280", fontSize: 14 },
+  rightTop: { display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 },
+  walletHint: { fontSize: 12, color: "#6b7280" },
+
+  card: {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 16,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+    overflow: "hidden",
+  },
+  cardHeader: {
+    padding: "16px 18px",
+    borderBottom: "1px solid #eef2f7",
+    background: "#fafafa",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    flexWrap: "wrap",
+  },
+  cardHeaderTitle: { fontWeight: 800, fontSize: 14, color: "#111827" },
+  badgesRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  badge: {
+    fontSize: 12,
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    color: "#111827",
+  },
+  badgeMuted: {
+    fontSize: 12,
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    color: "#6b7280",
+  },
+  mono: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" },
+
+  cardBody: { padding: 18 },
+
+  sectionTitle: { fontWeight: 800, fontSize: 13, marginBottom: 10, color: "#111827" },
+
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: 14,
+  },
+
+  field: { display: "flex", flexDirection: "column", gap: 6 },
+  labelRow: { display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 10 },
+  label: { fontSize: 12, fontWeight: 700, color: "#111827" },
+  required: { color: "#ef4444", fontWeight: 900, marginLeft: 4 },
+  helper: { fontSize: 12, color: "#6b7280" },
+
+  input: {
+    width: "100%",
+    padding: "11px 12px",
+    borderRadius: 12,
+    border: "1px solid #e5e7eb",
+    outline: "none",
+    fontSize: 14,
+    background: "#fff",
+  },
+  inputReadOnly: {
+    width: "100%",
+    padding: "11px 12px",
+    borderRadius: 12,
+    border: "1px solid #e5e7eb",
+    outline: "none",
+    fontSize: 14,
+    background: "#f9fafb",
+    color: "#6b7280",
+  },
+  textarea: {
+    width: "100%",
+    padding: "11px 12px",
+    borderRadius: 12,
+    border: "1px solid #e5e7eb",
+    outline: "none",
+    fontSize: 14,
+    background: "#fff",
+    resize: "vertical",
+    minHeight: 110,
+  },
+  disabled: { opacity: 0.55, cursor: "not-allowed" },
+
+  actionsWrap: {
+    marginTop: 16,
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+  },
+  btn: {
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+    fontSize: 13,
+  },
+  btnDanger: {
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid #fecaca",
+    background: "#fff",
+    fontWeight: 800,
+    cursor: "pointer",
+    fontSize: 13,
+    color: "#b91c1c",
+  },
+  btnPrimary: {
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid #111827",
+    background: "#111827",
+    color: "#fff",
+    fontWeight: 900,
+    cursor: "pointer",
+    fontSize: 13,
+  },
+  btnEmphasis: {
+    padding: "10px 14px",
+    borderRadius: 12,
+    border: "1px solid #111827",
+    background: "#fff",
+    color: "#111827",
+    fontWeight: 900,
+    cursor: "pointer",
+    fontSize: 13,
+  },
+};
+
 export default function RegisterOnChainPage() {
   const wallet = useWallet();
   const [searchParams] = useSearchParams();
 
-  // ✅ fixed: manufacturerId is not editable here
   const manufacturerId = useMemo(() => Number(localStorage.getItem("userId")) || 0, []);
 
   const [serialNo, setSerialNo] = useState("");
@@ -62,15 +213,12 @@ export default function RegisterOnChainPage() {
 
   const [productId, setProductId] = useState<number | null>(null);
 
-  // workflow flags
   const [draftStage, setDraftStage] = useState<"draft" | "confirmed" | "unknown">("unknown");
   const [txSig, setTxSig] = useState<string>("");
   const [productPdaStr, setProductPdaStr] = useState<string>("");
   const [metadataUri, setMetadataUri] = useState<string>("");
   const [metadataHashHex, setMetadataHashHex] = useState<string>("");
   const [isFinalized, setIsFinalized] = useState<boolean>(false);
-
-  const [status, setStatus] = useState<string>("");
 
   const meta: ProductMetadata = useMemo(
     () => ({
@@ -84,18 +232,8 @@ export default function RegisterOnChainPage() {
     [serialNo, productName, batchNo, category, manufactureDate, description]
   );
 
-  // locked after confirm-draft OR after finalized
   const isLocked = draftStage === "confirmed" || isFinalized;
 
-  function prettyError(e: any) {
-    return e?.response?.data
-      ? JSON.stringify(e.response.data, null, 2)
-      : e?.message ?? String(e);
-  }
-
-  // ==========================
-  // AUTO LOAD BY ?productId=
-  // ==========================
   useEffect(() => {
     const pidStr = searchParams.get("productId");
     if (!pidStr) return;
@@ -110,14 +248,11 @@ export default function RegisterOnChainPage() {
 
   async function loadProduct(pid: number) {
     try {
-      setStatus("Loading product from DB...");
       const res = await axios.get<GetEditResponse>(`${API_BASE}/api/products/${pid}/edit`, {
         params: { manufacturerId },
       });
 
-      if (!res.data.success || !res.data.data) {
-        throw new Error(res.data.error || "Failed to load product");
-      }
+      if (!res.data.success || !res.data.data) throw new Error(res.data.error || "Failed to load product");
 
       const d = res.data.data;
 
@@ -125,33 +260,24 @@ export default function RegisterOnChainPage() {
       setProductName(d.productName ?? "");
       setBatchNo(d.batchNumber ?? "");
       setCategory(d.category ?? "");
-      setManufactureDate(
-        d.manufactureDate ? new Date(d.manufactureDate).toISOString().slice(0, 10) : ""
-      );
+      setManufactureDate(d.manufactureDate ? new Date(d.manufactureDate).toISOString().slice(0, 10) : "");
       setDescription(d.productDescription ?? "");
 
-      // ✅ If backend provides stage, use it; else assume confirmed when opened from list
       const stage = (d.stage || "").toLowerCase();
       if (stage === "confirmed") setDraftStage("confirmed");
       else if (stage === "draft") setDraftStage("draft");
-      else setDraftStage("confirmed"); // fallback so send button can work if you navigated from eligible list
+      else setDraftStage("confirmed");
 
-      // If already on-chain, show info and lock
       if (d.txHash) {
         setIsFinalized(true);
         setTxSig(d.txHash);
         if (d.productPda) setProductPdaStr(d.productPda);
       }
-
-      setStatus(`✅ Loaded productId=${pid}.`);
-    } catch (e: any) {
-      setStatus(`❌ Load product failed:\n${prettyError(e)}`);
+    } catch {
+      // no status bar; ignore or add toast later
     }
   }
 
-  // ==========================
-  // A) SAVE DRAFT (DB ONLY)
-  // ==========================
   async function saveDraft(): Promise<number> {
     const s = serialNo.trim();
     if (!s) throw new Error("Serial number is required");
@@ -174,9 +300,7 @@ export default function RegisterOnChainPage() {
       null;
 
     if (!pid) {
-      throw new Error(
-        `Draft saved but could not parse productId.\nResponse:\n${JSON.stringify(dbRes.data, null, 2)}`
-      );
+      throw new Error(`Draft saved but could not parse productId.\nResponse:\n${JSON.stringify(dbRes.data, null, 2)}`);
     }
 
     setProductId(pid);
@@ -192,61 +316,41 @@ export default function RegisterOnChainPage() {
 
   async function onSaveDraftClick() {
     try {
-      setStatus("Saving draft (DB only)...");
-      const pid = await saveDraft();
-      setStatus(`✅ Draft saved.\nproductId=${pid}\nserial=${serialNo.trim()}\nstage=draft`);
-    } catch (e: any) {
-      setStatus(`❌ Save Draft failed:\n${prettyError(e)}`);
+      await saveDraft();
+    } catch {
+      // ignore or toast
     }
   }
 
-  // ==========================
-  // B) DELETE DRAFT
-  // ==========================
   async function deleteDraft() {
     try {
       if (!productId) throw new Error("No productId. Save draft first.");
       if (isLocked) throw new Error("Draft is locked (confirmed/finalized). Cannot delete.");
 
-      setStatus("Deleting draft (DB)...");
-
-      const r = await axios.delete(`${API_BASE}/api/products/${productId}/draft`, {
+      await axios.delete(`${API_BASE}/api/products/${productId}/draft`, {
         data: { manufacturerId },
         headers: { "Content-Type": "application/json" },
       });
 
-      setStatus(`✅ Draft deleted.\n${JSON.stringify(r.data, null, 2)}`);
       setProductId(null);
       setDraftStage("unknown");
-    } catch (e: any) {
-      setStatus(`❌ Delete failed:\n${prettyError(e)}`);
+    } catch {
+      // ignore or toast
     }
   }
 
-  // ==========================
-  // C) CONFIRM DRAFT (LOCKS)
-  // ==========================
   async function confirmDraft() {
     try {
       if (!productId) throw new Error("No productId. Save draft first.");
       if (isLocked) throw new Error("Already locked.");
 
-      setStatus("Confirming draft (DB)...");
-
-      await axios.post(`${API_BASE}/api/products/${productId}/confirm-draft`, {
-        manufacturerId,
-      });
-
+      await axios.post(`${API_BASE}/api/products/${productId}/confirm-draft`, { manufacturerId });
       setDraftStage("confirmed");
-      setStatus(`✅ Draft confirmed.\nproductId=${productId}\nDraft is now LOCKED (no edits/deletes).`);
-    } catch (e: any) {
-      setStatus(`❌ Confirm draft failed:\n${prettyError(e)}`);
+    } catch {
+      // ignore or toast
     }
   }
 
-  // ==========================================================
-  // D) SEND TO BLOCKCHAIN (finalize metadata first, then chain, then DB confirm)
-  // ==========================================================
   async function sendToBlockchain() {
     try {
       if (!wallet.publicKey) throw new Error("Connect wallet first");
@@ -256,8 +360,6 @@ export default function RegisterOnChainPage() {
       if (draftStage !== "confirmed") throw new Error("Draft not confirmed. Click 'Confirm Draft' first.");
       if (isFinalized) throw new Error("Already finalized.");
 
-      // 1) finalize metadata first (backend creates metadata file + returns uri + hash)
-      setStatus("1/3 Finalizing metadata (backend)...");
       const metaRes = await axios.post(`${API_BASE}/api/products/${productId}/metadata-final`, {
         manufacturerId,
         metadata: meta,
@@ -277,8 +379,6 @@ export default function RegisterOnChainPage() {
 
       const metadataHash = Buffer.from(hashHex, "hex");
 
-      // 2) on-chain register
-      setStatus("2/3 Registering on-chain...");
       const [productPda, _bump, serialHash] = await deriveProductPda(wallet.publicKey, s);
 
       const provider = getProvider(wallet);
@@ -296,8 +396,6 @@ export default function RegisterOnChainPage() {
       setTxSig(sig);
       setProductPdaStr(productPda.toBase58());
 
-      // 3) confirm tx in DB
-      setStatus("3/3 Confirming on-chain tx in DB...");
       await axios.post(`${API_BASE}/api/products/${productId}/confirm`, {
         manufacturerId,
         txHash: sig,
@@ -305,148 +403,208 @@ export default function RegisterOnChainPage() {
       });
 
       setIsFinalized(true);
-      setStatus(
-        `✅ SENT + FINALIZED!\nproductId=${productId}\nPDA=${productPda.toBase58()}\ntx=${sig}\nuri=${uri}\nhash=${hashHex}\n\nProduct is now PERMANENTLY LOCKED.`
-      );
-    } catch (e: any) {
-      setStatus(`❌ Send to blockchain failed:\n${prettyError(e)}`);
+    } catch {
+      // ignore or toast
     }
   }
 
   return (
-    <div style={{ maxWidth: 820, margin: "24px auto", padding: 16 }}>
-      <h2 style={{ marginBottom: 12 }}>Manufacturer Registration (Draft → Confirm → Blockchain)</h2>
+    <div style={styles.page}>
+      <div style={styles.headerRow}>
+        <div style={styles.titleWrap}>
+          <h1 style={styles.h1}>Register New Product</h1>
+          <div style={styles.subtitle}>Add a new product to the blockchain system</div>
+        </div>
 
-      <div style={{ marginTop: 12 }}>
-        <WalletMultiButton />
-        <div style={{ marginTop: 6, fontFamily: "monospace" }}>
-          Connected: {wallet.publicKey?.toBase58() ?? "—"}
+        <div style={styles.rightTop}>
+          <WalletMultiButton />
+          <div style={styles.walletHint}>
+            Connected:{" "}
+            <span style={styles.mono}>
+              {wallet.publicKey?.toBase58().slice(0, 6) ?? "—"}
+              {wallet.publicKey ? "…" : ""}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div style={{ marginTop: 10, padding: 10, background: "#f7f7f7", borderRadius: 8 }}>
-        <div><b>Manufacturer ID:</b> {manufacturerId}</div>
-        <div><b>Stage:</b> {draftStage}</div>
-        <div><b>Locked:</b> {isLocked ? "YES" : "NO"}</div>
-        <div><b>Finalized:</b> {isFinalized ? "YES" : "NO"}</div>
-        {txSig ? <div><b>Tx:</b> <span style={{ fontFamily: "monospace" }}>{txSig}</span></div> : null}
-        {productPdaStr ? <div><b>PDA:</b> <span style={{ fontFamily: "monospace" }}>{productPdaStr}</span></div> : null}
-        {metadataUri ? <div><b>Metadata URI:</b> <span style={{ fontFamily: "monospace" }}>{metadataUri}</span></div> : null}
+      <div style={styles.card}>
+        <div style={styles.cardHeader}>
+          <div style={styles.cardHeaderTitle}>Product Information</div>
+
+          <div style={styles.badgesRow}>
+            <span style={styles.badgeMuted}>
+              Manufacturer ID: <span style={styles.mono}>{manufacturerId}</span>
+            </span>
+            <span style={styles.badge}>
+              Stage: <b>{draftStage}</b>
+            </span>
+            <span style={styles.badge}>
+              Locked: <b>{isLocked ? "YES" : "NO"}</b>
+            </span>
+            <span style={styles.badge}>
+              Finalized: <b>{isFinalized ? "YES" : "NO"}</b>
+            </span>
+          </div>
+        </div>
+
+        <div style={styles.cardBody}>
+          <div style={styles.sectionTitle}>Enter the details of the product you want to register</div>
+
+          <div style={styles.grid}>
+            <div style={styles.field}>
+              <div style={styles.labelRow}>
+                <span style={styles.label}>Product ID (DB)</span>
+                <span style={styles.helper}>Auto after Save Draft / ?productId=</span>
+              </div>
+              <input type="text" value={productId ?? ""} readOnly placeholder="e.g., 12345" style={styles.inputReadOnly} />
+            </div>
+
+            <div style={styles.field}>
+              <div style={styles.labelRow}>
+                <span style={styles.label}>
+                  Serial Number<span style={styles.required}>*</span>
+                </span>
+                <span style={styles.helper}>{isLocked ? "Locked" : "Editable until Confirm"}</span>
+              </div>
+              <input
+                value={serialNo}
+                onChange={(e) => setSerialNo(e.target.value)}
+                placeholder="e.g., SER-008"
+                style={{ ...styles.input, ...(isLocked ? styles.disabled : {}) }}
+                disabled={isLocked}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <div style={styles.labelRow}>
+                <span style={styles.label}>Product Name</span>
+              </div>
+              <input
+                value={productName}
+                onChange={(e) => setProductName(e.target.value)}
+                placeholder="e.g., iPhone 15 Pro Max"
+                style={{ ...styles.input, ...(isLocked ? styles.disabled : {}) }}
+                disabled={isLocked}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <div style={styles.labelRow}>
+                <span style={styles.label}>Batch Number</span>
+              </div>
+              <input
+                value={batchNo}
+                onChange={(e) => setBatchNo(e.target.value)}
+                placeholder="e.g., BATCH-2024-A1"
+                style={{ ...styles.input, ...(isLocked ? styles.disabled : {}) }}
+                disabled={isLocked}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <div style={styles.labelRow}>
+                <span style={styles.label}>Category</span>
+              </div>
+              <input
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="e.g., Electronics"
+                style={{ ...styles.input, ...(isLocked ? styles.disabled : {}) }}
+                disabled={isLocked}
+              />
+            </div>
+
+            <div style={styles.field}>
+              <div style={styles.labelRow}>
+                <span style={styles.label}>Manufacture Date</span>
+              </div>
+              <input
+                type="date"
+                value={manufactureDate}
+                onChange={(e) => setManufactureDate(e.target.value)}
+                style={{ ...styles.input, ...(isLocked ? styles.disabled : {}) }}
+                disabled={isLocked}
+              />
+            </div>
+
+            <div style={{ ...styles.field, gridColumn: "1 / -1" }}>
+              <div style={styles.labelRow}>
+                <span style={styles.label}>Product Description</span>
+              </div>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Detailed description of the product..."
+                style={{ ...styles.textarea, ...(isLocked ? styles.disabled : {}) }}
+                disabled={isLocked}
+              />
+            </div>
+
+            {(txSig || productPdaStr || metadataUri) && (
+              <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {txSig && (
+                  <div style={styles.field}>
+                    <span style={styles.label}>Tx Signature</span>
+                    <div style={{ ...styles.inputReadOnly, ...styles.mono, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {txSig}
+                    </div>
+                  </div>
+                )}
+                {productPdaStr && (
+                  <div style={styles.field}>
+                    <span style={styles.label}>Product PDA</span>
+                    <div style={{ ...styles.inputReadOnly, ...styles.mono, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {productPdaStr}
+                    </div>
+                  </div>
+                )}
+                {metadataUri && (
+                  <div style={{ ...styles.field, gridColumn: "1 / -1" }}>
+                    <span style={styles.label}>Metadata URI</span>
+                    <div style={{ ...styles.inputReadOnly, ...styles.mono, overflow: "hidden", textOverflow: "ellipsis" }}>
+                      {metadataUri}
+                    </div>
+                    {metadataHashHex ? (
+                      <div style={{ ...styles.helper, marginTop: 4 }}>
+                        Hash: <span style={styles.mono}>{metadataHashHex}</span>
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div style={styles.actionsWrap}>
+            <button onClick={onSaveDraftClick} style={styles.btn} disabled={isLocked}>
+              Save Draft (DB)
+            </button>
+
+            <button onClick={deleteDraft} style={styles.btnDanger} disabled={isLocked || !productId}>
+              Delete Draft
+            </button>
+
+            <button
+              onClick={confirmDraft}
+              style={styles.btnEmphasis}
+              disabled={isLocked || !productId}
+              title={!productId ? "Save draft first" : isLocked ? "Already locked" : ""}
+            >
+              Confirm Draft (Lock)
+            </button>
+
+            <button
+              onClick={sendToBlockchain}
+              style={styles.btnPrimary}
+              disabled={draftStage !== "confirmed" || isFinalized || !productId}
+              title={draftStage !== "confirmed" ? "Confirm draft first" : isFinalized ? "Already finalized" : ""}
+            >
+              Send to Blockchain (Finalize & Lock)
+            </button>
+          </div>
+        </div>
       </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 12 }}>
-        <label>
-          Product ID (DB)
-          <input
-            type="text"
-            value={productId ?? ""}
-            readOnly
-            placeholder="(auto after Save Draft / or from ?productId=)"
-            style={{ width: "100%", padding: 8, background: "#f5f5f5" }}
-          />
-        </label>
-
-        <div />
-
-        <label style={{ gridColumn: "1 / -1" }}>
-          Serial No (editable until Confirm Draft)
-          <input
-            value={serialNo}
-            onChange={(e) => setSerialNo(e.target.value)}
-            placeholder="e.g. SER-008"
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
-        </label>
-
-        <label>
-          Product Name
-          <input
-            value={productName}
-            onChange={(e) => setProductName(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
-        </label>
-
-        <label>
-          Batch No
-          <input
-            value={batchNo}
-            onChange={(e) => setBatchNo(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
-        </label>
-
-        <label>
-          Category
-          <input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
-        </label>
-
-        <label>
-          Manufacture Date
-          <input
-            type="date"
-            value={manufactureDate}
-            onChange={(e) => setManufactureDate(e.target.value)}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
-        </label>
-
-        <label style={{ gridColumn: "1 / -1" }}>
-          Description
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={4}
-            style={{ width: "100%", padding: 8 }}
-            disabled={isLocked}
-          />
-        </label>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
-        <button onClick={onSaveDraftClick} style={{ padding: "10px 14px" }} disabled={isLocked}>
-          Save Draft (DB)
-        </button>
-
-        <button onClick={deleteDraft} style={{ padding: "10px 14px" }} disabled={isLocked || !productId}>
-          Delete Draft
-        </button>
-
-        <button onClick={confirmDraft} style={{ padding: "10px 14px", fontWeight: 700 }} disabled={isLocked || !productId}>
-          Confirm Draft (Lock)
-        </button>
-
-        <button
-          onClick={sendToBlockchain}
-          style={{ padding: "10px 14px", fontWeight: 800 }}
-          disabled={draftStage !== "confirmed" || isFinalized || !productId}
-          title={draftStage !== "confirmed" ? "Confirm draft first" : ""}
-        >
-          Send to Blockchain (Finalize & Lock)
-        </button>
-      </div>
-
-      <pre
-        style={{
-          marginTop: 16,
-          padding: 12,
-          background: "#111",
-          color: "#0f0",
-          borderRadius: 8,
-          whiteSpace: "pre-wrap",
-        }}
-      >
-        {status || "Status log will appear here..."}
-      </pre>
     </div>
   );
 }
