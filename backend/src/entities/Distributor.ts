@@ -181,38 +181,65 @@ class DistributorEntity {
     }
 
     static async getProductsByUserId(userId: number): Promise<any[]> {
-        const result = await pool.query(`
+        const result = await pool.query(
+            `
             SELECT
-                p.product_id,
-                p.serial_no,
-                p.model,
-                p.batch_no,
-                p.category,
-                p.manufacture_date,
-                p.description,
-                p.status,
-                p.product_pda,
-                p.tx_hash,
-                p.track,
-                p.stage,
-                p.registered_by,
-                o.ownership_id,
-                o.start_on AS owned_since,
-                CASE
-                    WHEN o.owner_id IS NOT NULL THEN 'owner'
-                    WHEN p.registered_by = $1 THEN 'manufacturer'
-                    ELSE NULL
-                END AS relationship
+            p.product_id,
+            p.serial_no,
+            p.model,
+            p.batch_no,
+            p.category,
+            p.manufacture_date,
+            p.description,
+            p.status,
+            p.stage,
+            p.product_pda,
+            p.tx_hash,
+            p.track,
+            p.registered_by,
+
+            -- latest ownership row (current owner if end_on is null)
+            o_latest.ownership_id,
+            o_latest.owner_id AS latest_owner_id,
+            o_latest.start_on AS latest_owned_since,
+            o_latest.end_on   AS latest_end_on,
+
+            CASE
+                WHEN o_latest.end_on IS NULL AND o_latest.owner_id = $1 THEN 'owner'
+                WHEN p.registered_by = $1 THEN 'manufacturer'
+                ELSE NULL
+            END AS relationship,
+
+            CASE
+                WHEN o_latest.end_on IS NULL AND o_latest.owner_id = $1 THEN o_latest.start_on
+                ELSE NULL
+            END AS owned_since
+
             FROM fyp_25_s4_20.product p
-            LEFT JOIN fyp_25_s4_20.ownership o
-                ON o.product_id = p.product_id
-                AND o.owner_id = $1
-                AND o.end_on IS NULL
-            WHERE o.owner_id = $1 OR p.registered_by = $1
-            ORDER BY p.product_id DESC
-        `, [userId]);
+
+            -- pick ONE latest ownership row per product
+            LEFT JOIN LATERAL (
+            SELECT o.*
+            FROM fyp_25_s4_20.ownership o
+            WHERE o.product_id = p.product_id
+            ORDER BY
+                (o.end_on IS NULL) DESC,   -- prefer active row
+                o.start_on DESC            -- newest first
+            LIMIT 1
+            ) o_latest ON TRUE
+
+            -- show products you registered OR products you currently own
+            WHERE p.registered_by = $1
+            OR (o_latest.end_on IS NULL AND o_latest.owner_id = $1)
+
+            ORDER BY p.product_id DESC;
+            `,
+            [userId]
+        );
+
         return result.rows;
-    }
+        }
+
 }
 
 export default DistributorEntity;

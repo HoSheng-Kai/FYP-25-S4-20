@@ -152,16 +152,19 @@ export default function ManufacturerProductsPage() {
     );
   };
 
-  // ✅ register eligible: stage === confirmed AND not yet on chain
+  // register eligible: stage === confirmed AND not yet on chain
   const isRegisterOnChainEligible = (p: ProductRow) => {
     if (isOnChainConfirmed(p)) return false;
+
     const stage = (p.stage || "").toLowerCase();
-    return stage === "confirmed";
+    if (stage !== "confirmed") return false;
+
+    return p.relationship === "manufacturer";
   };
 
   // ✅ transfer eligible: on-chain confirmed + still owned by you
   const isTransferEligible = (p: ProductRow) => {
-    return isOnChainConfirmed(p) && p.lifecycleStatus !== "transferred";
+    return isOnChainConfirmed(p) && p.relationship === "owner";
   };
 
   const safeDate = (iso: string) => {
@@ -273,9 +276,8 @@ export default function ManufacturerProductsPage() {
         const relationship = (p.relationship as any) ?? null;
 
         const lifecycleStatus: ProductRow["lifecycleStatus"] =
-          relationship === "owner" || relationship === "manufacturer"
-            ? "active"
-            : "transferred";
+          relationship === "owner" ? "active" : "transferred";
+
 
         return {
           productId: p.product_id,
@@ -626,9 +628,9 @@ export default function ManufacturerProductsPage() {
                     aria-label={`Select product ${p.productId}`}
                     title={
                       !locked
-                        ? "Cannot transfer: product not confirmed on-chain"
-                        : p.lifecycleStatus === "transferred"
-                        ? "Cannot transfer: you are no longer the current owner"
+                        ? "Cannot transfer: product not on-chain yet"
+                        : p.relationship !== "owner"
+                        ? "Cannot transfer: you are not the current owner"
                         : "Transfer eligible"
                     }
                   />
@@ -663,21 +665,24 @@ export default function ManufacturerProductsPage() {
                     {p.productStatus}
                   </span>
 
-                  {p.blockchainStatus && (
-                    <span
-                      style={{
-                        marginLeft: 10,
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: 12,
-                        background: locked ? "#e5e7eb" : "#fff7ed",
-                        color: locked ? "#374151" : "#9a3412",
-                      }}
-                      title="Blockchain status"
-                    >
-                      {p.blockchainStatus}
-                    </span>
-                  )}
+                  {/* Ownership */}
+                  <span
+                    style={{
+                      marginLeft: 10,
+                      padding: "4px 10px",
+                      borderRadius: "999px",
+                      fontSize: 12,
+                      background: p.lifecycleStatus === "active" ? "#dcfce7" : "#fee2e2",
+                      color: p.lifecycleStatus === "active" ? "#166534" : "#991b1b",
+                    }}
+                    title={
+                      p.lifecycleStatus === "active"
+                        ? "You currently own this product"
+                        : "You have transferred this product"
+                    }
+                  >
+                    {p.lifecycleStatus === "active" ? "owned" : "transferred"}
+                  </span>
 
                   {/* Optional: show stage pill to help you debug */}
                   {p.stage && (
@@ -695,22 +700,6 @@ export default function ManufacturerProductsPage() {
                       {p.stage}
                     </span>
                   )}
-
-                  {p.lifecycleStatus === "transferred" && (
-                    <span
-                      style={{
-                        marginLeft: 10,
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: 12,
-                        background: "#fee2e2",
-                        color: "#b91c1c",
-                      }}
-                      title="This product has been transferred away from you"
-                    >
-                      transferred
-                    </span>
-                  )}
                 </td>
 
                 <td style={td}>
@@ -722,7 +711,7 @@ export default function ManufacturerProductsPage() {
                     👁
                   </button>
 
-                  {/* ✅ Register on-chain button */}
+                  {/* Register on-chain button */}
                   <button
                     onClick={() =>
                       navigate(`/manufacturer/register?productId=${p.productId}`)
