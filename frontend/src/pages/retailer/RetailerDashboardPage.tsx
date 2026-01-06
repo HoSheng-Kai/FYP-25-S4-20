@@ -1,4 +1,4 @@
-import React from "react";
+import NotificationsPanel from "../../components/notifications/NotificationsPanel";
 
 export default function RetailerDashboardPage() {
   return (
@@ -11,24 +11,9 @@ export default function RetailerDashboardPage() {
         </p>
       </div>
 
-      {/* Main content card */}
-      <div
-        style={{
-          background: "white",
-          border: "1px solid #e5e7eb",
-          borderRadius: 16,
-          padding: 24,
-        }}
-      >
-        <h2 style={{ marginTop: 0, marginBottom: 12 }}>Quick Actions</h2>
+      {/* Notifications */}
+      <NotificationsPanel />
 
-        <ul style={{ paddingLeft: 18, color: "#374151", lineHeight: 1.8 }}>
-          <li>Scan product QR codes to verify authenticity</li>
-          <li>List verified products for sale to consumers</li>
-          <li>Manage your active marketplace listings</li>
-          <li>Update product availability (available / sold)</li>
-        </ul>
-      </div>
     </div>
   );
 }

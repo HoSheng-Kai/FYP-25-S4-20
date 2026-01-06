@@ -23,8 +23,6 @@ import TransactionHistory from "./components/products/TransactionHistory";
 // Manufacturer pages
 import ManufacturerProductsPage from "./pages/manufacturer/ManufacturerProductsPage";
 import RegisterOnChainPage from "./pages/blockchain/RegisterOnChainPage";
-// (optional legacy page kept for reference)
-import RegisterProductPage from "./pages/manufacturer/RegisterProductPage";
 
 // Marketplace
 import MarketplacePage from "./pages/marketplace/MarketplacePage";
@@ -56,11 +54,8 @@ export default function App() {
       {/* Manufacturer */}
       <Route path="/manufacturer" element={<ManufacturerLayout />}>
         <Route index element={<ManufacturerDashboardPage />} />
-        {/* New blockchain-first registration flow */}
         <Route path="register" element={<RegisterOnChainPage />} />
-        {/* Legacy DB registration page (optional) */}
         <Route path="scan-qr" element={<QrInput />} />
-        <Route path="register-legacy" element={<RegisterProductPage />} />
         <Route path="my-products" element={<ManufacturerProductsPage />} />
       </Route>
 
