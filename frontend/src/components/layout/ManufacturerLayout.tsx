@@ -1,9 +1,3 @@
-// src/components/layout/ManufacturerLayout.tsx
-// -----------------------------------------------------------------------------
-// Manufacturer layout with persistent sidebar.
-// Nested routes under /manufacturer/* render inside <Outlet />.
-// -----------------------------------------------------------------------------
-
 import React from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 
@@ -31,24 +25,33 @@ export default function ManufacturerLayout() {
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div
+      style={{
+        display: "flex",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
       <aside
         style={{
           width: 240,
+          flexShrink: 0,
           background: "#0d1b2a",
           color: "white",
           padding: 20,
-          position: "relative",
+          display: "flex",
+          flexDirection: "column",
+          height: "100vh",
+          boxSizing: "border-box",
         }}
       >
         <h2 style={{ marginBottom: 30 }}>Manufacturer</h2>
 
-        {/* RELATIVE links => /manufacturer/... */}
         <nav>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
             <li>
               <NavLink
-                to="" // /manufacturer
+                to=""
                 end
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
@@ -58,7 +61,7 @@ export default function ManufacturerLayout() {
 
             <li>
               <NavLink
-                to="scan-qr" // /manufacturer/scan-qr
+                to="scan-qr"
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
                 Scan QR
@@ -67,7 +70,7 @@ export default function ManufacturerLayout() {
 
             <li>
               <NavLink
-                to="register" // /manufacturer/register
+                to="register"
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
                 Register Product
@@ -76,7 +79,7 @@ export default function ManufacturerLayout() {
 
             <li>
               <NavLink
-                to="my-products" // /manufacturer/my-products
+                to="my-products"
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
                 My Products
@@ -85,7 +88,8 @@ export default function ManufacturerLayout() {
           </ul>
         </nav>
 
-        <div style={{ position: "absolute", bottom: 30, left: 20, right: 20 }}>
+        {/* pinned to bottom of the *viewport-height* sidebar */}
+        <div style={{ marginTop: "auto", paddingTop: 16 }}>
           <button
             onClick={handleLogout}
             style={{
@@ -104,7 +108,15 @@ export default function ManufacturerLayout() {
         </div>
       </aside>
 
-      <main style={{ flexGrow: 1, background: "#f5f7fb", padding: 40 }}>
+      <main
+        style={{
+          flexGrow: 1,
+          background: "#f5f7fb",
+          padding: 40,
+          overflowY: "auto",
+          boxSizing: "border-box",
+        }}
+      >
         <Outlet />
       </main>
     </div>

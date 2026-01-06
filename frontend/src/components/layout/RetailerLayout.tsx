@@ -1,4 +1,3 @@
-// src/components/layout/RetailerLayout.tsx
 import React from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -35,14 +34,24 @@ export default function RetailerLayout() {
   };
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div
+      style={{
+        display: "flex",
+        height: "100vh",
+        overflow: "hidden",
+      }}
+    >
       <aside
         style={{
           width: 240,
+          flexShrink: 0,
           background: "#0d1b2a",
           color: "white",
           padding: 20,
-          position: "relative",
+          height: "100vh",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
         <h2 style={{ marginBottom: 30 }}>Retailer</h2>
@@ -51,7 +60,7 @@ export default function RetailerLayout() {
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
             <li>
               <NavLink
-                to="" // /retailer
+                to=""
                 end
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
@@ -61,7 +70,7 @@ export default function RetailerLayout() {
 
             <li>
               <NavLink
-                to="scan-qr" // /retailer/scan-qr
+                to="scan-qr"
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
                 Scan QR
@@ -71,10 +80,7 @@ export default function RetailerLayout() {
             <li>
               <NavLink
                 to="products"
-                style={({ isActive }) => ({
-                  ...linkBaseStyle,
-                  ...(isActive ? activeStyle : {}),
-                })}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
                 My Products
               </NavLink>
@@ -82,7 +88,7 @@ export default function RetailerLayout() {
           </ul>
         </nav>
 
-        <div style={{ position: "absolute", bottom: 30, left: 20, right: 20 }}>
+        <div style={{ marginTop: "auto", paddingTop: 16 }}>
           <button
             onClick={handleLogout}
             style={{
@@ -101,7 +107,15 @@ export default function RetailerLayout() {
         </div>
       </aside>
 
-      <main style={{ flexGrow: 1, background: "#f5f7fb", padding: 40 }}>
+      <main
+        style={{
+          flexGrow: 1,
+          background: "#f5f7fb",
+          padding: 40,
+          overflowY: "auto",
+          boxSizing: "border-box",
+        }}
+      >
         <Outlet />
       </main>
     </div>
