@@ -9,7 +9,7 @@ import React from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const USERS_API_BASE_URL = "http://localhost:3000/api/user";
+const USERS_API_BASE_URL = "http://localhost:3000/api/users";
 
 const linkBaseStyle: React.CSSProperties = {
   color: "white",
@@ -89,6 +89,15 @@ export default function ConsumerLayout() {
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
                 My Listings
+              </NavLink>
+            </li>
+
+            <li>
+              <NavLink
+                to="create-listing" // /consumer/create-listing
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
+                + Create Listing
               </NavLink>
             </li>
           </ul>

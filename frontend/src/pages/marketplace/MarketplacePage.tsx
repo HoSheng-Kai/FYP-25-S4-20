@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import ListingCard from "../../components/marketplace/ListingCard";
 
@@ -35,6 +35,11 @@ const MarketplacePage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
+  const userId = useMemo(() => {
+    const raw = localStorage.getItem("userId");
+    return raw ? Number(raw) : NaN;
+  }, []);
+
   useEffect(() => {
     const load = async () => {
       setLoading(true);
@@ -53,7 +58,12 @@ const MarketplacePage: React.FC = () => {
           return;
         }
 
-        setItems(res.data.data);
+        // Filter out user's own listings
+        const filtered = Number.isFinite(userId)
+          ? res.data.data.filter((item) => Number(item.seller.userId) !== userId)
+          : res.data.data;
+
+        setItems(filtered);
       } catch (e) {
         console.error(e);
         setErr("Unable to load marketplace listings.");
@@ -64,7 +74,7 @@ const MarketplacePage: React.FC = () => {
     };
 
     void load();
-  }, []);
+  }, [userId]);
 
   return (
     <div style={{ padding: 24 }}>

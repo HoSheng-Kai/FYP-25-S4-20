@@ -1,6 +1,7 @@
 // frontend/src/pages/marketplace/MyListingsPage.tsx
 
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import MyListingCard from "../../components/marketplace/MyListingCard";
 
@@ -21,6 +22,7 @@ export type MyListing = {
 };
 
 export default function MyListingsPage() {
+  const navigate = useNavigate();
   const userId = useMemo(() => {
     const raw = localStorage.getItem("userId");
     return raw ? Number(raw) : NaN;
@@ -179,10 +181,36 @@ export default function MyListingsPage() {
 
   return (
     <div style={{ padding: 24 }}>
-      <h1 style={{ margin: 0, fontSize: 24 }}>My Listings</h1>
-      <p style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
-        Manage listings that you created.
-      </p>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          marginBottom: 16,
+        }}
+      >
+        <div>
+          <h1 style={{ margin: 0, fontSize: 24 }}>My Listings</h1>
+          <p style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
+            Manage listings that you created.
+          </p>
+        </div>
+        <button
+          onClick={() => navigate("/consumer/create-listing")}
+          style={{
+            background: "#0066cc",
+            color: "white",
+            border: "none",
+            padding: "10px 20px",
+            borderRadius: 8,
+            cursor: "pointer",
+            fontSize: 15,
+            fontWeight: 600,
+          }}
+        >
+          + Create Listing
+        </button>
+      </div>
 
       {loading && <p style={{ color: "#6b7280" }}>Loading…</p>}
       {err && <p style={{ color: "#b91c1c" }}>{err}</p>}

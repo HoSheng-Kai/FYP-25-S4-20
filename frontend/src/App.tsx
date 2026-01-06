@@ -28,6 +28,7 @@ import RegisterOnChainPage from "./pages/blockchain/RegisterOnChainPage";
 import MarketplacePage from "./pages/marketplace/MarketplacePage";
 import MyListingsPage from "./pages/marketplace/MyListingsPage";
 import EditListingPage from "./pages/marketplace/EditListingPage";
+import CreateListingPage from "./pages/marketplace/CreateListingPage";
 
 // Distributor
 import DistributorProductsPage from "./pages/distributor/DistributorProductsPage";
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="scan-qr" element={<QrInput />} />
         <Route path="marketplace" element={<MarketplacePage />} />
         <Route path="my-listings" element={<MyListingsPage />} />
+        <Route path="create-listing" element={<CreateListingPage />} />
         <Route path="my-listings/:listingId/edit" element={<EditListingPage />} />
       </Route>
 

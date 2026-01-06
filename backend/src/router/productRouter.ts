@@ -64,6 +64,12 @@ router.put('/:productId', productController.updateProduct.bind(productController
 // Marketplace Page (Buyer View) – available products for sale
 router.get('/marketplace/listings', productController.getMarketplaceListings.bind(productController));
 
+// Get products owned by user (for creating listings)
+router.get('/owned', productController.getOwnedProducts.bind(productController));
+
+// Get user's own listings
+router.get('/my-listings', productController.getMyListings.bind(productController));
+
 // Create listing (sell product)
 router.post("/listings", productController.createListing.bind(productController));
 

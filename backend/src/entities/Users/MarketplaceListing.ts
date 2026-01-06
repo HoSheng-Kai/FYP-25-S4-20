@@ -54,10 +54,7 @@ export class MarketplaceListing {
 
       WHERE
         pl.status = 'available'
-        AND p.track = TRUE
         AND p.status = 'verified'
-        AND p.tx_hash IS NOT NULL
-        AND p.tx_hash <> ''
 
       ORDER BY pl.created_on DESC;
       `

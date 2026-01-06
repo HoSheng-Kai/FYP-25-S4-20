@@ -1379,6 +1379,158 @@ class ProductController {
       });
     }
   }
+
+  // GET /api/products/owned?userId=8
+  // Get products owned by a specific user (for creating listings)
+  async getOwnedProducts(req: Request, res: Response): Promise<void> {
+    try {
+      const userIdParam = req.query.userId as string | undefined;
+      
+      if (!userIdParam) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'userId' query parameter"
+        });
+        return;
+      }
+
+      const userId = Number(userIdParam);
+      if (Number.isNaN(userId) || userId <= 0) {
+        res.status(400).json({
+          success: false,
+          error: "userId must be a positive number"
+        });
+        return;
+      }
+
+      const client = await pool.connect();
+      try {
+        // Get products owned by this user that don't have active listings
+        const result = await client.query(
+          `
+          SELECT 
+            p.product_id,
+            p.serial_no,
+            p.model,
+            p.batch_no,
+            p.category,
+            p.status,
+            p.registered_on,
+            COALESCE(
+              (
+                SELECT pl.status::text
+                FROM fyp_25_s4_20.product_listing pl
+                WHERE pl.product_id = p.product_id
+                ORDER BY pl.created_on DESC
+                LIMIT 1
+              ),
+              'none'
+            ) AS listing_status
+          FROM fyp_25_s4_20.product p
+          JOIN fyp_25_s4_20.ownership o
+            ON p.product_id = o.product_id
+          WHERE o.owner_id = $1
+            AND o.end_on IS NULL
+          ORDER BY p.registered_on DESC;
+          `,
+          [userId]
+        );
+
+        res.json({
+          success: true,
+          data: result.rows.map(row => ({
+            productId: row.product_id,
+            serialNo: row.serial_no,
+            model: row.model,
+            batchNo: row.batch_no,
+            category: row.category,
+            status: row.status,
+            registeredOn: row.registered_on,
+            listingStatus: row.listing_status,
+            canCreateListing: row.listing_status === 'none' || row.listing_status === 'sold'
+          }))
+        });
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch owned products",
+        details: err instanceof Error ? err.message : String(err)
+      });
+    }
+  }
+
+  // GET /api/products/my-listings?userId=8
+  // Get user's own listings
+  async getMyListings(req: Request, res: Response): Promise<void> {
+    try {
+      const userIdParam = req.query.userId as string | undefined;
+      
+      if (!userIdParam) {
+        res.status(400).json({
+          success: false,
+          error: "Missing 'userId' query parameter"
+        });
+        return;
+      }
+
+      const userId = Number(userIdParam);
+      if (Number.isNaN(userId) || userId <= 0) {
+        res.status(400).json({
+          success: false,
+          error: "userId must be a positive number"
+        });
+        return;
+      }
+
+      const client = await pool.connect();
+      try {
+        const result = await client.query(
+          `
+          SELECT 
+            pl.listing_id,
+            pl.product_id,
+            p.serial_no,
+            p.model,
+            pl.price,
+            pl.currency,
+            pl.status,
+            pl.created_on
+          FROM fyp_25_s4_20.product_listing pl
+          JOIN fyp_25_s4_20.product p
+            ON pl.product_id = p.product_id
+          WHERE pl.seller_id = $1
+          ORDER BY pl.created_on DESC;
+          `,
+          [userId]
+        );
+
+        res.json({
+          success: true,
+          data: result.rows.map(row => ({
+            listing_id: row.listing_id,
+            product_id: row.product_id,
+            serial_no: row.serial_no,
+            model: row.model,
+            price: row.price,
+            currency: row.currency,
+            status: row.status,
+            created_on: row.created_on
+          }))
+        });
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch your listings",
+        details: err instanceof Error ? err.message : String(err)
+      });
+    }
+  }
 }
 
 export default new ProductController();
