@@ -51,7 +51,7 @@ VALUES
 
   ('phantom_wallet_1','phantom_password','phantom@mail1.com','manufacturer',
     '5X6x3cV94w94qjYR62UXLTAVA63Yt2V7dFY3RX41u4hWT1WAPgfh7WXv79ujJw5q9RBT4J7otvmq1PZ6xJHN2kVH',
-    '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE);
+    '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE),
 
 --      ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
 --    '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
@@ -59,7 +59,7 @@ VALUES
    
   ('adidas_manufacturer','adidas123','adidas@manufacturer.com','manufacturer',
    '2aW6cVrGAGsTv9UXFMpcDRhb9iiPcfxgR1jHoBcYKKTFoFcZYjazQSsQtQEfHhar3MukdKz7jUaWCNVKQaYbgKbp',
-   'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc', FALSE, FALSE),
+   'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc', TRUE, FALSE),
 
   ('global_distributor','global123','global@distributor.com','distributor',
    '66X4Fdd7XwpbBrYSRYda3dpQsmaWhcbV9qTu9aD12fcdKa7zkHs5nrzHebWspuzBgDMGL75Rwu4QBqieULwAtvvb',
@@ -88,11 +88,7 @@ VALUES
 
   ('mike_consumer','mike123','mike@consumer.com','consumer',
    '4NcvkwnkyFBN79bJ643dBSJQ3oqTrpQ98hHqbn1RGoKoFVmdCcqdf1pKnTTApYdf5QmzohQ9phAwaf4RztzfBq25',
-   '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid', TRUE, FALSE),
-   
-  ('phantom_wallet_1','phantom_password','phantom@mail1.com','consumer',
-   '5X6x3cV94w94qjYR62UXLTAVA63Yt2V7dFY3RX41u4hWT1WAPgfh7WXv79ujJw5q9RBT4J7otvmq1PZ6xJHN2kVH',
-   '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE);   
+   '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid', TRUE, FALSE);
 
 
 -- ===========================
