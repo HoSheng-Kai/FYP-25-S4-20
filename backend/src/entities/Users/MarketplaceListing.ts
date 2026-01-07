@@ -54,7 +54,7 @@ export class MarketplaceListing {
 
       WHERE
         pl.status = 'available'
-        AND p.status = 'verified'
+        AND p.status != 'suspicious'
 
       ORDER BY pl.created_on DESC;
       `
