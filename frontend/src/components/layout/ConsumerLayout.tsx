@@ -76,6 +76,15 @@ export default function ConsumerLayout() {
 
             <li>
               <NavLink
+                to="my-products" // /consumer/my-products
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
+                My Products
+              </NavLink>
+            </li>
+
+            <li>
+              <NavLink
                 to="marketplace" // /consumer/marketplace
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >

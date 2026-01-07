@@ -20,6 +20,9 @@ import ConsumerDashboardPage from "./pages/consumer/ConsumerDashboardPage";
 import QrInput from "./components/products/QrInput";
 import TransactionHistory from "./components/products/TransactionHistory";
 
+// Consumer pages
+import MyProductsPage from "./pages/consumer/MyProductsPage";
+
 // Manufacturer pages
 import ManufacturerProductsPage from "./pages/manufacturer/ManufacturerProductsPage";
 import RegisterOnChainPage from "./pages/blockchain/RegisterOnChainPage";
@@ -78,6 +81,7 @@ export default function App() {
       <Route path="/consumer" element={<ConsumerLayout />}>
         <Route index element={<ConsumerDashboardPage />} />
         <Route path="scan-qr" element={<QrInput />} />
+        <Route path="my-products" element={<MyProductsPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
         <Route path="my-listings" element={<MyListingsPage />} />
         <Route path="create-listing" element={<CreateListingPage />} />
