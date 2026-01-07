@@ -76,6 +76,28 @@ const MarketplacePage: React.FC = () => {
     void load();
   }, [userId]);
 
+  const handlePurchaseSuccess = () => {
+    // Reload the marketplace to remove purchased items
+    const load = async () => {
+      try {
+        const res = await axios.get<{
+          success: boolean;
+          data?: MarketplaceListing[];
+        }>(`${API}/marketplace/listings`);
+
+        if (res.data.success && res.data.data) {
+          const filtered = Number.isFinite(userId)
+            ? res.data.data.filter((item) => Number(item.seller.userId) !== userId)
+            : res.data.data;
+          setItems(filtered);
+        }
+      } catch (e) {
+        console.error("Failed to refresh marketplace:", e);
+      }
+    };
+    void load();
+  };
+
   return (
     <div style={{ padding: 24 }}>
       <h1 style={{ margin: 0, fontSize: 24 }}>Consumer Marketplace</h1>
@@ -95,7 +117,7 @@ const MarketplacePage: React.FC = () => {
         }}
       >
         {items.map((x) => (
-          <ListingCard key={x.listingId} listing={x} />
+          <ListingCard key={x.listingId} listing={x} onPurchaseSuccess={handlePurchaseSuccess} />
         ))}
       </div>
 

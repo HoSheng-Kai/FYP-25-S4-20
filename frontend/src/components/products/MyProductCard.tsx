@@ -53,8 +53,8 @@ export default function MyProductCard({ product }: MyProductCardProps) {
   };
 
   const handleViewDetails = () => {
-    // Navigate to a product details page (could be extended later)
-    navigate("/consumer/my-products/" + product.productId);
+    // Navigate to product details page
+    navigate(`/consumer/product/${product.productId}`);
   };
 
   return (

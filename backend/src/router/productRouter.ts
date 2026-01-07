@@ -88,6 +88,14 @@ router.delete('/listings/:listingId',productController.deleteListing.bind(produc
 // Toggle availability (My Listings switch/button)
 router.patch('/listings/:listingId/availability',productController.updateListingAvailability.bind(productController));
 
+// Purchase listing (buyer buys product)
+// POST /api/products/listings/:listingId/purchase
+router.post('/listings/:listingId/purchase', productController.purchaseListing.bind(productController));
+
+// Get product details with ownership history
+// GET /api/products/:productId/details
+router.get('/:productId/details', productController.getProductDetails.bind(productController));
+
 
 
 export default router;

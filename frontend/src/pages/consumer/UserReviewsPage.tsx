@@ -6,7 +6,6 @@ import ReviewCard from "../../components/reviews/ReviewCard";
 import CreateReviewModal from "../../components/reviews/CreateReviewModal";
 
 const API = "http://localhost:3000/api/reviews";
-const USERS_API = "http://localhost:3000/api/users";
 
 export type Review = {
   review_id: number;

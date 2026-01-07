@@ -1,16 +1,61 @@
-import React from "react";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { MarketplaceListing } from "../../pages/marketplace/MarketplacePage";
+import axios from "axios";
 
 type Props = {
   listing: MarketplaceListing;
+  onPurchaseSuccess?: () => void;
 };
 
-const ListingCard: React.FC<Props> = ({ listing }) => {
+const API = "http://localhost:3000/api/products";
+
+const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
+  const navigate = useNavigate();
+  const [purchasing, setPurchasing] = useState(false);
+
   const priceText =
     listing.price && listing.currency ? `${listing.price} ${listing.currency}` : "—";
 
   const statusBadge =
     listing.productStatus === "verified" ? "Verified" : listing.productStatus;
+
+  const handlePurchase = async () => {
+    const userId = localStorage.getItem("userId");
+    if (!userId) {
+      alert("Please log in to purchase");
+      return;
+    }
+
+    const confirm = window.confirm(
+      `Purchase "${listing.productName || 'this product'}" for ${priceText}?`
+    );
+    
+    if (!confirm) return;
+
+    setPurchasing(true);
+    try {
+      const res = await axios.post(
+        `${API}/listings/${listing.listingId}/purchase`,
+        { buyerId: Number(userId) }
+      );
+
+      if (res.data.success) {
+        alert(`Purchase successful! You now own ${listing.productName || 'this product'}`);
+        if (onPurchaseSuccess) {
+          onPurchaseSuccess();
+        }
+      }
+    } catch (e: any) {
+      const errorMsg =
+        e?.response?.data?.error ||
+        e?.response?.data?.details ||
+        "Failed to complete purchase";
+      alert(errorMsg);
+    } finally {
+      setPurchasing(false);
+    }
+  };
 
   return (
     <div
@@ -85,18 +130,56 @@ const ListingCard: React.FC<Props> = ({ listing }) => {
 
         <button
           style={{
-            background: "#111827",
+            background: purchasing ? "#6c757d" : "#28a745",
             color: "white",
             border: "none",
             borderRadius: 10,
-            padding: "9px 12px",
+            padding: "9px 16px",
+            cursor: purchasing ? "not-allowed" : "pointer",
+            fontSize: 13,
+            fontWeight: 600,
+            opacity: purchasing ? 0.6 : 1,
+            marginRight: 8,
+          }}
+          onClick={handlePurchase}
+          disabled={purchasing}
+          onMouseEnter={(e) => {
+            if (!purchasing) {
+              (e.currentTarget as HTMLButtonElement).style.background = "#218838";
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!purchasing) {
+              (e.currentTarget as HTMLButtonElement).style.background = "#28a745";
+            }
+          }}
+        >
+          {purchasing ? "Processing..." : "🛒 Buy Now"}
+        </button>
+
+        <button
+          style={{
+            background: "#007bff",
+            color: "white",
+            border: "none",
+            borderRadius: 10,
+            padding: "9px 16px",
             cursor: "pointer",
             fontSize: 13,
             fontWeight: 600,
           }}
-          onClick={() => alert("Hook up view details / buy flow later")}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/consumer/product/${listing.productId}`);
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#0056b3";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#007bff";
+          }}
         >
-          View Details
+          📋 Details
         </button>
       </div>
     </div>

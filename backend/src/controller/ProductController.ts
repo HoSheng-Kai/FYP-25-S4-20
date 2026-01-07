@@ -1562,6 +1562,281 @@ class ProductController {
       });
     }
   }
+
+  // Purchase listing (buyer buys product and ownership transfers)
+  async purchaseListing(req: Request, res: Response): Promise<void> {
+    try {
+      const listingId = Number(req.params.listingId);
+      const { buyerId } = req.body;
+
+      if (!listingId || Number.isNaN(listingId)) {
+        res.status(400).json({
+          success: false,
+          error: "Invalid listing ID"
+        });
+        return;
+      }
+
+      if (!buyerId || Number.isNaN(Number(buyerId))) {
+        res.status(400).json({
+          success: false,
+          error: "Missing or invalid buyerId"
+        });
+        return;
+      }
+
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // 1. Get listing and verify it's available
+        const listingResult = await client.query(
+          `
+          SELECT 
+            pl.listing_id,
+            pl.product_id,
+            pl.seller_id,
+            pl.price,
+            pl.currency,
+            pl.status,
+            p.serial_no,
+            p.model
+          FROM fyp_25_s4_20.product_listing pl
+          JOIN fyp_25_s4_20.product p ON pl.product_id = p.product_id
+          WHERE pl.listing_id = $1
+          `,
+          [listingId]
+        );
+
+        if (listingResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          res.status(404).json({
+            success: false,
+            error: "Listing not found"
+          });
+          return;
+        }
+
+        const listing = listingResult.rows[0];
+
+        // Verify listing is available
+        if (listing.status !== 'available') {
+          await client.query('ROLLBACK');
+          res.status(400).json({
+            success: false,
+            error: `Listing is not available (current status: ${listing.status})`
+          });
+          return;
+        }
+
+        // Verify buyer is not the seller
+        if (Number(listing.seller_id) === Number(buyerId)) {
+          await client.query('ROLLBACK');
+          res.status(400).json({
+            success: false,
+            error: "You cannot buy your own listing"
+          });
+          return;
+        }
+
+        // 2. Update listing status to sold
+        await client.query(
+          `UPDATE fyp_25_s4_20.product_listing 
+           SET status = 'sold' 
+           WHERE listing_id = $1`,
+          [listingId]
+        );
+
+        // 3. Get buyer and seller user info
+        const usersResult = await client.query(
+          `SELECT user_id, username, public_key 
+           FROM fyp_25_s4_20.users 
+           WHERE user_id IN ($1, $2)`,
+          [buyerId, listing.seller_id]
+        );
+
+        const buyer = usersResult.rows.find((u: any) => u.user_id === Number(buyerId));
+        const seller = usersResult.rows.find((u: any) => u.user_id === Number(listing.seller_id));
+
+        if (!buyer || !seller) {
+          await client.query('ROLLBACK');
+          res.status(404).json({
+            success: false,
+            error: "Buyer or seller not found"
+          });
+          return;
+        }
+
+        // 4. Close current ownership (seller)
+        await client.query(
+          `UPDATE fyp_25_s4_20.ownership 
+           SET end_on = NOW() 
+           WHERE product_id = $1 AND owner_id = $2 AND end_on IS NULL`,
+          [listing.product_id, listing.seller_id]
+        );
+
+        // 5. Create new ownership record (buyer)
+        await client.query(
+          `INSERT INTO fyp_25_s4_20.ownership 
+           (product_id, owner_id, owner_public_key, start_on, tx_hash) 
+           VALUES ($1, $2, $3, NOW(), NULL)`,
+          [listing.product_id, buyerId, buyer.public_key]
+        );
+
+        // 6. Create notification for seller
+        await Notification.create({
+          userId: listing.seller_id,
+          title: 'Product Sold!',
+          message: `${buyer.username} purchased your "${listing.model || 'product'}" for ${listing.currency} ${listing.price}`,
+          productId: listing.product_id,
+          isRead: false,
+        });
+
+        // 7. Create notification for buyer
+        await Notification.create({
+          userId: buyerId,
+          title: 'Purchase Successful!',
+          message: `You purchased "${listing.model || 'product'}" from ${seller.username} for ${listing.currency} ${listing.price}`,
+          productId: listing.product_id,
+          isRead: false,
+        });
+
+        await client.query('COMMIT');
+
+        res.status(200).json({
+          success: true,
+          message: "Purchase successful! Ownership transferred.",
+          data: {
+            listingId: listing.listing_id,
+            productId: listing.product_id,
+            serialNo: listing.serial_no,
+            model: listing.model,
+            price: listing.price,
+            currency: listing.currency,
+            newOwner: buyer.username,
+            previousOwner: seller.username
+          }
+        });
+
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to complete purchase",
+        details: err instanceof Error ? err.message : String(err)
+      });
+    }
+  }
+
+  async getProductDetails(req: Request, res: Response): Promise<void> {
+    try {
+      const productId = Number(req.params.productId);
+
+      if (!productId || Number.isNaN(productId)) {
+        res.status(400).json({
+          success: false,
+          error: "Invalid product ID"
+        });
+        return;
+      }
+
+      // Get product details
+      const productResult = await pool.query(
+        `
+        SELECT 
+          p.product_id,
+          p.serial_no,
+          p.model,
+          p.batch_no,
+          p.category,
+          p.manufacture_date,
+          p.description,
+          p.status,
+          p.qr_code,
+          p.product_pda,
+          p.tx_hash,
+          p.registered_on,
+          p.track,
+          u.username as manufacturer_name,
+          u.user_id as manufacturer_id
+        FROM fyp_25_s4_20.product p
+        LEFT JOIN fyp_25_s4_20.users u ON p.registered_by = u.user_id
+        WHERE p.product_id = $1
+        `,
+        [productId]
+      );
+
+      if (productResult.rows.length === 0) {
+        res.status(404).json({
+          success: false,
+          error: "Product not found"
+        });
+        return;
+      }
+
+      const product = productResult.rows[0];
+
+      // Get ownership history
+      const ownershipResult = await pool.query(
+        `
+        SELECT 
+          o.ownership_id,
+          o.owner_id,
+          o.start_on,
+          o.end_on,
+          o.tx_hash,
+          u.username as owner_name,
+          u.public_key as owner_public_key
+        FROM fyp_25_s4_20.ownership o
+        JOIN fyp_25_s4_20.users u ON o.owner_id = u.user_id
+        WHERE o.product_id = $1
+        ORDER BY o.start_on DESC
+        `,
+        [productId]
+      );
+
+      // Get current listing if exists
+      const listingResult = await pool.query(
+        `
+        SELECT 
+          listing_id,
+          price,
+          currency,
+          status,
+          created_on
+        FROM fyp_25_s4_20.product_listing
+        WHERE product_id = $1 AND status = 'available'
+        ORDER BY created_on DESC
+        LIMIT 1
+        `,
+        [productId]
+      );
+
+      res.status(200).json({
+        success: true,
+        data: {
+          product: {
+            ...product,
+            qr_code: product.qr_code ? product.qr_code.toString('base64') : null
+          },
+          ownershipHistory: ownershipResult.rows,
+          currentListing: listingResult.rows[0] || null
+        }
+      });
+
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch product details",
+        details: err instanceof Error ? err.message : String(err)
+      });
+    }
+  }
 }
 
 export default new ProductController();

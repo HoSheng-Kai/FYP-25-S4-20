@@ -169,7 +169,7 @@ CREATE TABLE IF NOT EXISTS ownership (
   product_id INT NOT NULL REFERENCES product(product_id) ON DELETE CASCADE,
   start_on TIMESTAMP NOT NULL,
   end_on TIMESTAMP NULL,
-  tx_hash TEXT NOT NULL REFERENCES blockchain_node(tx_hash) ON DELETE CASCADE
+  tx_hash TEXT NULL REFERENCES blockchain_node(tx_hash) ON DELETE CASCADE
 );
 
 CREATE UNIQUE INDEX IF NOT EXISTS unique_active_ownership

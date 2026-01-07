@@ -23,6 +23,7 @@ import TransactionHistory from "./components/products/TransactionHistory";
 // Consumer pages
 import MyProductsPage from "./pages/consumer/MyProductsPage";
 import UserReviewsPage from "./pages/consumer/UserReviewsPage";
+import ProductDetailsPage from "./pages/consumer/ProductDetailsPage";
 
 // Manufacturer pages
 import ManufacturerProductsPage from "./pages/manufacturer/ManufacturerProductsPage";
@@ -83,6 +84,7 @@ export default function App() {
         <Route index element={<ConsumerDashboardPage />} />
         <Route path="scan-qr" element={<QrInput />} />
         <Route path="my-products" element={<MyProductsPage />} />
+        <Route path="product/:productId" element={<ProductDetailsPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
         <Route path="my-listings" element={<MyListingsPage />} />
         <Route path="create-listing" element={<CreateListingPage />} />
