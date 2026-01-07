@@ -21,6 +21,7 @@ export type Review = {
 export type UserOption = {
   user_id: number;
   username: string;
+  role?: string;
 };
 
 export default function UserReviewsPage() {
@@ -42,23 +43,38 @@ export default function UserReviewsPage() {
   useEffect(() => {
     const loadUsers = async () => {
       try {
-        // Get all consumers - using admin endpoint with query params
-        const res = await axios.get(`http://localhost:3000/api/admins/view-accounts`, {
-          params: { role_id: "consumer" },
-        });
+        // Get both consumers and retailers
+        const [consumersRes, retailersRes] = await Promise.all([
+          axios.get(`http://localhost:3000/api/admins/view-accounts`, {
+            params: { role_id: "consumer" },
+          }),
+          axios.get(`http://localhost:3000/api/admins/view-accounts`, {
+            params: { role_id: "retailer" },
+          })
+        ]);
         
-        if (res.data.success && res.data.data) {
-          // Filter out current user
-          const filteredUsers = res.data.data.filter(
-            (u: any) => u.user_id !== currentUserId
-          );
-          setUsers(
-            filteredUsers.map((u: any) => ({
-              user_id: u.user_id,
-              username: u.username,
-            }))
-          );
+        const allUsers: any[] = [];
+        
+        if (consumersRes.data.success && consumersRes.data.data) {
+          allUsers.push(...consumersRes.data.data);
         }
+        
+        if (retailersRes.data.success && retailersRes.data.data) {
+          allUsers.push(...retailersRes.data.data);
+        }
+        
+        // Filter out current user
+        const filteredUsers = allUsers.filter(
+          (u: any) => u.user_id !== currentUserId
+        );
+        
+        setUsers(
+          filteredUsers.map((u: any) => ({
+            user_id: u.user_id,
+            username: u.username,
+            role: u.role_id || 'consumer'
+          }))
+        );
       } catch (e: any) {
         console.error("Failed to load users:", e);
       }
@@ -254,7 +270,7 @@ export default function UserReviewsPage() {
                 <option value="">-- Choose a user --</option>
                 {users.map((user) => (
                   <option key={user.user_id} value={user.user_id}>
-                    {user.username}
+                    {user.username} {user.role && `(${user.role})`}
                   </option>
                 ))}
               </select>
