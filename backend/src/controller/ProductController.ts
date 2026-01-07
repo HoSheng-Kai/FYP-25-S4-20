@@ -10,6 +10,7 @@ import { ManufacturerProductListing } from '../entities/Manufacturer/Manufacture
 import { MarketplaceListing } from '../entities/Users/MarketplaceListing';
 import { ConsumerProductListing, ListingStatus } from '../entities/Users/ConsumerProductListing';
 import { QrCodeService } from '../service/QrCodeService';
+import { Notification } from '../entities/Notification';
 
 import pool from '../schema/database';
 import fs from "fs";
@@ -983,6 +984,36 @@ class ProductController {
           price: priceNum,
           currency,
           status,
+        });
+
+        // Get the seller's username
+        const sellerQuery = await pool.query(
+          `SELECT username FROM fyp_25_s4_20.users WHERE user_id = $1`,
+          [userIdNum]
+        );
+        const sellerUsername = sellerQuery.rows[0]?.username || 'A user';
+
+        // Get all other consumers (excluding the seller)
+        const consumersQuery = await pool.query(
+          `SELECT user_id FROM fyp_25_s4_20.users 
+           WHERE role_id = 'consumer' AND user_id != $1`,
+          [userIdNum]
+        );
+
+        // Create notifications for all other consumers
+        const notificationPromises = consumersQuery.rows.map((row) =>
+          Notification.create({
+            userId: row.user_id,
+            title: 'New Product Listed!',
+            message: `${sellerUsername} listed "${created.model || 'a product'}" for ${currency} ${priceNum}`,
+            productId: created.product_id,
+            isRead: false,
+          })
+        );
+
+        // Execute all notification creations in parallel (don't wait for completion)
+        Promise.all(notificationPromises).catch((err) => {
+          console.error('Failed to create notifications:', err);
         });
 
         res.status(201).json({

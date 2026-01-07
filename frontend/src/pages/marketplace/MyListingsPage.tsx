@@ -100,13 +100,6 @@ export default function MyListingsPage() {
     );
     if (!ok) return;
 
-    // ✅ MOCK MODE: listingId 999 is UI-only
-    if (listingId === 999) {
-      setItems((prev) => prev.filter((x) => x.listing_id !== listingId));
-      alert("Mock listing deleted (UI only).");
-      return;
-    }
-
     try {
       setBusy(listingId, true);
 
@@ -148,12 +141,6 @@ export default function MyListingsPage() {
         x.listing_id === listingId ? { ...x, status: nextStatus } : x
       )
     );
-
-    // ✅ MOCK MODE: UI-only update
-    if (listingId === 999) {
-      alert(`Mock listing status updated to "${nextStatus}" (UI only).`);
-      return;
-    }
 
     try {
       setBusy(listingId, true);
@@ -231,37 +218,6 @@ export default function MyListingsPage() {
             product, it will appear here with controls to update availability or
             delete the listing.
           </p>
-
-          {/* UI test only (no backend). Lets you demo US-018/US-019 */}
-          <button
-            onClick={() =>
-              setItems([
-                {
-                  listing_id: 999,
-                  product_id: 123,
-                  serial_no: "TEST-123",
-                  model: "Mock Product",
-                  price: "199.99",
-                  currency: "SGD",
-                  status: "available",
-                  created_on: new Date().toISOString(),
-                },
-              ])
-            }
-            style={{
-              marginTop: 14,
-              background: "#111827",
-              color: "white",
-              border: "none",
-              borderRadius: 10,
-              padding: "10px 12px",
-              cursor: "pointer",
-              fontSize: 13,
-              fontWeight: 600,
-            }}
-          >
-            Add Mock Listing (Demo US-018/US-019)
-          </button>
         </div>
       )}
 
