@@ -109,6 +109,15 @@ export default function ConsumerLayout() {
                 + Create Listing
               </NavLink>
             </li>
+
+            <li>
+              <NavLink
+                to="reviews" // /consumer/reviews
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
+                ⭐ Reviews
+              </NavLink>
+            </li>
           </ul>
         </nav>
 

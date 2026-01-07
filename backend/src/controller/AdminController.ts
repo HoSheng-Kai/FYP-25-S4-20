@@ -28,14 +28,14 @@ class AdminController{
     async viewAccounts(req: Request, res: Response){
         try{
             let accounts = await AdminEntity.viewAccounts(
-                req.body.username,
-                req.body.role_id,
-                req.body.verified
+                req.query.username as string,
+                req.query.role_id as string,
+                req.query.verified ? req.query.verified === 'true' : null
             );
 
             res.json({
                 success: true,
-                accounts: accounts,
+                data: accounts,
             });
 
             }catch(error: any){

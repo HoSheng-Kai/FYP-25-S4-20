@@ -22,6 +22,7 @@ import TransactionHistory from "./components/products/TransactionHistory";
 
 // Consumer pages
 import MyProductsPage from "./pages/consumer/MyProductsPage";
+import UserReviewsPage from "./pages/consumer/UserReviewsPage";
 
 // Manufacturer pages
 import ManufacturerProductsPage from "./pages/manufacturer/ManufacturerProductsPage";
@@ -86,6 +87,7 @@ export default function App() {
         <Route path="my-listings" element={<MyListingsPage />} />
         <Route path="create-listing" element={<CreateListingPage />} />
         <Route path="my-listings/:listingId/edit" element={<EditListingPage />} />
+        <Route path="reviews" element={<UserReviewsPage />} />
       </Route>
 
       {/* Optional standalone */}
