@@ -25,6 +25,7 @@ const activeStyle: React.CSSProperties = {
 
 export default function ConsumerLayout() {
   const navigate = useNavigate();
+  const [showCreateListing, setShowCreateListing] = React.useState(false);
 
   const handleLogout = async () => {
     try {
@@ -93,21 +94,40 @@ export default function ConsumerLayout() {
             </li>
 
             <li>
-              <NavLink
-                to="my-listings" // /consumer/my-listings
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              <div
+                onMouseEnter={() => setShowCreateListing(true)}
+                onMouseLeave={() => setShowCreateListing(false)}
               >
-                My Listings
-              </NavLink>
-            </li>
-
-            <li>
-              <NavLink
-                to="create-listing" // /consumer/create-listing
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-              >
-                + Create Listing
-              </NavLink>
+                <NavLink
+                  to="my-listings" // /consumer/my-listings
+                  style={({ isActive }) => ({ 
+                    ...linkBaseStyle, 
+                    ...(isActive ? activeStyle : {}),
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
+                  })}
+                >
+                  <span>My Listings</span>
+                  <span style={{ fontSize: '12px', transition: 'transform 0.2s', transform: showCreateListing ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                    ▶
+                  </span>
+                </NavLink>
+                
+                {showCreateListing && (
+                  <NavLink
+                    to="create-listing" // /consumer/create-listing
+                    style={({ isActive }) => ({
+                      ...linkBaseStyle,
+                      paddingLeft: 24,
+                      fontSize: 14,
+                      ...(isActive ? activeStyle : {})
+                    })}
+                  >
+                    + Create Listing
+                  </NavLink>
+                )}
+              </div>
             </li>
 
             <li>
@@ -115,7 +135,7 @@ export default function ConsumerLayout() {
                 to="reviews" // /consumer/reviews
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
-                ⭐ Reviews
+                Reviews
               </NavLink>
             </li>
           </ul>
