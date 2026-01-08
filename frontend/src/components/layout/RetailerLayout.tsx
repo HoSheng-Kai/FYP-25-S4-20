@@ -85,6 +85,15 @@ export default function RetailerLayout() {
                 My Products
               </NavLink>
             </li>
+
+            <li>
+              <NavLink
+                to="reviews"
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
+                Reviews
+              </NavLink>
+            </li>
           </ul>
         </nav>
 

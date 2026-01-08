@@ -40,6 +40,7 @@ import DistributorProductsPage from "./pages/distributor/DistributorProductsPage
 
 // Retailer
 import RetailerProductsPage from "./pages/retailer/RetailerProductsPage";
+import RetailerReviewsPage from "./pages/retailer/RetailerReviewsPage";
 
 // Blockchain transfer flow
 import CreateTransferPage from "./pages/blockchain/CreateTransferPage";
@@ -77,6 +78,7 @@ export default function App() {
         <Route index element={<RetailerDashboardPage />} />
         <Route path="scan-qr" element={<QrInput />} />
         <Route path="products" element={<RetailerProductsPage />} />
+        <Route path="reviews" element={<RetailerReviewsPage />} />
       </Route>
 
       {/* Consumer + Marketplace */}
