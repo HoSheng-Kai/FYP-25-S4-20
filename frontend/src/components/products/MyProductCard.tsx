@@ -1,8 +1,9 @@
 // frontend/src/components/products/MyProductCard.tsx
 
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { OwnedProduct } from "../../pages/consumer/MyProductsPage";
+import QuickListingModal from "../marketplace/QuickListingModal";
 
 interface MyProductCardProps {
   product: OwnedProduct;
@@ -43,13 +44,14 @@ const getStatusBadgeStyle = (
 
 export default function MyProductCard({ product }: MyProductCardProps) {
   const navigate = useNavigate();
+  const [showModal, setShowModal] = useState(false);
   const statusStyle = getStatusBadgeStyle(product.listingStatus);
+
+  const userId = Number(localStorage.getItem("userId")) || NaN;
 
   const handleCreateListing = (e: React.MouseEvent) => {
     e.stopPropagation();
-    navigate("/consumer/create-listing", {
-      state: { productId: product.productId },
-    });
+    setShowModal(true);
   };
 
   const handleViewDetails = () => {
@@ -57,29 +59,36 @@ export default function MyProductCard({ product }: MyProductCardProps) {
     navigate(`/consumer/product/${product.productId}`);
   };
 
+  const handleModalSuccess = () => {
+    setShowModal(false);
+    // Optionally redirect or refresh
+    navigate("/consumer/my-listings");
+  };
+
   return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #e0e0e0",
-        borderRadius: 12,
-        overflow: "hidden",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-        transition: "all 0.3s ease",
-        cursor: "pointer",
-      }}
-      onClick={handleViewDetails}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow =
-          "0 8px 16px rgba(0,0,0,0.12)";
-        (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLDivElement).style.boxShadow =
-          "0 2px 8px rgba(0,0,0,0.08)";
-        (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
-      }}
-    >
+    <>
+      <div
+        style={{
+          background: "white",
+          border: "1px solid #e0e0e0",
+          borderRadius: 12,
+          overflow: "hidden",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+          transition: "all 0.3s ease",
+          cursor: "pointer",
+        }}
+        onClick={handleViewDetails}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLDivElement).style.boxShadow =
+            "0 8px 16px rgba(0,0,0,0.12)";
+          (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLDivElement).style.boxShadow =
+            "0 2px 8px rgba(0,0,0,0.08)";
+          (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
+        }}
+      >
       {/* Status Badge */}
       <div
         style={{
@@ -231,5 +240,16 @@ export default function MyProductCard({ product }: MyProductCardProps) {
         </div>
       </div>
     </div>
+
+      {/* Modal */}
+      {showModal && (
+        <QuickListingModal
+          product={product}
+          userId={userId}
+          onClose={() => setShowModal(false)}
+          onSuccess={handleModalSuccess}
+        />
+      )}
+    </>
   );
 }

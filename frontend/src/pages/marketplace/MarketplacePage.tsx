@@ -19,6 +19,7 @@ export type MarketplaceListing = {
   currency: string | null;
   listingStatus: string;
   listingCreatedOn: string;
+  notes: string | null;
 
   seller: {
     userId: number;

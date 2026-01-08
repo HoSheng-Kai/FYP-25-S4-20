@@ -31,6 +31,7 @@ export default function CreateListingPage() {
   const [selectedProductId, setSelectedProductId] = useState<number | null>(null);
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState<"SGD" | "USD" | "EUR">("SGD");
+  const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -99,6 +100,7 @@ export default function CreateListingPage() {
         price: priceNum,
         currency,
         status: "available",
+        notes: notes.trim() || null,
       });
 
       if (!res.data.success) {
@@ -246,6 +248,31 @@ export default function CreateListingPage() {
                     <option value="USD">USD</option>
                     <option value="EUR">EUR</option>
                   </select>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
+                    Notes (optional)
+                  </label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    placeholder="e.g. Item is in good condition, slight scratches on back"
+                    maxLength={500}
+                    style={{
+                      width: "100%",
+                      padding: 12,
+                      fontSize: 15,
+                      border: "1px solid #ddd",
+                      borderRadius: 8,
+                      fontFamily: "inherit",
+                      resize: "vertical",
+                      minHeight: 100,
+                    }}
+                  />
+                  <p style={{ margin: "8px 0 0 0", fontSize: 12, color: "#999" }}>
+                    {notes.length}/500 characters
+                  </p>
                 </div>
 
                 {submitError && (

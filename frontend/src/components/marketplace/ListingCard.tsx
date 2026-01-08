@@ -107,6 +107,19 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
         </div>
       </div>
 
+      {listing.notes && (
+        <div style={{ 
+          marginTop: 12, 
+          padding: 12, 
+          background: "#f9fafb", 
+          borderRadius: 8,
+          borderLeft: "3px solid #3b82f6"
+        }}>
+          <p style={{ margin: 0, fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 4 }}>Seller Notes:</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#374151" }}>{listing.notes}</p>
+        </div>
+      )}
+
       <div
         style={{
           marginTop: 12,
@@ -130,6 +143,33 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
 
         <button
           style={{
+            background: "#6c757d",
+            color: "white",
+            border: "none",
+            borderRadius: 10,
+            padding: "9px 16px",
+            cursor: "pointer",
+            fontSize: 13,
+            fontWeight: 600,
+            marginRight: 8,
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/consumer/product/${listing.productId}`);
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#545b62";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#6c757d";
+          }}
+          title="View product journey timeline"
+        >
+          🕒 Timeline
+        </button>
+
+        <button
+          style={{
             background: purchasing ? "#6c757d" : "#28a745",
             color: "white",
             border: "none",
@@ -139,7 +179,6 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
             fontSize: 13,
             fontWeight: 600,
             opacity: purchasing ? 0.6 : 1,
-            marginRight: 8,
           }}
           onClick={handlePurchase}
           disabled={purchasing}
@@ -155,31 +194,6 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
           }}
         >
           {purchasing ? "Processing..." : "🛒 Buy Now"}
-        </button>
-
-        <button
-          style={{
-            background: "#007bff",
-            color: "white",
-            border: "none",
-            borderRadius: 10,
-            padding: "9px 16px",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/consumer/product/${listing.productId}`);
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#0056b3";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#007bff";
-          }}
-        >
-          📋 Details
         </button>
       </div>
     </div>

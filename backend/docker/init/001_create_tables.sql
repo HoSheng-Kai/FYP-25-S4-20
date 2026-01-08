@@ -93,8 +93,13 @@ CREATE TABLE IF NOT EXISTS product_listing (
   price NUMERIC(10,2),
   currency currency NOT NULL,
   status availability NOT NULL,
+  notes TEXT,
   created_on TIMESTAMP DEFAULT NOW()
 );
+
+-- Add notes column if it doesn't exist (for existing databases)
+ALTER TABLE IF EXISTS product_listing
+ADD COLUMN IF NOT EXISTS notes TEXT;
 
 -- ===========================
 -- Notification Table

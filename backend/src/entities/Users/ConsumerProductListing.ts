@@ -125,12 +125,14 @@ export class ConsumerProductListing {
     price: number;
     currency: string; // 'SGD' | 'USD' | 'EUR'
     status?: ListingStatus; // default 'available'
+    notes?: string | null;  // optional notes
   }): Promise<ListingRow> {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
 
       const status: ListingStatus = args.status ?? "available";
+      const notes = args.notes ?? null;
 
       // 1) Ensure product exists
       const prodRes = await client.query(
@@ -189,9 +191,9 @@ export class ConsumerProductListing {
       const ins = await client.query(
         `
         INSERT INTO fyp_25_s4_20.product_listing
-          (product_id, seller_id, price, currency, status)
+          (product_id, seller_id, price, currency, status, notes)
         VALUES
-          ($1, $2, $3, $4::fyp_25_s4_20.currency, $5::fyp_25_s4_20.availability)
+          ($1, $2, $3, $4::fyp_25_s4_20.currency, $5::fyp_25_s4_20.availability, $6)
         RETURNING
           listing_id,
           product_id,
@@ -200,7 +202,7 @@ export class ConsumerProductListing {
           status::text AS status,
           created_on;
         `,
-        [args.productId, args.userId, args.price, args.currency, status]
+        [args.productId, args.userId, args.price, args.currency, status, notes]
       );
 
       const row = ins.rows[0];

@@ -12,6 +12,7 @@ export type MarketplaceListingRow = {
   currency: string | null;
   listing_status: string; // available / reserved / sold
   listing_created_on: Date;
+  notes: string | null;    // Optional seller notes
 
   seller_id: number;
   seller_username: string;
@@ -36,6 +37,7 @@ export class MarketplaceListing {
         pl.currency::text AS currency,
         pl.status::text AS listing_status,
         pl.created_on AS listing_created_on,
+        pl.notes,
 
         u.user_id AS seller_id,
         u.username AS seller_username,

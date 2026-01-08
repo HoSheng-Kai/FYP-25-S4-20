@@ -914,6 +914,7 @@ class ProductController {
           currency: row.currency,
           listingStatus: row.listing_status,
           listingCreatedOn: row.listing_created_on,
+          notes: row.notes,
 
           seller: {
             userId: row.seller_id,
@@ -937,10 +938,10 @@ class ProductController {
   }
 
   // POST /api/products/listings
-  // body: { userId, productId, price, currency, status? }
+  // body: { userId, productId, price, currency, status?, notes? }
   async createListing(req: Request, res: Response): Promise<void> {
     try {
-      const { userId, productId, price, currency, status } = req.body || {};
+      const { userId, productId, price, currency, status, notes } = req.body || {};
 
       const userIdNum = Number(userId);
       const productIdNum = Number(productId);
@@ -984,6 +985,7 @@ class ProductController {
           price: priceNum,
           currency,
           status,
+          notes: notes ? String(notes).trim() : null,
         });
 
         // Get the seller's username
@@ -1528,6 +1530,7 @@ class ProductController {
             pl.price,
             pl.currency,
             pl.status,
+            pl.notes,
             pl.created_on
           FROM fyp_25_s4_20.product_listing pl
           JOIN fyp_25_s4_20.product p
@@ -1548,6 +1551,7 @@ class ProductController {
             price: row.price,
             currency: row.currency,
             status: row.status,
+            notes: row.notes,
             created_on: row.created_on
           }))
         });

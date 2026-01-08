@@ -55,6 +55,7 @@ export interface product_listing {
   currency: Enums.currency;
 
   status: Enums.availability;
+  notes?: string | null;    // Optional notes from seller
 
   created_on?: Date;
 }
