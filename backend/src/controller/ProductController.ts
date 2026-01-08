@@ -1639,10 +1639,9 @@ class ProductController {
           return;
         }
 
-        // 2. Update listing status to sold
+        // 2. Delete the listing (since it's now sold, seller shouldn't see it in My Listings)
         await client.query(
-          `UPDATE fyp_25_s4_20.product_listing 
-           SET status = 'sold' 
+          `DELETE FROM fyp_25_s4_20.product_listing 
            WHERE listing_id = $1`,
           [listingId]
         );
