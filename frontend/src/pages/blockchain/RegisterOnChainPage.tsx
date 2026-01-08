@@ -47,11 +47,7 @@ type GetEditResponse = {
 const API_BASE = API_ROOT.replace(/\/api\s*$/, "");
 
 const styles: Record<string, React.CSSProperties> = {
-  page: {
-    maxWidth: 980,
-    margin: "28px auto",
-    padding: "0 16px 32px",
-  },
+  page: { maxWidth: 980, margin: "28px auto", padding: "0 16px 32px" },
   headerRow: {
     display: "flex",
     alignItems: "flex-start",
@@ -83,33 +79,12 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: "wrap",
   },
   cardHeaderTitle: { fontWeight: 800, fontSize: 14, color: "#111827" },
-  badgesRow: { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  badge: {
-    fontSize: 12,
-    padding: "6px 10px",
-    borderRadius: 999,
-    border: "1px solid #e5e7eb",
-    background: "#fff",
-    color: "#111827",
-  },
-  badgeMuted: {
-    fontSize: 12,
-    padding: "6px 10px",
-    borderRadius: 999,
-    border: "1px solid #e5e7eb",
-    background: "#fff",
-    color: "#6b7280",
-  },
-  mono: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" },
-
   cardBody: { padding: 18 },
 
   sectionTitle: { fontWeight: 800, fontSize: 13, marginBottom: 10, color: "#111827" },
 
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 14,
+  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14, 
+    alignItems:"start"
   },
 
   field: { display: "flex", flexDirection: "column", gap: 6 },
@@ -120,6 +95,8 @@ const styles: Record<string, React.CSSProperties> = {
 
   input: {
     width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     padding: "11px 12px",
     borderRadius: 12,
     border: "1px solid #e5e7eb",
@@ -129,6 +106,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   inputReadOnly: {
     width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     padding: "11px 12px",
     borderRadius: 12,
     border: "1px solid #e5e7eb",
@@ -139,6 +118,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   textarea: {
     width: "100%",
+    maxWidth: "100%",
+    boxSizing: "border-box",
     padding: "11px 12px",
     borderRadius: 12,
     border: "1px solid #e5e7eb",
@@ -196,6 +177,40 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 13,
   },
+
+  // Bottom status card
+  statusCard: {
+    marginTop: 18,
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 16,
+    boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+    padding: 14,
+  },
+  statusRow: {
+    display: "flex",
+    gap: 10,
+    flexWrap: "wrap",
+    alignItems: "center",
+  },
+  badge: {
+    fontSize: 12,
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    color: "#111827",
+  },
+  badgeMuted: {
+    fontSize: 12,
+    padding: "6px 10px",
+    borderRadius: 999,
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    color: "#6b7280",
+  },
+
+  mono: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" },
 };
 
 export default function RegisterOnChainPage() {
@@ -220,6 +235,9 @@ export default function RegisterOnChainPage() {
   const [metadataHashHex, setMetadataHashHex] = useState<string>("");
   const [isFinalized, setIsFinalized] = useState<boolean>(false);
 
+  // QR (from backend)
+  const [qrUrl, setQrUrl] = useState<string>("");
+
   const meta: ProductMetadata = useMemo(
     () => ({
       serialNo: serialNo.trim(),
@@ -234,6 +252,13 @@ export default function RegisterOnChainPage() {
 
   const isLocked = draftStage === "confirmed" || isFinalized;
 
+  // cleanup object URL whenever it changes + on unmount
+  useEffect(() => {
+    return () => {
+      if (qrUrl) URL.revokeObjectURL(qrUrl);
+    };
+  }, [qrUrl]);
+
   useEffect(() => {
     const pidStr = searchParams.get("productId");
     if (!pidStr) return;
@@ -245,6 +270,22 @@ export default function RegisterOnChainPage() {
     void loadProduct(pid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function fetchQr(pid: number) {
+    // clear old url first (and revoke it)
+    setQrUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return "";
+    });
+
+    const res = await axios.get(`${API_BASE}/api/products/${pid}/qrcode`, {
+      responseType: "arraybuffer",
+    });
+
+    const blob = new Blob([res.data], { type: "image/png" });
+    const url = URL.createObjectURL(blob);
+    setQrUrl(url);
+  }
 
   async function loadProduct(pid: number) {
     try {
@@ -266,17 +307,33 @@ export default function RegisterOnChainPage() {
       const stage = (d.stage || "").toLowerCase();
       if (stage === "confirmed") setDraftStage("confirmed");
       else if (stage === "draft") setDraftStage("draft");
-      else setDraftStage("confirmed");
+      else setDraftStage("unknown");
 
       if (d.txHash) {
         setIsFinalized(true);
         setTxSig(d.txHash);
         if (d.productPda) setProductPdaStr(d.productPda);
       }
+
+      // Auto-load QR if confirmed/finalized
+      if ((stage === "confirmed" || !!d.txHash) && pid) {
+        await fetchQr(pid);
+      }
     } catch {
-      // no status bar; ignore or add toast later
+      // ignore
     }
   }
+
+  // ✅ Safety net:
+  // If UI says confirmed/finalized but qrUrl is still empty, fetch it.
+  useEffect(() => {
+    if (!productId) return;
+    if (!(draftStage === "confirmed" || isFinalized)) return;
+    if (qrUrl) return;
+
+    void fetchQr(productId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [productId, draftStage, isFinalized]);
 
   async function saveDraft(): Promise<number> {
     const s = serialNo.trim();
@@ -305,11 +362,18 @@ export default function RegisterOnChainPage() {
 
     setProductId(pid);
     setDraftStage("draft");
+
     setIsFinalized(false);
     setTxSig("");
     setProductPdaStr("");
     setMetadataUri("");
     setMetadataHashHex("");
+
+    // reset QR
+    setQrUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return "";
+    });
 
     return pid;
   }
@@ -318,7 +382,7 @@ export default function RegisterOnChainPage() {
     try {
       await saveDraft();
     } catch {
-      // ignore or toast
+      // ignore
     }
   }
 
@@ -334,8 +398,13 @@ export default function RegisterOnChainPage() {
 
       setProductId(null);
       setDraftStage("unknown");
+
+      setQrUrl((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return "";
+      });
     } catch {
-      // ignore or toast
+      // ignore
     }
   }
 
@@ -346,8 +415,11 @@ export default function RegisterOnChainPage() {
 
       await axios.post(`${API_BASE}/api/products/${productId}/confirm-draft`, { manufacturerId });
       setDraftStage("confirmed");
+
+      // ✅ generate + show QR immediately
+      await fetchQr(productId);
     } catch {
-      // ignore or toast
+      // ignore
     }
   }
 
@@ -403,8 +475,11 @@ export default function RegisterOnChainPage() {
       });
 
       setIsFinalized(true);
+
+      // Optional: keep QR visible even after finalize
+      if (!qrUrl) await fetchQr(productId);
     } catch {
-      // ignore or toast
+      // ignore
     }
   }
 
@@ -431,21 +506,6 @@ export default function RegisterOnChainPage() {
       <div style={styles.card}>
         <div style={styles.cardHeader}>
           <div style={styles.cardHeaderTitle}>Product Information</div>
-
-          <div style={styles.badgesRow}>
-            <span style={styles.badgeMuted}>
-              Manufacturer ID: <span style={styles.mono}>{manufacturerId}</span>
-            </span>
-            <span style={styles.badge}>
-              Stage: <b>{draftStage}</b>
-            </span>
-            <span style={styles.badge}>
-              Locked: <b>{isLocked ? "YES" : "NO"}</b>
-            </span>
-            <span style={styles.badge}>
-              Finalized: <b>{isFinalized ? "YES" : "NO"}</b>
-            </span>
-          </div>
         </div>
 
         <div style={styles.cardBody}>
@@ -542,7 +602,8 @@ export default function RegisterOnChainPage() {
             </div>
 
             {(txSig || productPdaStr || metadataUri) && (
-              <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+               gap: 12 }}>
                 {txSig && (
                   <div style={styles.field}>
                     <span style={styles.label}>Tx Signature</span>
@@ -572,6 +633,79 @@ export default function RegisterOnChainPage() {
                     ) : null}
                   </div>
                 )}
+              </div>
+            )}
+          </div>
+
+          {/* ===== Bottom Status + QR (status moved here) ===== */}
+          <div style={styles.statusCard}>
+            <div style={{ fontWeight: 900, marginBottom: 8 }}>Registration Status</div>
+            <div style={styles.statusRow}>
+              <span style={styles.badgeMuted}>
+                Manufacturer ID: <span style={styles.mono}>{manufacturerId}</span>
+              </span>
+              <span style={styles.badge}>
+                Stage: <b>{draftStage}</b>
+              </span>
+              <span style={styles.badge}>
+                Locked: <b>{isLocked ? "YES" : "NO"}</b>
+              </span>
+              <span style={styles.badge}>
+                Finalized: <b>{isFinalized ? "YES" : "NO"}</b>
+              </span>
+            </div>
+
+            {/* QR right below status */}
+            {(draftStage === "confirmed" || isFinalized || !!qrUrl) && productId && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 14,
+                  borderRadius: 14,
+                  background: "#f8fafc",
+                  border: "1px solid #e5e7eb",
+                }}
+              >
+                <div style={{ fontWeight: 900, marginBottom: 6 }}>QR Code</div>
+                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
+                </div>
+
+                <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      width: 160,
+                      height: 160,
+                      background: "#fff",
+                      borderRadius: 12,
+                      border: "1px solid #e5e7eb",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {qrUrl ? (
+                      <img
+                        src={qrUrl}
+                        alt="Product QR Code"
+                        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                      />
+                    ) : (
+                      <span style={{ fontSize: 12, color: "#6b7280" }}>Generating…</span>
+                    )}
+                  </div>
+
+                  <div style={{ fontSize: 13 }}>
+                    <div>
+                      <b>Product ID:</b> {productId}
+                    </div>
+                    <div>
+                      <b>Serial No:</b> {serialNo || "—"}
+                    </div>
+                    <div>
+                      <b>Manufacturer ID:</b> {manufacturerId}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
           </div>

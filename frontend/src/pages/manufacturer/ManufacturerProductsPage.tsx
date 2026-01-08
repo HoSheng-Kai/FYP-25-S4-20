@@ -55,10 +55,14 @@ type ProductRow = {
   listingCreatedOn: string | null;
 
   relationship?: "owner" | "manufacturer" | null;
-
   stage?: string | null;
 };
 
+type FilterMode = "all" | "owned";
+
+/** =========================
+ * Edit modal types (same as before)
+ * ========================= */
 type EditProductData = {
   productId: number;
   serialNumber: string;
@@ -98,8 +102,6 @@ type UpdateResponse = {
   details?: string;
 };
 
-type FilterMode = "all" | "owned";
-
 export default function ManufacturerProductsPage() {
   const navigate = useNavigate();
 
@@ -110,11 +112,6 @@ export default function ManufacturerProductsPage() {
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
 
-  const canEdit = useMemo(
-    () => !Number.isNaN(manufacturerId) && manufacturerId > 0,
-    [manufacturerId]
-  );
-
   // ======================
   // TRANSFER SELECTION + SHARED MODAL
   // ======================
@@ -123,7 +120,44 @@ export default function ManufacturerProductsPage() {
 
   const GET_BY_USER_URL = "http://localhost:3000/api/distributors/products-by-user";
 
-  // ---------- EDIT MODAL STATE ----------
+  // ======================
+  // ACTIONS MENU (⋯)
+  // ======================
+  const [openMenuForId, setOpenMenuForId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+
+      // click inside menu => don't close
+      if (t.closest?.("[data-actions-menu-root='true']")) return;
+
+      setOpenMenuForId(null);
+    };
+
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMenuForId(null);
+    };
+
+    const onScrollOrResize = () => setOpenMenuForId(null);
+
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onEsc);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onEsc);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, []);
+
+  // ================
+  // EDIT MODAL STATE
+  // ================
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isEditLoading, setIsEditLoading] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
@@ -152,7 +186,7 @@ export default function ManufacturerProductsPage() {
     );
   };
 
-  // register eligible: stage === confirmed AND not yet on chain
+  // register eligible: stage = confirmed AND not yet on chain
   const isRegisterOnChainEligible = (p: ProductRow) => {
     if (isOnChainConfirmed(p)) return false;
 
@@ -162,9 +196,17 @@ export default function ManufacturerProductsPage() {
     return p.relationship === "manufacturer";
   };
 
-  // ✅ transfer eligible: on-chain confirmed + still owned by you
+  // transfer eligible: on-chain confirmed + owned by user
   const isTransferEligible = (p: ProductRow) => {
     return isOnChainConfirmed(p) && p.relationship === "owner";
+  };
+
+  // lock eligible: stage=draft AND not on-chain AND manufacturer
+  const isLockDraftEligible = (p: ProductRow) => {
+    if (isOnChainConfirmed(p)) return false;
+    const stage = (p.stage || "").toLowerCase();
+    if (stage !== "draft") return false;
+    return p.relationship === "manufacturer";
   };
 
   const safeDate = (iso: string) => {
@@ -173,16 +215,14 @@ export default function ManufacturerProductsPage() {
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
   };
 
-  const normalizeStatus = (
-    s: string | null | undefined
-  ): ProductRow["productStatus"] => {
+  const normalizeStatus = (s: string | null | undefined): ProductRow["productStatus"] => {
     const v = (s || "").toLowerCase();
     if (v === "verified") return "verified";
     if (v === "suspicious") return "suspicious";
     return "registered";
   };
 
-  // ✅ filtered list for the table
+  // filtered list for the table
   const products = useMemo(() => {
     if (filterMode === "owned") {
       return allProducts.filter((p) => p.relationship === "owner");
@@ -190,7 +230,7 @@ export default function ManufacturerProductsPage() {
     return allProducts;
   }, [allProducts, filterMode]);
 
-  // ✅ Clear hidden selections when filter changes
+  // Clear hidden selections when filter changes
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
@@ -240,8 +280,7 @@ export default function ManufacturerProductsPage() {
   const toggleSelectAll = () => {
     setSelectedIds((prev) => {
       const eligibleIds = products.filter(isTransferEligible).map((p) => p.productId);
-      const allEligibleSelected =
-        eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
+      const allEligibleSelected = eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
 
       if (allEligibleSelected) return new Set();
       return new Set(eligibleIds);
@@ -278,7 +317,6 @@ export default function ManufacturerProductsPage() {
         const lifecycleStatus: ProductRow["lifecycleStatus"] =
           relationship === "owner" ? "active" : "transferred";
 
-
         return {
           productId: p.product_id,
           serialNumber: p.serial_no,
@@ -300,11 +338,7 @@ export default function ManufacturerProductsPage() {
       setAllProducts(mapped);
       setError(null);
     } catch (err: any) {
-      setError(
-        err?.response?.data?.error ||
-          err?.response?.data?.details ||
-          "Error fetching products."
-      );
+      setError(err?.response?.data?.error || err?.response?.data?.details || "Error fetching products.");
     } finally {
       setLoading(false);
     }
@@ -330,9 +364,7 @@ export default function ManufacturerProductsPage() {
       return;
     }
 
-    const confirmDelete = window.confirm(
-      "Are you sure you want to delete this product? This cannot be undone."
-    );
+    const confirmDelete = window.confirm("Are you sure you want to delete this product? This cannot be undone.");
     if (!confirmDelete) return;
 
     try {
@@ -360,13 +392,28 @@ export default function ManufacturerProductsPage() {
   };
 
   // ----------------------
-  // OPEN EDIT MODAL
+  // LOCK DRAFT (confirm draft)
+  // ----------------------
+  const handleLockDraft = async (productId: number) => {
+    try {
+      const res = await axios.post(`${PRODUCTS_API_BASE_URL}/${productId}/confirm-draft`, { manufacturerId });
+
+      if (!res.data?.success) {
+        alert(res.data?.error || "Failed to lock draft.");
+        return;
+      }
+
+      await loadProducts();
+    } catch (err: any) {
+      alert(err?.response?.data?.details || err?.message || "Lock draft failed.");
+    }
+  };
+
+  // ----------------------
+  // EDIT MODAL (restored)
   // ----------------------
   const openEditModal = async (productId: number) => {
-    if (!canEdit) {
-      alert("Manufacturer ID missing. Please login again.");
-      return;
-    }
+    setOpenMenuForId(null);
 
     const row = products.find((x) => x.productId === productId);
 
@@ -376,9 +423,7 @@ export default function ManufacturerProductsPage() {
       setEditSuccess(null);
       setEditingProductId(productId);
 
-      setEditError(
-        "This product is already confirmed on blockchain and cannot be edited (immutable)."
-      );
+      setEditError("This product is already confirmed on blockchain and cannot be edited (immutable).");
 
       setEditSerial(row.serialNumber ?? "");
       setEditName(row.productName ?? "");
@@ -397,10 +442,9 @@ export default function ManufacturerProductsPage() {
     setEditingProductId(productId);
 
     try {
-      const res = await axios.get<GetEditResponse>(
-        `${PRODUCTS_API_BASE_URL}/${productId}/edit`,
-        { params: { manufacturerId } }
-      );
+      const res = await axios.get<GetEditResponse>(`${PRODUCTS_API_BASE_URL}/${productId}/edit`, {
+        params: { manufacturerId },
+      });
 
       if (!res.data.success || !res.data.data) {
         setEditError(res.data.error || "Failed to load product for editing.");
@@ -414,19 +458,16 @@ export default function ManufacturerProductsPage() {
       setEditBatch(d.batchNumber ?? "");
       setEditCategory(d.category ?? "");
       setEditDescription(d.productDescription ?? "");
-
-      const mfg = d.manufactureDate ? new Date(d.manufactureDate) : null;
-      setEditMfgDate(
-        mfg && !Number.isNaN(mfg.getTime()) ? mfg.toISOString().slice(0, 10) : ""
-      );
-
+      // parse into yyyy-mm-dd (only valid for HTML date input if 4-digit year)
+      const toDateInputValue = (v: string | null | undefined) => {
+        if (!v) return "";
+        if (typeof v === "string" && v.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+        return "";
+      };
+      setEditMfgDate(toDateInputValue(d.manufactureDate));
       setQrImageUrl(d.qrImageUrl ? withNoCache(d.qrImageUrl) : null);
     } catch (err: any) {
-      setEditError(
-        err.response?.data?.error ||
-          err.response?.data?.details ||
-          "Error loading product for edit."
-      );
+      setEditError(err.response?.data?.error || err.response?.data?.details || "Error loading product for edit.");
     } finally {
       setIsEditLoading(false);
     }
@@ -448,9 +489,6 @@ export default function ManufacturerProductsPage() {
     setQrImageUrl(null);
   };
 
-  // ----------------------
-  // UPDATE PRODUCT + GENERATE NEW QR
-  // ----------------------
   const handleUpdateProduct = async () => {
     if (!editingProductId) return;
 
@@ -460,7 +498,7 @@ export default function ManufacturerProductsPage() {
       return;
     }
 
-    if (!canEdit) {
+    if (!manufacturerId || Number.isNaN(manufacturerId)) {
       setEditError("Manufacturer ID missing. Please login again.");
       return;
     }
@@ -480,14 +518,11 @@ export default function ManufacturerProductsPage() {
         productName: editName.trim() || null,
         batchNo: editBatch.trim() || null,
         category: editCategory.trim() || null,
-        manufactureDate: editMfgDate || null,
+        manufactureDate: editMfgDate || null, // YYYY-MM-DD
         description: editDescription.trim() || null,
       };
 
-      const res = await axios.put<UpdateResponse>(
-        `${PRODUCTS_API_BASE_URL}/${editingProductId}`,
-        payload
-      );
+      const res = await axios.put<UpdateResponse>(`${PRODUCTS_API_BASE_URL}/${editingProductId}`, payload);
 
       if (!res.data.success || !res.data.data) {
         setEditError(res.data.error || "Failed to update product.");
@@ -496,18 +531,12 @@ export default function ManufacturerProductsPage() {
 
       setEditSuccess("Updated successfully. New QR code generated.");
 
-      const newQr =
-        res.data.data.qrImageUrl ??
-        `${PRODUCTS_API_BASE_URL}/${editingProductId}/qrcode`;
+      const newQr = res.data.data.qrImageUrl ?? `${PRODUCTS_API_BASE_URL}/${editingProductId}/qrcode`;
       setQrImageUrl(withNoCache(newQr));
 
       await loadProducts();
     } catch (err: any) {
-      setEditError(
-        err.response?.data?.error ||
-          err.response?.data?.details ||
-          "Update failed."
-      );
+      setEditError(err.response?.data?.error || err.response?.data?.details || "Update failed.");
     } finally {
       setIsEditLoading(false);
     }
@@ -545,6 +574,8 @@ export default function ManufacturerProductsPage() {
           />
         </div>
       </div>
+
+      <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>Select products to transfer ownership</h2>
 
       {/* Transfer button row */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10 }}>
@@ -616,6 +647,14 @@ export default function ManufacturerProductsPage() {
             const locked = isOnChainConfirmed(p);
             const transferEligible = isTransferEligible(p);
             const registerEligible = isRegisterOnChainEligible(p);
+            const lockDraftEligible = isLockDraftEligible(p);
+
+            const isOpen = openMenuForId === p.productId;
+
+            const go = (fn: () => void) => {
+              fn();
+              setOpenMenuForId(null);
+            };
 
             return (
               <tr key={p.productId}>
@@ -684,7 +723,7 @@ export default function ManufacturerProductsPage() {
                     {p.lifecycleStatus === "active" ? "owned" : "transferred"}
                   </span>
 
-                  {/* Optional: show stage pill to help you debug */}
+                  {/* Stage pill */}
                   {p.stage && (
                     <span
                       style={{
@@ -702,69 +741,88 @@ export default function ManufacturerProductsPage() {
                   )}
                 </td>
 
+                {/* Actions Menu */}
                 <td style={td}>
-                  <button
-                    onClick={() => navigate(`/manufacturer/products/${p.productId}`)}
-                    style={iconBtn}
-                    title="View"
-                  >
-                    👁
-                  </button>
+                  <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenMenuForId((prev) => (prev === p.productId ? null : p.productId))}
+                      style={kebabBtn}
+                      aria-label="Open actions"
+                      title="Actions"
+                    >
+                      ⋯
+                    </button>
 
-                  {/* Register on-chain button */}
-                  <button
-                    onClick={() =>
-                      navigate(`/manufacturer/register?productId=${p.productId}`)
-                    }
-                    style={{
-                      ...iconBtn,
-                      opacity: registerEligible ? 1 : 0.35,
-                      cursor: registerEligible ? "pointer" : "not-allowed",
-                    }}
-                    title={
-                      registerEligible
-                        ? "Register this confirmed draft on the blockchain"
-                        : "Only confirmed drafts (not yet on-chain) can be registered"
-                    }
-                    disabled={!registerEligible}
-                  >
-                    ⛓️
-                  </button>
+                    {isOpen && (
+                      <div style={menuCard} role="menu" aria-label="Row actions">
+                        <button
+                          type="button"
+                          style={menuItem}
+                          onClick={() => go(() => navigate(`/manufacturer/products/${p.productId}`))}
+                          role="menuitem"
+                        >
+                          View details
+                        </button>
 
-                  <button
-                    onClick={() => void openEditModal(p.productId)}
-                    style={{
-                      ...iconBtn,
-                      opacity: locked ? 0.4 : 1,
-                      cursor: locked ? "not-allowed" : "pointer",
-                    }}
-                    title={
-                      locked
-                        ? "Product is already on blockchain and cannot be edited"
-                        : "Edit"
-                    }
-                    disabled={locked}
-                  >
-                    ✏️
-                  </button>
+                        <button
+                          type="button"
+                          style={locked ? menuItemDisabled : menuItem}
+                          onClick={() => (locked ? undefined : go(() => void openEditModal(p.productId)))}
+                          disabled={locked}
+                          role="menuitem"
+                          title={locked ? "On-chain products cannot be edited" : "Edit product"}
+                        >
+                          Edit
+                        </button>
 
-                  <button
-                    onClick={() => handleDelete(p.productId)}
-                    style={{
-                      ...iconBtn,
-                      color: "red",
-                      opacity: locked ? 0.4 : 1,
-                      cursor: locked ? "not-allowed" : "pointer",
-                    }}
-                    title={
-                      locked
-                        ? "Product is already on blockchain and cannot be deleted"
-                        : "Delete"
-                    }
-                    disabled={locked}
-                  >
-                    🗑
-                  </button>
+                        <div style={menuDivider} />
+
+                        <button
+                          type="button"
+                          style={lockDraftEligible ? menuItem : menuItemDisabled}
+                          onClick={() => (lockDraftEligible ? go(() => void handleLockDraft(p.productId)) : undefined)}
+                          disabled={!lockDraftEligible}
+                          role="menuitem"
+                          title={
+                            lockDraftEligible
+                              ? "Confirm (lock) this draft so it can be registered on-chain"
+                              : "Draft already locked or on-chain"
+                          }
+                        >
+                          Lock draft (confirm)
+                        </button>
+
+                        <button
+                          type="button"
+                          style={registerEligible ? menuItem : menuItemDisabled}
+                          onClick={() =>
+                            registerEligible
+                              ? go(() => navigate(`/manufacturer/register?productId=${p.productId}`))
+                              : undefined
+                          }
+                          disabled={!registerEligible}
+                          role="menuitem"
+                          title={registerEligible ? "Send to blockchain" : "Only confirmed drafts can be registered"}
+                        >
+                          Send to blockchain
+                        </button>
+
+                        <div style={menuDivider} />
+
+                        <button
+                          type="button"
+                          style={locked ? menuItemDisabledDanger : menuItemDanger}
+                          onClick={() => (locked ? undefined : go(() => void handleDelete(p.productId)))}
+                          disabled={locked}
+                          role="menuitem"
+                          title={locked ? "On-chain products cannot be deleted" : "Delete draft"}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
@@ -772,11 +830,7 @@ export default function ManufacturerProductsPage() {
         </tbody>
       </table>
 
-      {products.length === 0 && (
-        <p style={{ marginTop: 20, opacity: 0.6 }}>
-          No products found for this filter.
-        </p>
-      )}
+      {products.length === 0 && <p style={{ marginTop: 20, opacity: 0.6 }}>No products found for this filter.</p>}
 
       {/* =======================
           TRANSFER OWNERSHIP MODAL
@@ -798,7 +852,7 @@ export default function ManufacturerProductsPage() {
       />
 
       {/* =======================
-          EDIT PRODUCT MODAL
+          EDIT PRODUCT MODAL (restored)
       ======================== */}
       {isEditOpen && (
         <div style={modalOverlay} onMouseDown={closeEditModal}>
@@ -824,7 +878,11 @@ export default function ManufacturerProductsPage() {
             {editError && <div style={alertError}>{editError}</div>}
             {editSuccess && <div style={alertSuccess}>{editSuccess}</div>}
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+            <div style={{ display: "grid", 
+              gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+              gap: 14,
+            }}
+            >
               <Field label="Product Name *">
                 <input
                   style={input}
@@ -874,16 +932,12 @@ export default function ManufacturerProductsPage() {
                   disabled={!!editError && editError.includes("immutable")}
                 />
               </Field>
-
-              <Field label="Price (Optional)">
-                <input style={input} placeholder="(Optional) Not editable here" disabled />
-              </Field>
             </div>
 
             <div style={{ marginTop: 14 }}>
               <Field label="Description">
                 <textarea
-                  style={{ ...input, minHeight: 80, resize: "vertical" }}
+                  style={{ ...input, minHeight: 80, resize: "vertical", boxSizing: "border-box" }}
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   placeholder="e.g. 256GB, Titanium Blue, Factory Sealed"
@@ -919,12 +973,7 @@ export default function ManufacturerProductsPage() {
             </div>
 
             <div style={modalFooter}>
-              <button
-                type="button"
-                onClick={closeEditModal}
-                style={btnSecondary}
-                disabled={isEditLoading}
-              >
+              <button type="button" onClick={closeEditModal} style={btnSecondary} disabled={isEditLoading}>
                 Cancel
               </button>
 
@@ -932,10 +981,7 @@ export default function ManufacturerProductsPage() {
                 type="button"
                 onClick={() => void handleUpdateProduct()}
                 style={btnPrimary}
-                disabled={
-                  isEditLoading ||
-                  !!(editError && editError.toLowerCase().includes("immutable"))
-                }
+                disabled={isEditLoading || !!(editError && editError.toLowerCase().includes("immutable"))}
                 title={
                   editError && editError.toLowerCase().includes("immutable")
                     ? "On-chain product cannot be updated"
@@ -967,6 +1013,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     </div>
   );
 }
+
+/* ----------------- UI helpers ----------------- */
 
 function FilterPill({
   active,
@@ -1033,12 +1081,63 @@ const td: React.CSSProperties = {
   fontSize: "14px",
 };
 
-const iconBtn: React.CSSProperties = {
-  border: "none",
-  background: "none",
+const kebabBtn: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  background: "white",
   cursor: "pointer",
-  fontSize: "18px",
-  marginRight: "10px",
+  borderRadius: 10,
+  padding: "6px 10px",
+  fontSize: 18,
+  lineHeight: 1,
+};
+
+const menuCard: React.CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 6px)",
+  right: 0,
+  minWidth: 200,
+  background: "white",
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+  padding: 6,
+  zIndex: 9999,
+};
+
+const menuItem: React.CSSProperties = {
+  width: "100%",
+  textAlign: "left",
+  border: "none",
+  background: "transparent",
+  padding: "10px 10px",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#111827",
+};
+
+const menuItemDisabled: React.CSSProperties = {
+  ...menuItem,
+  cursor: "not-allowed",
+  opacity: 0.45,
+};
+
+const menuDivider: React.CSSProperties = {
+  height: 1,
+  background: "#eef2f7",
+  margin: "6px 6px",
+};
+
+const menuItemDanger: React.CSSProperties = {
+  ...menuItem,
+  color: "#b91c1c",
+};
+
+const menuItemDisabledDanger: React.CSSProperties = {
+  ...menuItemDanger,
+  cursor: "not-allowed",
+  opacity: 0.45,
 };
 
 const modalOverlay: React.CSSProperties = {
@@ -1053,12 +1152,16 @@ const modalOverlay: React.CSSProperties = {
 };
 
 const modalCard: React.CSSProperties = {
-  width: "100%",
-  maxWidth: 520,
+  width: "min(720px, 100%)",
+  maxHeight: "calc(100vh - 48px)",
+  overflow: "auto",
+
   background: "white",
   borderRadius: 14,
   boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
   padding: 18,
+
+  boxSizing: "border-box",
 };
 
 const modalHeader: React.CSSProperties = {
@@ -1084,6 +1187,7 @@ const input: React.CSSProperties = {
   border: "1px solid #d1d5db",
   fontSize: 14,
   outline: "none",
+  boxSizing: "border-box",
 };
 
 const infoBox: React.CSSProperties = {

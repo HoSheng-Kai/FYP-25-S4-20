@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS product (
   model TEXT,
   batch_no TEXT,
   category TEXT,
-  manufacture_date DATE,
+  manufacture_date TIMESTAMPTZ,
   description TEXT,
   registered_on TIMESTAMP DEFAULT NOW(),
 
