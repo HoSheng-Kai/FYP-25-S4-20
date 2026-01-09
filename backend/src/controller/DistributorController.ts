@@ -310,18 +310,18 @@ class DistributorController {
     }
 
     async updateOwnership(req: Request, res: Response) {
-        const { from_user_id, to_user_id, product_id } = req.body;
+        const { from_user_id, to_user_id, product_id, from_private_key, to_private_key } = req.body;
 
-        if (!from_user_id || !to_user_id || !product_id) {
+        if (!from_user_id || !to_user_id || !product_id || !from_private_key || !to_private_key) {
             return res.status(400).json({
                 success: false,
-                error: "Missing required fields: from_user_id, to_user_id, product_id"
+                error: "Missing required fields: from_user_id, to_user_id, product_id, from_private_key, to_private_key"
             });
         }
 
         try {
 
-            // 1. Get users and product from database
+            // 1. Get users and product from database (for record keeping)
             const fromUser = await DistributorEntity.getUserById(from_user_id);
             const toUser = await DistributorEntity.getUserById(to_user_id);
             const product = await DistributorEntity.getProductById(product_id);
@@ -341,17 +341,10 @@ class DistributorController {
                 });
             }
 
-            // 2. Create keypairs
-            // TODO: Decryption
-            // const fromPrivateKey = await decrypt(fromUser.private_key);
-            // const toPrivateKey = await decrypt(toUser.private_key);
-            // const fromKeypair = Keypair.fromSecretKey(bs58.decode(fromPrivateKey));
-            // const toKeypair = Keypair.fromSecretKey(bs58.decode(toPrivateKey));
-
-            const fromKeypair = Keypair.fromSecretKey(bs58.decode(fromUser.private_key));
-            const toKeypair = Keypair.fromSecretKey(bs58.decode(toUser.private_key));
-            
-            const toPublicKey = new PublicKey(toUser.public_key);
+            // 2. Create keypairs from provided private keys
+            const fromKeypair = Keypair.fromSecretKey(bs58.decode(from_private_key));
+            const toKeypair = Keypair.fromSecretKey(bs58.decode(to_private_key));
+            const toPublicKey = toKeypair.publicKey;
 
 
             // 3. Get or derive product PDA
@@ -388,7 +381,7 @@ class DistributorController {
             let fromBalance = await connection.getBalance(fromKeypair.publicKey);
             if (fromBalance < minBalance) {
                 try {
-                    await airdropSol(fromUser.private_key, 0.5 * 1e9);
+                    await airdropSol(from_private_key, 0.5 * 1e9);
                     await new Promise(resolve => setTimeout(resolve, 1000));
                     fromBalance = await connection.getBalance(fromKeypair.publicKey);
                 } catch (e: any) {}
@@ -404,7 +397,7 @@ class DistributorController {
             let toBalance = await connection.getBalance(toKeypair.publicKey);
             if (toBalance < minBalance) {
                 try {
-                    await airdropSol(toUser.private_key, 0.5 * 1e9);
+                    await airdropSol(to_private_key, 0.5 * 1e9);
                     await new Promise(resolve => setTimeout(resolve, 1000));
                     toBalance = await connection.getBalance(toKeypair.publicKey);
                 } catch (e: any) {}
@@ -492,9 +485,9 @@ class DistributorController {
                 tx_hash: executeTx,
                 prev_tx_hash: prev_owner_hash!,
                 from_user_id: from_user_id,
-                from_public_key: fromUser.public_key,
+                from_public_key: fromKeypair.publicKey.toBase58(),
                 to_user_id: to_user_id,
-                to_public_key: toUser.public_key,
+                to_public_key: toKeypair.publicKey.toBase58(),
                 product_id: product_id,
                 block_slot: blockSlot,
                 created_on: current_date
@@ -504,7 +497,7 @@ class DistributorController {
 
             const new_ownership: ownership = {
                 owner_id: to_user_id,
-                owner_public_key: toUser.public_key,
+                owner_public_key: toKeypair.publicKey.toBase58(),
                 product_id: product_id,
                 start_on: new Date(),
                 end_on: null,
