@@ -818,9 +818,9 @@ export default function ManufacturerProductsPage() {
         }}
       />
 
-      {/* =======================
-          EDIT PRODUCT MODAL (restored)
-      ======================== */}
+      {/* ===================
+          EDIT PRODUCT MODAL
+      =================== */}
       {isEditOpen && (
         <div style={modalOverlay} onMouseDown={closeEditModal}>
           <div

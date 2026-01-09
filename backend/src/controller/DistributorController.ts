@@ -498,17 +498,6 @@ class DistributorController {
                 await DistributorEntity.updateOwnership(currentOwnership);
             }
 
-            // Create new ownership record (buyer)
-            const newOwnership: ownership = {
-                owner_id: actualToUserId,
-                owner_public_key: to_public_key,
-                product_id: product_id,
-                start_on: new Date(),
-                end_on: null,
-                tx_hash: tx_hash
-            };
-            await DistributorEntity.createOwnership(newOwnership);
-
             // Create blockchain_node record
             const blockchainNodeData: blockchain_node = {
                 tx_hash: tx_hash,
@@ -521,7 +510,18 @@ class DistributorController {
                 block_slot: block_slot || 0,
                 created_on: new Date()
             };
+
             await DistributorEntity.createBlockchainNode(blockchainNodeData);
+            // Create new ownership record (buyer)
+            const newOwnership: ownership = {
+                owner_id: actualToUserId,
+                owner_public_key: to_public_key,
+                product_id: product_id,
+                start_on: new Date(),
+                end_on: null,
+                tx_hash: tx_hash
+            };
+            await DistributorEntity.createOwnership(newOwnership);
 
             res.json({
                 success: true,
