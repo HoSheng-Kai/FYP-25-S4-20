@@ -1043,6 +1043,32 @@ class DistributorController {
             });
         }
     }
+    async getProductInfo(req: Request, res: Response) {
+    try {
+            const productId = Number(req.params.productId);
+            if (Number.isNaN(productId)) {
+                return res.status(400).json({ success: false, error: "Invalid productId" });
+            }
+        const product = await DistributorEntity.getProductById(productId);
+        if (!product) {
+        return res.status(404).json({ success: false, error: "Product not found" });
+        }
+
+        res.json({
+        success: true,
+        data: {
+            product_id: product.product_id,
+            serial_no: product.serial_no,
+            product_pda: product.product_pda,
+            registered_by: product.registered_by,
+            tx_hash: product.tx_hash,
+            track: product.track,
+        },
+        });
+    } catch (e: any) {
+        res.status(500).json({ success: false, error: "Failed to get product info", details: e.message });
+    }
+    }
 }
 
 export default new DistributorController();

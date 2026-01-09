@@ -1,5 +1,12 @@
-import React, { useMemo, useState } from "react";
+// src/components/transfers/TransferOwnershipModal.tsx
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
+
+import { API_ROOT, USERS_API_BASE_URL, NOTIFICATIONS_API_BASE_URL } from "../../config/api";
+import { getProvider, getProgram } from "../../lib/anchorClient";
+import { deriveTransferPda } from "../../lib/pdas";
 
 type TransferResult = { productId: number; ok: boolean; message: string };
 
@@ -9,11 +16,42 @@ type Props = {
   fromUserId: number;
   selectedProductIds: number[];
   title?: string;
-  transferUrl?: string; // allow override if needed
-  onTransferred?: (results: TransferResult[]) => void; // e.g. reload products
+  onTransferred?: (results: TransferResult[]) => void;
 };
 
-const DEFAULT_TRANSFER_URL = "http://localhost:3000/api/distributors/update-ownership";
+type UserOption = {
+  user_id: number;
+  username: string;
+  public_key: string; // ✅ must exist from /users/list
+  role?: string;
+};
+
+const USERS_LIST_URL = `${USERS_API_BASE_URL}/list`;
+const PRODUCT_INFO_URL = `${API_ROOT}/distributors/product`; // GET /:productId
+
+const box: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  padding: 10,
+  background: "#f9fafb",
+  maxHeight: 200,
+  overflow: "auto",
+};
+
+function buildTransferPayload(input: {
+  kind: "TRANSFER_REQUEST";
+  productId: number;
+  fromUserId: number;
+  toUserId: number;
+  productPda: string;
+  transferPda: string;
+  proposeTx: string;
+  fromOwnerPubkey: string;
+  toOwnerPubkey: string;
+}) {
+  // store as machine-readable payload in message
+  return JSON.stringify(input);
+}
 
 export default function TransferOwnershipModal({
   open,
@@ -21,141 +59,225 @@ export default function TransferOwnershipModal({
   fromUserId,
   selectedProductIds,
   title = "Ownership Transfer",
-  transferUrl = DEFAULT_TRANSFER_URL,
   onTransferred,
 }: Props) {
+  const wallet = useWallet();
+
   const [recipientUserId, setRecipientUserId] = useState("");
-  const [transferLoading, setTransferLoading] = useState(false);
-  const [transferError, setTransferError] = useState<string | null>(null);
-  const [transferResults, setTransferResults] = useState<TransferResult[] | null>(null);
+  const [users, setUsers] = useState<UserOption[]>([]);
+  const [userQuery, setUserQuery] = useState("");
+  const [selectedUser, setSelectedUser] = useState<UserOption | null>(null);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [results, setResults] = useState<TransferResult[] | null>(null);
 
   const count = selectedProductIds.length;
 
-  const canSubmit = useMemo(() => {
-    const toId = Number(recipientUserId);
-    return (
-      open &&
-      !transferLoading &&
-      count > 0 &&
-      !!fromUserId &&
-      !Number.isNaN(fromUserId) &&
-      toId > 0 &&
-      !Number.isNaN(toId)
-    );
-  }, [open, transferLoading, count, fromUserId, recipientUserId]);
+  useEffect(() => {
+    if (!open) return;
+
+    (async () => {
+      try {
+        const res = await axios.get(USERS_LIST_URL);
+        if (res.data?.success && Array.isArray(res.data.data)) setUsers(res.data.data);
+        else setUsers([]);
+      } catch {
+        setUsers([]);
+      }
+    })();
+  }, [open]);
+
+  const filteredUsers = useMemo(() => {
+    const q = userQuery.toLowerCase();
+    return users
+      .filter((u) => u.user_id !== fromUserId)
+      .filter((u) => u.username.toLowerCase().includes(q))
+      .slice(0, 30);
+  }, [users, userQuery, fromUserId]);
+
+  const canSubmit =
+    !loading &&
+    count > 0 &&
+    !!recipientUserId &&
+    !!selectedUser &&
+    !!wallet.publicKey &&
+    wallet.connected;
 
   if (!open) return null;
 
   const close = () => {
-    if (transferLoading) return;
+    if (loading) return;
     setRecipientUserId("");
-    setTransferError(null);
-    setTransferResults(null);
+    setSelectedUser(null);
+    setUserQuery("");
+    setDropdownOpen(false);
+    setErr(null);
+    setResults(null);
     onClose();
   };
 
-  const handleConfirmTransfer = async () => {
-    if (!fromUserId || Number.isNaN(fromUserId)) {
-      setTransferError("Your userId is missing. Please login again.");
-      return;
-    }
+  async function fetchProductPda(productId: number): Promise<string> {
+    const res = await axios.get(`${PRODUCT_INFO_URL}/${productId}`);
+    if (!res.data?.success) throw new Error(res.data?.error || "Failed to load product info");
+    const pda = res.data?.data?.product_pda;
+    if (!pda) throw new Error("Missing product_pda in backend response");
+    return pda as string;
+  }
 
-    const toId = Number(recipientUserId);
-    if (!toId || Number.isNaN(toId) || toId <= 0) {
-      setTransferError("Please enter a valid Recipient User ID.");
-      return;
-    }
-
-    if (selectedProductIds.length === 0) {
-      setTransferError("No products selected.");
-      return;
-    }
-
-    setTransferLoading(true);
-    setTransferError(null);
-    setTransferResults(null);
-
+  const handlePropose = async () => {
     try {
-      const results: TransferResult[] = [];
+      setErr(null);
+      setResults(null);
+
+      if (!wallet.publicKey || !wallet.connected) {
+        setErr("Wallet not connected. Please connect Phantom first.");
+        return;
+      }
+
+      if (!fromUserId) {
+        setErr("Missing sender user ID.");
+        return;
+      }
+
+      const toId = Number(recipientUserId);
+      if (!toId || toId === fromUserId || !selectedUser) {
+        setErr("Invalid recipient.");
+        return;
+      }
+
+      // recipient on-chain pubkey from DB
+      const toOwnerPubkey = new PublicKey(selectedUser.public_key);
+
+      setLoading(true);
+
+      const provider = getProvider(wallet);
+      const program = getProgram(provider);
+
+      const out: TransferResult[] = [];
 
       for (const productId of selectedProductIds) {
         try {
-          const res = await axios.post(transferUrl, {
-            from_user_id: fromUserId,
-            to_user_id: toId,
-            product_id: productId,
+          const productPdaStr = await fetchProductPda(productId);
+          const productPda = new PublicKey(productPdaStr);
+
+          // derive transfer PDA from program seeds
+          const [transferPda] = await deriveTransferPda(
+            productPda,
+            wallet.publicKey,
+            toOwnerPubkey
+          );
+
+          // STEP 1: proposeTransfer on-chain (sender signs in Phantom)
+          const proposeTx = await program.methods
+            .proposeTransfer()
+            .accounts({
+              fromOwner: wallet.publicKey,
+              product: productPda,
+              toOwner: toOwnerPubkey,
+              transferRequest: transferPda,
+            })
+            .rpc();
+
+          // Create notification to recipient
+          const payload = buildTransferPayload({
+            kind: "TRANSFER_REQUEST",
+            productId,
+            fromUserId,
+            toUserId: toId,
+            productPda: productPda.toBase58(),
+            transferPda: transferPda.toBase58(),
+            proposeTx,
+            fromOwnerPubkey: wallet.publicKey.toBase58(),
+            toOwnerPubkey: toOwnerPubkey.toBase58(),
           });
 
-          if (res.data?.success) {
-            const exec = res.data?.data?.transactions?.execute;
-            results.push({
-              productId,
-              ok: true,
-              message: exec ? `Transferred ✅ (execute: ${exec})` : "Transferred ✅",
-            });
-          } else {
-            results.push({
-              productId,
-              ok: false,
-              message: res.data?.error || "Transfer failed",
-            });
-          }
-        } catch (err: any) {
-          results.push({
+          await axios.post(`${NOTIFICATIONS_API_BASE_URL}/create`, {
+            userId: toId,
+            title: "Transfer Request",
+            message: payload,
+            productId,
+            txHash: proposeTx,
+          });
+
+          out.push({ productId, ok: true, message: `Proposed ✅ (tx: ${proposeTx})` });
+        } catch (e: any) {
+          out.push({
             productId,
             ok: false,
-            message:
-              err?.response?.data?.details ||
-              err?.response?.data?.error ||
-              err.message ||
-              "Transfer failed",
+            message: e?.response?.data?.error || e?.response?.data?.details || e?.message || "Failed",
           });
         }
       }
 
-      setTransferResults(results);
-      onTransferred?.(results);
+      setResults(out);
+      onTransferred?.(out);
     } finally {
-      setTransferLoading(false);
+      setLoading(false);
     }
   };
 
   return (
     <div style={overlay} onMouseDown={close}>
-      <div style={card} onMouseDown={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div style={header}>
-          <div>
-            <h2 style={{ margin: 0, fontSize: 18 }}>{title}</h2>
-            <p style={{ margin: "6px 0 0", fontSize: 13, color: "#6b7280" }}>
-              Transfer {count} selected product(s) to another user.
-            </p>
-          </div>
-          <button style={closeBtn} onClick={close} type="button" disabled={transferLoading}>
-            ✕
-          </button>
-        </div>
+      <div style={card} onMouseDown={(e) => e.stopPropagation()}>
+        <h2 style={{ marginTop: 0 }}>{title}</h2>
 
-        {count === 0 && (
-          <div style={warn}>
-            No products selected. Close this and select at least 1 product.
-          </div>
-        )}
-
-        {transferError && <div style={errBox}>{transferError}</div>}
+        {err && <div style={errBox}>{err}</div>}
 
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 6 }}>Recipient User ID</div>
+          <div style={hint}>
+            Sender wallet:{" "}
+            <span style={{ fontFamily: "monospace" }}>
+              {wallet.publicKey ? wallet.publicKey.toBase58() : "Not connected"}
+            </span>
+          </div>
+        </div>
+
+        {/* Recipient dropdown */}
+        <div style={{ marginBottom: 14, position: "relative" }}>
+          <label style={label}>Recipient User</label>
           <input
             style={input}
-            value={recipientUserId}
-            onChange={(e) => setRecipientUserId(e.target.value)}
-            placeholder="e.g. 6"
-            disabled={transferLoading}
+            value={selectedUser ? selectedUser.username : userQuery}
+            onChange={(e) => {
+              setUserQuery(e.target.value);
+              setSelectedUser(null);
+              setRecipientUserId("");
+              setDropdownOpen(true);
+            }}
+            onFocus={() => setDropdownOpen(true)}
+            placeholder="Search username..."
           />
+
+          {dropdownOpen && (
+            <div style={dropdown}>
+              {filteredUsers.length === 0 ? (
+                <div style={empty}>No users found</div>
+              ) : (
+                filteredUsers.map((u) => (
+                  <button
+                    key={u.user_id}
+                    type="button"
+                    style={dropdownItem}
+                    onClick={() => {
+                      setSelectedUser(u);
+                      setRecipientUserId(String(u.user_id));
+                      setDropdownOpen(false);
+                      setUserQuery("");
+                    }}
+                  >
+                    <strong>{u.username}</strong>{" "}
+                    <span style={{ color: "#6b7280" }}>#{u.user_id}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: 14 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Selected Products</div>
+          <div style={label}>Selected Products</div>
           <div style={box}>
             {selectedProductIds.length === 0 ? (
               <div style={{ fontSize: 13, color: "#6b7280" }}>No products selected.</div>
@@ -169,19 +291,12 @@ export default function TransferOwnershipModal({
           </div>
         </div>
 
-        {transferResults && (
+        {results && (
           <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, marginBottom: 8 }}>Transfer Results</div>
+            <div style={label}>Results</div>
             <div style={{ ...box, background: "white" }}>
-              {transferResults.map((r) => (
-                <div
-                  key={r.productId}
-                  style={{
-                    fontSize: 13,
-                    padding: "6px 0",
-                    color: r.ok ? "#116a2b" : "#a11",
-                  }}
-                >
+              {results.map((r) => (
+                <div key={r.productId} style={{ fontSize: 13, padding: "6px 0", color: r.ok ? "#116a2b" : "#a11" }}>
                   Product {r.productId}: {r.message}
                 </div>
               ))}
@@ -190,21 +305,11 @@ export default function TransferOwnershipModal({
         )}
 
         <div style={footer}>
-          <button type="button" onClick={close} style={btnSecondary} disabled={transferLoading}>
-            Close
+          <button onClick={close} disabled={loading} style={btn}>
+            Cancel
           </button>
-
-          <button
-            type="button"
-            onClick={() => void handleConfirmTransfer()}
-            disabled={!canSubmit}
-            style={{
-              ...btnPrimary,
-              opacity: canSubmit ? 1 : 0.6,
-              cursor: canSubmit ? "pointer" : "not-allowed",
-            }}
-          >
-            {transferLoading ? "Transferring..." : "Confirm Transfer"}
+          <button onClick={() => void handlePropose()} disabled={!canSubmit} style={btnPrimary}>
+            {loading ? "Submitting..." : "Propose Transfer"}
           </button>
         </div>
       </div>
@@ -212,60 +317,85 @@ export default function TransferOwnershipModal({
   );
 }
 
-/* styles */
+/* ---------------- styles ---------------- */
 const overlay: React.CSSProperties = {
   position: "fixed",
   inset: 0,
   background: "rgba(0,0,0,0.35)",
   display: "flex",
-  alignItems: "center",
   justifyContent: "center",
+  alignItems: "center",
   padding: 18,
+  boxSizing: "border-box",
   zIndex: 9999,
 };
 
 const card: React.CSSProperties = {
   width: "100%",
-  maxWidth: 620,
+  maxWidth: 520,
   background: "white",
-  borderRadius: 14,
-  boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
-  padding: 18,
-};
-
-const header: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 12,
-  marginBottom: 14,
-};
-
-const closeBtn: React.CSSProperties = {
-  border: "none",
-  background: "transparent",
-  cursor: "pointer",
-  fontSize: 18,
-  lineHeight: 1,
+  borderRadius: 12,
+  padding: 20,
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 const input: React.CSSProperties = {
   width: "100%",
   padding: "10px 12px",
-  borderRadius: 10,
+  marginBottom: 12,
+  borderRadius: 8,
   border: "1px solid #d1d5db",
-  fontSize: 14,
-  outline: "none",
+  boxSizing: "border-box",
+  display: "block",
 };
 
-const box: React.CSSProperties = {
+const dropdown: React.CSSProperties = {
+  position: "absolute",
+  top: "100%",
+  left: 0,
+  right: 0,
+  background: "white",
   border: "1px solid #e5e7eb",
-  borderRadius: 12,
-  padding: 10,
-  background: "#f9fafb",
-  maxHeight: 200,
-  overflow: "auto",
+  borderRadius: 8,
+  maxHeight: 220,
+  overflowY: "auto",
+  zIndex: 9999,
 };
+
+const dropdownItem: React.CSSProperties = {
+  width: "100%",
+  padding: 10,
+  textAlign: "left",
+  border: "none",
+  background: "transparent",
+  cursor: "pointer",
+};
+
+const empty: React.CSSProperties = {
+  padding: 12,
+  fontSize: 13,
+  color: "#6b7280",
+};
+
+const footer: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "flex-end",
+  gap: 10,
+  marginTop: 10,
+};
+
+const errBox: React.CSSProperties = {
+  background: "#fee2e2",
+  color: "#991b1b",
+  padding: 10,
+  borderRadius: 8,
+  marginBottom: 12,
+};
+
+const label: React.CSSProperties = { display: "block", fontSize: 12, fontWeight: 700, marginBottom: 6 };
+
+const hint: React.CSSProperties = { fontSize: 12, color: "#6b7280" };
 
 const row: React.CSSProperties = {
   padding: "6px 0",
@@ -274,45 +404,19 @@ const row: React.CSSProperties = {
   fontSize: 13,
 };
 
-const footer: React.CSSProperties = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: 10,
-  marginTop: 14,
-};
-
-const btnSecondary: React.CSSProperties = {
-  padding: "10px 14px",
+const btn: React.CSSProperties = {
+  padding: "8px 12px",
   borderRadius: 10,
-  border: "1px solid #d1d5db",
+  border: "1px solid #e5e7eb",
   background: "white",
   cursor: "pointer",
-  fontWeight: 700,
 };
 
 const btnPrimary: React.CSSProperties = {
-  padding: "10px 14px",
+  padding: "8px 12px",
   borderRadius: 10,
-  border: "none",
+  border: "1px solid #111827",
   background: "#111827",
   color: "white",
-  fontWeight: 700,
-};
-
-const errBox: React.CSSProperties = {
-  background: "#ffe6e6",
-  color: "#a11",
-  padding: "10px 12px",
-  borderRadius: 10,
-  fontSize: 13,
-  marginBottom: 10,
-};
-
-const warn: React.CSSProperties = {
-  background: "#fff7ed",
-  color: "#9a3412",
-  padding: "10px 12px",
-  borderRadius: 10,
-  fontSize: 13,
-  marginBottom: 10,
+  cursor: "pointer",
 };

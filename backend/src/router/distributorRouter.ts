@@ -24,4 +24,6 @@ router.post('/cancel-transfer', DistributorController.cancelTransfer.bind(Distri
 // End tracking for a product (no further transfers allowed)
 router.post('/end-tracking', DistributorController.endTracking.bind(DistributorController));
 
+router.get("/product/:productId", DistributorController.getProductInfo.bind(DistributorController));
+
 export default router;
