@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { API_ROOT, USERS_API_BASE_URL, NOTIFICATIONS_API_BASE_URL } from "../../config/api";
 import { getProvider, getProgram } from "../../lib/anchorClient";
 import { deriveTransferPda } from "../../lib/pdas";
@@ -258,18 +257,7 @@ export default function TransferOwnershipModal({
                 {wallet.publicKey ? wallet.publicKey.toBase58() : "Not connected"}
               </span>
             </div>
-
-            {/* ✅ Connect wallet button */}
-            <div>
-              <WalletMultiButton />
-            </div>
           </div>
-
-          {!wallet.connected && (
-            <div style={{ marginTop: 8, fontSize: 12, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", padding: "8px 10px", borderRadius: 10 }}>
-              Please connect your wallet to propose a transfer.
-            </div>
-          )}
         </div>
 
         {/* Recipient dropdown */}
