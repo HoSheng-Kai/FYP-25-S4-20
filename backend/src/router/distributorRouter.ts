@@ -6,8 +6,15 @@ const router = express.Router();
 // Register product on blockchain
 router.post('/register-product', DistributorController.registerProduct.bind(DistributorController));
 
-// Transfer ownership (3-step: propose, accept, execute)
-router.post('/update-ownership', DistributorController.updateOwnership.bind(DistributorController));
+// Transfer ownership - 3-step wallet-based flow (no private keys required)
+// Step 1: Seller proposes transfer (after signing with wallet)
+router.post('/propose-transfer', DistributorController.proposeTransfer.bind(DistributorController));
+
+// Step 2: Buyer accepts transfer (after signing with wallet)
+router.post('/accept-transfer', DistributorController.acceptTransfer.bind(DistributorController));
+
+// Step 3: Seller executes transfer (after signing with wallet) - updates ownership in DB
+router.post('/execute-transfer', DistributorController.executeTransfer.bind(DistributorController));
 
 // Check ownership on blockchain
 router.post('/check-ownership', DistributorController.checkOwnership.bind(DistributorController));

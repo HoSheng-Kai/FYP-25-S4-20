@@ -309,27 +309,36 @@ class DistributorController {
         }
     }
 
-    async updateOwnership(req: Request, res: Response) {
-        const { from_user_id, to_user_id, product_id, from_private_key, to_private_key } = req.body;
+    // ================================
+    // Wallet-Based Transfer Flow (3 steps)
+    // No private keys required - frontend signs with browser wallet
+    // ================================
 
-        if (!from_user_id || !to_user_id || !product_id || !from_private_key || !to_private_key) {
+    // POST /api/distributors/propose-transfer
+    // Called after seller signs proposeTransfer() on-chain via wallet
+    async proposeTransfer(req: Request, res: Response) {
+        const { product_id, from_user_id, to_public_key, tx_hash, product_pda, transfer_pda } = req.body;
+
+        if (!product_id || !from_user_id || !to_public_key || !tx_hash) {
             return res.status(400).json({
                 success: false,
-                error: "Missing required fields: from_user_id, to_user_id, product_id, from_private_key, to_private_key"
+                error: "Missing required fields: product_id, from_user_id, to_public_key, tx_hash"
             });
         }
 
         try {
-
-            // 1. Get users and product from database (for record keeping)
-            const fromUser = await DistributorEntity.getUserById(from_user_id);
-            const toUser = await DistributorEntity.getUserById(to_user_id);
+            // Verify product exists
             const product = await DistributorEntity.getProductById(product_id);
+            if (!product) {
+                return res.status(404).json({ success: false, error: "Product not found" });
+            }
 
-            if (!fromUser || !toUser || !product) {
-                return res.status(404).json({
+            // Verify seller is current owner
+            const currentOwnership = await DistributorEntity.getCurrentOwnership(product_id);
+            if (!currentOwnership || currentOwnership.owner_id !== from_user_id) {
+                return res.status(403).json({
                     success: false,
-                    error: `Missing data: fromUser=${!!fromUser}, toUser=${!!toUser}, product=${!!product}`
+                    error: "You are not the current owner of this product"
                 });
             }
 
@@ -337,199 +346,206 @@ class DistributorController {
             if (product.track === false) {
                 return res.status(400).json({
                     success: false,
-                    error: "Product is no longer being tracked. Ownership transfers are not allowed."
+                    error: "Product is no longer being tracked. Transfers not allowed."
                 });
             }
 
-            // 2. Create keypairs from provided private keys
-            const fromKeypair = Keypair.fromSecretKey(bs58.decode(from_private_key));
-            const toKeypair = Keypair.fromSecretKey(bs58.decode(to_private_key));
-            const toPublicKey = toKeypair.publicKey;
-
-
-            // 3. Get or derive product PDA
-            let productPda: PublicKey;
-
-            if (product.product_pda) {
-                productPda = new PublicKey(product.product_pda);
-            } else {
-                const manufacturer = await DistributorEntity.getUserById(product.registered_by);
-                if (!manufacturer) {
-                    return res.status(404).json({
-                        success: false,
-                        error: `Manufacturer not found for product ${product_id}`
-                    });
-                }
-                const manufacturerPubkey = new PublicKey(manufacturer.public_key);
-                const [derivedPda] = deriveProductPda(manufacturerPubkey, product.serial_no);
-                productPda = derivedPda;
-            }
-
-            // 4. Check if product exists on-chain
-            const productAccount = await connection.getAccountInfo(productPda);
-            if (!productAccount) {
-                return res.status(400).json({
-                    success: false,
-                    error: "Product not found on-chain. Register the product first.",
-                    productPda: productPda.toBase58()
-                });
-            }
-
-            // 5. Airdrop SOL if needed
-            const minBalance = 0.05 * 1e9;
-
-            let fromBalance = await connection.getBalance(fromKeypair.publicKey);
-            if (fromBalance < minBalance) {
-                try {
-                    await airdropSol(from_private_key, 0.5 * 1e9);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    fromBalance = await connection.getBalance(fromKeypair.publicKey);
-                } catch (e: any) {}
-            }
-            if (fromBalance < minBalance) {
-                return res.status(400).json({
-                    success: false,
-                    error: "Insufficient SOL balance for from_user",
-                    details: `Balance: ${fromBalance / 1e9} SOL. Fund wallet: ${fromKeypair.publicKey.toBase58()}`
-                });
-            }
-
-            let toBalance = await connection.getBalance(toKeypair.publicKey);
-            if (toBalance < minBalance) {
-                try {
-                    await airdropSol(to_private_key, 0.5 * 1e9);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    toBalance = await connection.getBalance(toKeypair.publicKey);
-                } catch (e: any) {}
-            }
-            if (toBalance < minBalance) {
-                return res.status(400).json({
-                    success: false,
-                    error: "Insufficient SOL balance for to_user",
-                    details: `Balance: ${toBalance / 1e9} SOL. Fund wallet: ${toKeypair.publicKey.toBase58()}`
-                });
-            }
-
-            // 6. Create Anchor provider and program for from_user
-            const fromWallet = {
-                publicKey: fromKeypair.publicKey,
-                signTransaction: async (tx: any) => { tx.sign(fromKeypair); return tx; },
-                signAllTransactions: async (txs: any) => { txs.forEach((tx: any) => tx.sign(fromKeypair)); return txs; },
-            };
-            const fromProvider = new AnchorProvider(connection, fromWallet as any, { commitment: "confirmed" });
-            const fromProgram = new Program(idlJson as unknown as Idl, fromProvider);
-
-            // 7. Derive transfer PDA
-            const [transferPda] = deriveTransferPda(productPda, fromKeypair.publicKey, toPublicKey);
-
-            // STEP 1: Propose Transfer
-            const proposeTx = await fromProgram.methods
-                .proposeTransfer()
-                .accounts({
-                    fromOwner: fromKeypair.publicKey,
-                    product: productPda,
-                    toOwner: toPublicKey,
-                    transferRequest: transferPda,
-                })
-                .signers([fromKeypair])
-                .rpc();
-
-            // STEP 2: Accept Transfer (using to_user's keypair)
-            const toWallet = {
-                publicKey: toKeypair.publicKey,
-                signTransaction: async (tx: any) => { tx.sign(toKeypair); return tx; },
-                signAllTransactions: async (txs: any) => { txs.forEach((tx: any) => tx.sign(toKeypair)); return txs; },
-            };
-            const toProvider = new AnchorProvider(connection, toWallet as any, { commitment: "confirmed" });
-            const toProgram = new Program(idlJson as unknown as Idl, toProvider);
-
-            const acceptTx = await toProgram.methods
-                .acceptTransfer()
-                .accounts({
-                    toOwner: toKeypair.publicKey,
-                    transferRequest: transferPda,
-                })
-                .signers([toKeypair])
-                .rpc();
-
-            // STEP 3: Execute Transfer
-            const executeTx = await fromProgram.methods
-                .executeTransfer()
-                .accounts({
-                    fromOwner: fromKeypair.publicKey,
-                    product: productPda,
-                    transferRequest: transferPda,
-                })
-                .signers([fromKeypair])
-                .rpc();
-
-            // Update database
-            let latest_block = await DistributorEntity.viewLatestBlockchainNode(product_id);
-            let prev_owner_hash = null;
-            let current_date = new Date();
-
-            if (latest_block != null) {
-                prev_owner_hash = latest_block.tx_hash;
-                let prev_owner = await DistributorEntity.getOwnership(prev_owner_hash);
-                if (prev_owner) {
-                    prev_owner.end_on = current_date;
-                    await DistributorEntity.updateOwnership(prev_owner);
-                }
-            }
-
-            // Get the block slot from the execute transaction
-            const txInfo = await connection.getTransaction(executeTx, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
-            const blockSlot = txInfo?.slot ?? 0;
-
-            const blockchain_node_data: blockchain_node = {
-                tx_hash: executeTx,
-                prev_tx_hash: prev_owner_hash!,
-                from_user_id: from_user_id,
-                from_public_key: fromKeypair.publicKey.toBase58(),
-                to_user_id: to_user_id,
-                to_public_key: toKeypair.publicKey.toBase58(),
-                product_id: product_id,
-                block_slot: blockSlot,
-                created_on: current_date
-            };
-
-            await DistributorEntity.createBlockchainNode(blockchain_node_data);
-
-            const new_ownership: ownership = {
-                owner_id: to_user_id,
-                owner_public_key: toKeypair.publicKey.toBase58(),
-                product_id: product_id,
-                start_on: new Date(),
-                end_on: null,
-                tx_hash: executeTx,
-            };
-
-            await DistributorEntity.createOwnership(new_ownership);
-
+            // Look up buyer by public key (optional - they might not be registered yet)
+            const buyer = await DistributorEntity.getUserByPublicKey(to_public_key);
+            const seller = await DistributorEntity.getUserById(from_user_id);
 
             res.json({
                 success: true,
                 data: {
-                    from_user: fromUser.username,
-                    to_user: toUser.username,
-                    product_serial: product.serial_no,
-                    product_pda: productPda.toBase58(),
-                    transfer_pda: transferPda.toBase58(),
-                    transactions: {
-                        propose: proposeTx,
-                        accept: acceptTx,
-                        execute: executeTx
-                    }
+                    product_id,
+                    serial_no: product.serial_no,
+                    from_user: seller?.username || from_user_id,
+                    to_public_key,
+                    to_user: buyer?.username || null,
+                    to_user_id: buyer?.user_id || null,
+                    tx_hash,
+                    product_pda: product_pda || product.product_pda,
+                    transfer_pda,
+                    stage: 'proposed'
                 }
             });
 
         } catch (error: any) {
-            console.error("Transfer failed:", error);
+            console.error("proposeTransfer error:", error);
             res.status(500).json({
                 success: false,
-                error: "Smart contract transfer failed",
-                details: error.message,
-                logs: error.logs || null
+                error: "Failed to record transfer proposal",
+                details: error.message
+            });
+        }
+    }
+
+    // POST /api/distributors/accept-transfer
+    // Called after buyer signs acceptTransfer() on-chain via wallet
+    async acceptTransfer(req: Request, res: Response) {
+        const { product_id, to_user_id, to_public_key, tx_hash, transfer_pda } = req.body;
+
+        if (!tx_hash || !to_public_key) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required fields: tx_hash, to_public_key"
+            });
+        }
+
+        try {
+            // Look up buyer
+            let buyer = null;
+            if (to_user_id) {
+                buyer = await DistributorEntity.getUserById(to_user_id);
+            } else {
+                buyer = await DistributorEntity.getUserByPublicKey(to_public_key);
+            }
+
+            // Get product info if provided
+            let product = null;
+            if (product_id) {
+                product = await DistributorEntity.getProductById(product_id);
+            }
+
+            res.json({
+                success: true,
+                data: {
+                    product_id: product_id || null,
+                    serial_no: product?.serial_no || null,
+                    to_user: buyer?.username || null,
+                    to_user_id: buyer?.user_id || null,
+                    to_public_key,
+                    tx_hash,
+                    transfer_pda,
+                    stage: 'accepted'
+                }
+            });
+
+        } catch (error: any) {
+            console.error("acceptTransfer error:", error);
+            res.status(500).json({
+                success: false,
+                error: "Failed to record transfer acceptance",
+                details: error.message
+            });
+        }
+    }
+
+    // POST /api/distributors/execute-transfer
+    // Called after seller signs executeTransfer() on-chain - updates ownership in DB
+    async executeTransfer(req: Request, res: Response) {
+        const {
+            product_id,
+            from_user_id,
+            from_public_key,
+            to_user_id,
+            to_public_key,
+            tx_hash,
+            block_slot,
+            transfer_pda,
+            product_pda
+        } = req.body;
+
+        if (!product_id || !from_public_key || !to_public_key || !tx_hash) {
+            return res.status(400).json({
+                success: false,
+                error: "Missing required fields: product_id, from_public_key, to_public_key, tx_hash"
+            });
+        }
+
+        try {
+            // Verify product exists
+            const product = await DistributorEntity.getProductById(product_id);
+            if (!product) {
+                return res.status(404).json({ success: false, error: "Product not found" });
+            }
+
+            // Check if product is still being tracked
+            if (product.track === false) {
+                return res.status(400).json({
+                    success: false,
+                    error: "Product is no longer being tracked. Transfers not allowed."
+                });
+            }
+
+            // Get seller info
+            let seller = null;
+            if (from_user_id) {
+                seller = await DistributorEntity.getUserById(from_user_id);
+            } else {
+                seller = await DistributorEntity.getUserByPublicKey(from_public_key);
+            }
+
+            // Get buyer info
+            let buyer = null;
+            if (to_user_id) {
+                buyer = await DistributorEntity.getUserById(to_user_id);
+            } else {
+                buyer = await DistributorEntity.getUserByPublicKey(to_public_key);
+            }
+
+            const actualFromUserId = seller?.user_id || from_user_id;
+            const actualToUserId = buyer?.user_id || to_user_id || null;
+
+            // Get the previous blockchain node
+            const latestBlock = await DistributorEntity.viewLatestBlockchainNode(product_id);
+            const prevTxHash = latestBlock?.tx_hash || null;
+
+            // Close current ownership (seller)
+            const currentOwnership = await DistributorEntity.getCurrentOwnership(product_id);
+            if (currentOwnership) {
+                currentOwnership.end_on = new Date();
+                await DistributorEntity.updateOwnership(currentOwnership);
+            }
+
+            // Create new ownership record (buyer)
+            const newOwnership: ownership = {
+                owner_id: actualToUserId,
+                owner_public_key: to_public_key,
+                product_id: product_id,
+                start_on: new Date(),
+                end_on: null,
+                tx_hash: tx_hash
+            };
+            await DistributorEntity.createOwnership(newOwnership);
+
+            // Create blockchain_node record
+            const blockchainNodeData: blockchain_node = {
+                tx_hash: tx_hash,
+                prev_tx_hash: prevTxHash!,
+                from_user_id: actualFromUserId,
+                from_public_key: from_public_key,
+                to_user_id: actualToUserId,
+                to_public_key: to_public_key,
+                product_id: product_id,
+                block_slot: block_slot || 0,
+                created_on: new Date()
+            };
+            await DistributorEntity.createBlockchainNode(blockchainNodeData);
+
+            res.json({
+                success: true,
+                data: {
+                    product_id,
+                    serial_no: product.serial_no,
+                    from_user: seller?.username || from_public_key,
+                    to_user: buyer?.username || to_public_key,
+                    from_user_id: actualFromUserId,
+                    to_user_id: actualToUserId,
+                    tx_hash,
+                    product_pda: product_pda || product.product_pda,
+                    transfer_pda,
+                    stage: 'executed',
+                    ownership_transferred: true
+                }
+            });
+
+        } catch (error: any) {
+            console.error("executeTransfer error:", error);
+            res.status(500).json({
+                success: false,
+                error: "Failed to execute transfer",
+                details: error.message
             });
         }
     }
