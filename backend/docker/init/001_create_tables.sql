@@ -20,10 +20,10 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
-DO $$ BEGIN
-  CREATE TYPE product_status AS ENUM ('registered','verified','suspicious');
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;
+-- DO $$ BEGIN
+--   CREATE TYPE product_status AS ENUM ('registered','verified','suspicious');
+-- EXCEPTION WHEN duplicate_object THEN NULL;
+-- END $$;
 
 DO $$ BEGIN
   CREATE TYPE tx_event AS ENUM ('REGISTER','TRANSFER','SELL');
@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS product (
   registered_by INT REFERENCES users(user_id) ON DELETE SET NULL,
   serial_no TEXT NOT NULL UNIQUE,
   qr_code BYTEA UNIQUE,
-  status product_status NOT NULL,
+  -- status product_status NOT NULL,
   model TEXT,
   batch_no TEXT,
   category TEXT,
@@ -230,7 +230,7 @@ SELECT
   p.batch_no,
   p.manufacture_date,
   p.description,
-  p.status AS product_status,
+  -- p.status AS product_status,
   p.registered_on,
   p.track,
 
@@ -331,7 +331,7 @@ SELECT
   p.batch_no,
   p.manufacture_date,
   p.description,
-  p.status                AS product_status,
+  -- p.status                AS product_status,
   p.registered_on,
   p.track,
 
