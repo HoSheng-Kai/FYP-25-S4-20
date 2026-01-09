@@ -58,7 +58,6 @@ class ProductController {
           category: result.category,
           manufactureDate: result.manufactureDate,
           productDescription: result.productDescription,
-          status: result.status,
           registeredOn: result.registeredOn,
 
           manufacturer: result.manufacturer,
@@ -193,11 +192,11 @@ class ProductController {
       const r = await pool.query(
         `
         INSERT INTO fyp_25_s4_20.product
-          (registered_by, serial_no, status, model, batch_no, category, manufacture_date, description, stage, track)
+          (registered_by, serial_no, model, batch_no, category, manufacture_date, description, stage, track)
         VALUES
-          ($1, $2, 'registered', $3, $4, $5, $6, $7, 'draft', TRUE)
+          ($1, $2, $3, $4, $5, $6, $7, 'draft', TRUE)
         ON CONFLICT (serial_no) DO NOTHING
-        RETURNING product_id, serial_no, model, batch_no, category, manufacture_date, description, status, stage, registered_on;
+        RETURNING product_id, serial_no, model, batch_no, category, manufacture_date, description, stage, registered_on;
         `,
         [manufacturerId, serialNo.trim(), productName ?? null, batchNo ?? null, category ?? null, manufactureDate ?? null, description ?? null]
       );
@@ -259,7 +258,7 @@ class ProductController {
           AND registered_by = $8
           AND stage = 'draft'
           AND (tx_hash IS NULL OR tx_hash = '')
-        RETURNING product_id, serial_no, model, batch_no, category, manufacture_date, description, status, stage, registered_on;
+        RETURNING product_id, serial_no, model, batch_no, category, manufacture_date, description, stage, registered_on;
         `,
         [
           serialNo ? String(serialNo).trim() : null,
@@ -874,7 +873,6 @@ class ProductController {
           category: updated.category,
           manufactureDate: updated.manufacture_date,
           productDescription: updated.description,
-          status: updated.status,
           registeredOn: updated.registered_on,
           qrPayload: updated.qr_payload,
           qrImageUrl: `${apiBase}/api/products/${updated.product_id}/qrcode`,
@@ -1106,7 +1104,6 @@ class ProductController {
           p.category,
           p.manufacture_date,
           p.description,
-          p.status,
           p.registered_on,
           p.registered_by,
           p.tx_hash,
@@ -1166,7 +1163,6 @@ class ProductController {
           category: p.category,
           manufactureDate: p.manufacture_date,
           productDescription: p.description,
-          status: p.status,
           registeredOn: p.registered_on,
 
           // for QR display on the Edit page:
@@ -1447,7 +1443,6 @@ class ProductController {
             p.model,
             p.batch_no,
             p.category,
-            p.status,
             p.registered_on,
             COALESCE(
               (
@@ -1759,7 +1754,6 @@ class ProductController {
           p.category,
           p.manufacture_date,
           p.description,
-          p.status,
           p.qr_code,
           p.product_pda,
           p.tx_hash,

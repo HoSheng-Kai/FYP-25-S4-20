@@ -13,7 +13,6 @@ export interface ProductScanResult {
   category: string | null;
   manufactureDate: Date | null;
   productDescription: string | null;
-  status: string; // registered / verified / suspicious
   registeredOn: Date;
 
   manufacturer: {
@@ -249,7 +248,6 @@ export class ProductScan {
       category: row.category ?? null,
       manufactureDate: row.manufacture_date ?? null,
       productDescription: row.description ?? null,
-      status: row.product_status,
       registeredOn: row.registered_on,
 
       manufacturer,

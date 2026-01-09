@@ -28,13 +28,12 @@ type EditProductData = {
   category: string | null;
   manufactureDate: string | null;
   productDescription: string | null;
-  status: string;
   registeredOn: string;
   qrImageUrl?: string;
 
   stage?: string | null;
 
-  // backend might return camelCase or snake_case; we handle both below
+  // handle both below camelCase or snake_case
   txHash?: string | null;
   productPda?: string | null;
 
