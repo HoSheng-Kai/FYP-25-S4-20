@@ -132,6 +132,22 @@ class UserController {
       })
     }
   }
+  async listUsers(req: Request, res: Response) {
+    try {
+      const users = await User.listUsers();
+
+      res.json({
+        success: true,
+        data: users,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to list users",
+        details: error.message,
+      });
+    }
+  }
 }
 
 export default new UserController();

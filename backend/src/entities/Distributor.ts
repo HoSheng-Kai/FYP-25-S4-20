@@ -191,7 +191,6 @@ class DistributorEntity {
             p.category,
             p.manufacture_date,
             p.description,
-            p.status,
             p.stage,
             p.product_pda,
             p.tx_hash,

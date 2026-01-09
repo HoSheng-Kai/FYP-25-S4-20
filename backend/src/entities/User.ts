@@ -37,6 +37,16 @@ class UserEntity {
         return true;
     }
 
+    static async listUsers()
+    : Promise<{ user_id: number; username: string; role_id: string; public_key: string | null }[]> {
+    const result = await pool.query(`
+        SELECT user_id, username, role_id, public_key
+        FROM users
+        ORDER BY username ASC
+    `);
+
+    return result.rows;
+    }
 }
 
 export default UserEntity;

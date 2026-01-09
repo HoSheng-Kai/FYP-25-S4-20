@@ -1,6 +1,14 @@
+// src/components/notifications/NotificationsPanel.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { NOTIFICATIONS_API_BASE_URL } from "../../config/api";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
+import { getProvider, getProgram } from "../../lib/anchorClient";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+
+const TRANSFER_ACCEPT_URL = `${NOTIFICATIONS_API_BASE_URL}/transfer/accept`;
+const TRANSFER_EXECUTE_URL = `${NOTIFICATIONS_API_BASE_URL}/transfer/execute`;
 
 type ApiNotification = {
   notificationId: number;
@@ -13,9 +21,39 @@ type ApiNotification = {
   txHash: string | null;
 };
 
+type TransferPayload =
+  | {
+      kind: "TRANSFER_REQUEST";
+      productId: number;
+      fromUserId: number;
+      toUserId: number;
+      productPda: string;
+      transferPda: string;
+      proposeTx: string;
+      fromOwnerPubkey: string;
+      toOwnerPubkey: string;
+    }
+  | {
+      kind: "TRANSFER_ACCEPTED";
+      productId: number;
+      fromUserId: number;
+      toUserId: number;
+      productPda: string;
+      transferPda: string;
+      acceptTx: string;
+      fromOwnerPubkey: string;
+      toOwnerPubkey: string;
+    };
+
 function formatWhen(iso: string) {
   const d = new Date(iso);
   return d.toLocaleString();
+}
+
+function shortKey(s: string, left = 6, right = 6) {
+  if (!s) return "";
+  if (s.length <= left + right + 3) return s;
+  return `${s.slice(0, left)}...${s.slice(-right)}`;
 }
 
 function getUserIdFromStorage(): number | null {
@@ -35,6 +73,86 @@ function getUserIdFromStorage(): number | null {
   return null;
 }
 
+/**
+ * ✅ Robust parser:
+ * - Accepts valid JSON stringified payload
+ * - ALSO accepts your current format: {kind:TRANSFER_REQUEST,productId:11,...}
+ */
+function parseTransferPayload(msg: string): TransferPayload | null {
+  if (!msg) return null;
+
+  // 1) Try real JSON first
+  try {
+    const obj = JSON.parse(msg);
+    if (obj?.kind === "TRANSFER_REQUEST") return obj as TransferPayload;
+    if (obj?.kind === "TRANSFER_ACCEPTED") return obj as TransferPayload;
+  } catch {
+    // fallthrough
+  }
+
+  // 2) Try parse pseudo-json: {k:v,k2:v2}
+  // Works because your values don't contain commas.
+  const raw = msg.trim();
+  if (!raw.startsWith("{") || !raw.endsWith("}")) return null;
+
+  const inner = raw.slice(1, -1).trim();
+  if (!inner) return null;
+
+  const map: Record<string, string> = {};
+  const parts = inner.split(",");
+
+  for (const p of parts) {
+    const idx = p.indexOf(":");
+    if (idx === -1) continue;
+    const key = p.slice(0, idx).trim();
+    let val = p.slice(idx + 1).trim();
+
+    // remove wrapping quotes if any
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+
+    map[key] = val;
+  }
+
+  const kind = map.kind;
+  if (kind !== "TRANSFER_REQUEST" && kind !== "TRANSFER_ACCEPTED") return null;
+
+  const base = {
+    kind: kind as any,
+    productId: Number(map.productId ?? map.product_id),
+    fromUserId: Number(map.fromUserId ?? map.from_user_id),
+    toUserId: Number(map.toUserId ?? map.to_user_id),
+    productPda: map.productPda ?? map.product_pda,
+    transferPda: map.transferPda ?? map.transfer_pda,
+    fromOwnerPubkey: map.fromOwnerPubkey ?? map.from_owner_pubkey ?? map.fromPublicKey ?? map.from_public_key,
+    toOwnerPubkey: map.toOwnerPubkey ?? map.to_owner_pubkey ?? map.toPublicKey ?? map.to_public_key,
+  };
+
+  if (
+    !base.productId ||
+    !base.fromUserId ||
+    !base.toUserId ||
+    !base.productPda ||
+    !base.transferPda ||
+    !base.fromOwnerPubkey ||
+    !base.toOwnerPubkey
+  ) {
+    return null;
+  }
+
+  if (kind === "TRANSFER_REQUEST") {
+    const proposeTx = map.proposeTx ?? map.propose_tx ?? "";
+    return { ...(base as any), proposeTx } as TransferPayload;
+  }
+
+  const acceptTx = map.acceptTx ?? map.accept_tx ?? "";
+  return { ...(base as any), acceptTx } as TransferPayload;
+}
+
 export default function NotificationsPanel(props: {
   title?: string;
   defaultOnlyUnread?: boolean;
@@ -42,6 +160,7 @@ export default function NotificationsPanel(props: {
 }) {
   const { title = "Notifications", defaultOnlyUnread = true, showHeader = true } = props;
 
+  const wallet = useWallet();
   const userId = useMemo(() => getUserIdFromStorage(), []);
 
   const [onlyUnread, setOnlyUnread] = useState(defaultOnlyUnread);
@@ -83,15 +202,11 @@ export default function NotificationsPanel(props: {
     setBusyId(notificationId);
     setError(null);
 
-    // optimistic
     setItems((prev) => prev.map((n) => (n.notificationId === notificationId ? { ...n, isRead: true } : n)));
 
     try {
       await axios.put(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}/read`, null, { params: { userId } });
-
-      if (onlyUnread) {
-        setItems((prev) => prev.filter((n) => n.notificationId !== notificationId));
-      }
+      if (onlyUnread) setItems((prev) => prev.filter((n) => n.notificationId !== notificationId));
     } catch (e: any) {
       setItems((prev) => prev.map((n) => (n.notificationId === notificationId ? { ...n, isRead: false } : n)));
       setError(e?.response?.data?.error ?? e?.message ?? "Failed to mark as read");
@@ -105,8 +220,6 @@ export default function NotificationsPanel(props: {
 
     setLoading(true);
     setError(null);
-
-    // optimistic
     setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
 
     try {
@@ -155,124 +268,264 @@ export default function NotificationsPanel(props: {
     }
   }
 
+  function ensureWalletConnected(actionName: string): boolean {
+    if (!wallet.connected || !wallet.publicKey) {
+      setError(`Connect your Phantom wallet to ${actionName}.`);
+      return false;
+    }
+    return true;
+  }
+
+  async function acceptTransfer(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+    if (!payload || payload.kind !== "TRANSFER_REQUEST") return;
+
+    if (!ensureWalletConnected("accept this transfer")) return;
+
+    if (wallet.publicKey!.toBase58() !== payload.toOwnerPubkey) {
+      setError(`Wrong wallet connected. Expected recipient: ${payload.toOwnerPubkey}`);
+      return;
+    }
+
+    setBusyId(n.notificationId);
+    setError(null);
+
+    try {
+      const provider = getProvider(wallet);
+      const program = getProgram(provider);
+
+      const transferPda = new PublicKey(payload.transferPda);
+
+      const acceptTx = await program.methods
+        .acceptTransfer()
+        .accounts({
+          toOwner: wallet.publicKey!,
+          transferRequest: transferPda,
+        })
+        .rpc();
+
+      await axios.post(TRANSFER_ACCEPT_URL, {
+        notificationId: n.notificationId,
+        fromUserId: payload.fromUserId,
+        toUserId: payload.toUserId,
+        productId: payload.productId,
+        productPda: payload.productPda,
+        transferPda: payload.transferPda,
+        acceptTx,
+        fromOwnerPubkey: payload.fromOwnerPubkey,
+        toOwnerPubkey: payload.toOwnerPubkey,
+      });
+
+      await markOneRead(n.notificationId);
+      await fetchNotifications(onlyUnread);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? e?.response?.data?.details ?? e?.message ?? "Accept failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function executeTransfer(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+    if (!payload || payload.kind !== "TRANSFER_ACCEPTED") return;
+
+    if (!ensureWalletConnected("execute this transfer")) return;
+
+    if (wallet.publicKey!.toBase58() !== payload.fromOwnerPubkey) {
+      setError(`Wrong wallet connected. Expected sender: ${payload.fromOwnerPubkey}`);
+      return;
+    }
+
+    setBusyId(n.notificationId);
+    setError(null);
+
+    try {
+      const provider = getProvider(wallet);
+      const program = getProgram(provider);
+
+      const productPda = new PublicKey(payload.productPda);
+      const transferPda = new PublicKey(payload.transferPda);
+
+      const executeTx = await program.methods
+        .executeTransfer()
+        .accounts({
+          fromOwner: wallet.publicKey!,
+          product: productPda,
+          transferRequest: transferPda,
+        })
+        .rpc();
+
+      await axios.post(TRANSFER_EXECUTE_URL, {
+        notificationId: n.notificationId,
+        fromUserId: payload.fromUserId,
+        toUserId: payload.toUserId,
+        productId: payload.productId,
+        executeTx,
+        fromPublicKey: payload.fromOwnerPubkey,
+        toPublicKey: payload.toOwnerPubkey,
+      });
+
+      await markOneRead(n.notificationId);
+      await fetchNotifications(onlyUnread);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? e?.response?.data?.details ?? e?.message ?? "Execute failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function denyTransfer(n: ApiNotification) {
+    // Simple deny: mark read (optional: backend "denied" notification)
+    setBusyId(n.notificationId);
+    setError(null);
+    try {
+      await markOneRead(n.notificationId);
+      await fetchNotifications(onlyUnread);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function renderMessage(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+
+    // ✅ Pretty short UI (no long blob)
+    if (payload?.kind === "TRANSFER_REQUEST") {
+      return (
+        <div style={{ marginTop: 6, color: "#4b5563", lineHeight: 1.5 }}>
+          <div>
+            Product <strong>#{payload.productId}</strong> — Transfer request
+          </div>
+          <div style={{ fontSize: 12, marginTop: 6 }}>
+            <span style={monoWrap}>toOwner: {shortKey(payload.toOwnerPubkey)}</span>
+            {"  "}•{"  "}
+            <span style={monoWrap}>transferPda: {shortKey(payload.transferPda)}</span>
+          </div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>
+            <span style={monoWrap}>proposeTx: {shortKey(payload.proposeTx)}</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (payload?.kind === "TRANSFER_ACCEPTED") {
+      return (
+        <div style={{ marginTop: 6, color: "#4b5563", lineHeight: 1.5 }}>
+          <div>
+            Product <strong>#{payload.productId}</strong> — Recipient accepted
+          </div>
+          <div style={{ fontSize: 12, marginTop: 6 }}>
+            <span style={monoWrap}>fromOwner: {shortKey(payload.fromOwnerPubkey)}</span>
+            {"  "}•{"  "}
+            <span style={monoWrap}>transferPda: {shortKey(payload.transferPda)}</span>
+          </div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>
+            <span style={monoWrap}>acceptTx: {shortKey(payload.acceptTx)}</span>
+          </div>
+        </div>
+      );
+    }
+
+    // Default fallback (also wrapped so it won't overflow)
+    return (
+      <div style={{ color: "#4b5563", marginTop: 6, lineHeight: 1.5, wordBreak: "break-word" }}>
+        {n.message}
+      </div>
+    );
+  }
+
+  function renderTransferActions(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+
+    // ✅ Accept/Deny for recipient
+    if (!n.isRead && (n.title === "Transfer Request" || payload?.kind === "TRANSFER_REQUEST")) {
+      if (!payload || payload.kind !== "TRANSFER_REQUEST") return null;
+
+      return (
+        <>
+          <button
+            onClick={() => acceptTransfer(n)}
+            disabled={busyId === n.notificationId}
+            style={btnPrimary}
+          >
+            Accept
+          </button>
+          <button
+            onClick={() => denyTransfer(n)}
+            disabled={busyId === n.notificationId}
+            style={btnLight}
+          >
+            Deny
+          </button>
+        </>
+      );
+    }
+
+    // ✅ Execute for sender after accepted
+    if (!n.isRead && (n.title === "Transfer Accepted" || payload?.kind === "TRANSFER_ACCEPTED")) {
+      if (!payload || payload.kind !== "TRANSFER_ACCEPTED") return null;
+
+      return (
+        <button
+          onClick={() => executeTransfer(n)}
+          disabled={busyId === n.notificationId}
+          style={btnPrimary}
+        >
+          Execute
+        </button>
+      );
+    }
+
+    return null;
+  }
+
   return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #e5e7eb",
-        borderRadius: 16,
-        padding: 24,
-        marginBottom: 18,
-      }}
-    >
+    <div style={panel}>
       {showHeader && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+        <div style={headerRow}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h2 style={{ margin: 0 }}>{title}</h2>
-            <span
-              style={{
-                fontSize: 12,
-                padding: "4px 10px",
-                borderRadius: 999,
-                background: "#f3f4f6",
-                border: "1px solid #e5e7eb",
-                color: "#111827",
-              }}
-            >
-              Unread: {unreadCount}
-            </span>
+            <span style={pill}>Unread: {unreadCount}</span>
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {/* ✅ WALLET CONNECT UI */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <WalletMultiButton />
+            </div>
+
             <div style={{ display: "flex", gap: 8 }}>
-              <button
-                onClick={() => setOnlyUnread(true)}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
-                  background: onlyUnread ? "#111827" : "white",
-                  color: onlyUnread ? "white" : "#111827",
-                  cursor: "pointer",
-                }}
-              >
+              <button onClick={() => setOnlyUnread(true)} style={onlyUnread ? btnDark : btnLight}>
                 Unread
               </button>
-              <button
-                onClick={() => setOnlyUnread(false)}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
-                  background: !onlyUnread ? "#111827" : "white",
-                  color: !onlyUnread ? "white" : "#111827",
-                  cursor: "pointer",
-                }}
-              >
+              <button onClick={() => setOnlyUnread(false)} style={!onlyUnread ? btnDark : btnLight}>
                 All
               </button>
             </div>
 
-            <button
-              onClick={() => fetchNotifications(onlyUnread)}
-              disabled={loading}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: "1px solid #e5e7eb",
-                background: "white",
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-            >
+            <button onClick={() => fetchNotifications(onlyUnread)} disabled={loading} style={btnLight}>
               Refresh
             </button>
 
-            <button
-              onClick={markAllRead}
-              disabled={loading || items.length === 0}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: "1px solid #e5e7eb",
-                background: "white",
-                cursor: loading || items.length === 0 ? "not-allowed" : "pointer",
-              }}
-            >
+            <button onClick={markAllRead} disabled={loading || items.length === 0} style={btnLight}>
               Mark all read
             </button>
 
-            <button
-              onClick={deleteAllRead}
-              disabled={loading}
-              style={{
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: "1px solid #e5e7eb",
-                background: "white",
-                cursor: loading ? "not-allowed" : "pointer",
-              }}
-              title="Deletes all read notifications"
-            >
+            <button onClick={deleteAllRead} disabled={loading} style={btnLight} title="Deletes all read notifications">
               Delete read
             </button>
           </div>
         </div>
       )}
 
-      {error && (
-        <div
-          style={{
-            marginTop: 12,
-            padding: 12,
-            borderRadius: 12,
-            background: "#fef2f2",
-            border: "1px solid #fecaca",
-            color: "#991b1b",
-          }}
-        >
-          {error}
-        </div>
-      )}
+      <div style={{ marginTop: 10, color: "#6b7280", fontSize: 12 }}>
+        Wallet:{" "}
+        <span style={{ fontFamily: "monospace" }}>
+          {wallet.publicKey ? wallet.publicKey.toBase58() : "Not connected"}
+        </span>
+      </div>
+
+      {error && <div style={errBox}>{error}</div>}
 
       <div style={{ marginTop: 14 }}>
         {loading ? (
@@ -282,73 +535,42 @@ export default function NotificationsPanel(props: {
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {items.map((n) => (
-              <div
-                key={n.notificationId}
-                style={{
-                  border: "1px solid #e5e7eb",
-                  borderRadius: 14,
-                  padding: 14,
-                  background: n.isRead ? "#ffffff" : "#f9fafb",
-                }}
-              >
+              <div key={n.notificationId} style={{ ...card, background: n.isRead ? "#fff" : "#f9fafb" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                  <div style={{ minWidth: 0 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ fontWeight: 700, color: "#111827" }}>{n.title}</div>
-                      {!n.isRead && (
-                        <span
-                          style={{
-                            fontSize: 12,
-                            padding: "2px 8px",
-                            borderRadius: 999,
-                            background: "#111827",
-                            color: "white",
-                          }}
-                        >
-                          NEW
-                        </span>
-                      )}
+                      {!n.isRead && <span style={newPill}>NEW</span>}
                     </div>
 
-                    <div style={{ color: "#4b5563", marginTop: 6, lineHeight: 1.5 }}>{n.message}</div>
+                    {renderMessage(n)}
 
-                    <div style={{ color: "#6b7280", fontSize: 12, marginTop: 10 }}>
+                    <div style={{ color: "#6b7280", fontSize: 12, marginTop: 10, wordBreak: "break-word" }}>
                       {formatWhen(n.createdOn)}
                       {n.productId ? <span> • Product #{n.productId}</span> : null}
-                      {n.txHash ? <span> • Tx: {n.txHash}</span> : null}
+                      {n.txHash ? <span> • Tx: {shortKey(n.txHash, 6, 6)}</span> : null}
                     </div>
                   </div>
 
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    {/* ✅ transfer buttons */}
+                    {renderTransferActions(n)}
+
+                    {/* existing actions */}
                     {!n.isRead && (
                       <button
                         onClick={() => markOneRead(n.notificationId)}
                         disabled={busyId === n.notificationId}
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #e5e7eb",
-                          background: "white",
-                          cursor: busyId === n.notificationId ? "not-allowed" : "pointer",
-                          whiteSpace: "nowrap",
-                        }}
+                        style={btnLight}
                       >
                         Mark read
                       </button>
                     )}
-
                     {n.isRead && (
                       <button
                         onClick={() => deleteOneRead(n.notificationId)}
                         disabled={busyId === n.notificationId}
-                        style={{
-                          padding: "8px 10px",
-                          borderRadius: 10,
-                          border: "1px solid #e5e7eb",
-                          background: "white",
-                          cursor: busyId === n.notificationId ? "not-allowed" : "pointer",
-                          whiteSpace: "nowrap",
-                        }}
+                        style={btnLight}
                         title="Only works if the notification is already read"
                       >
                         Delete
@@ -364,3 +586,77 @@ export default function NotificationsPanel(props: {
     </div>
   );
 }
+
+/* ---------------- styles ---------------- */
+const panel: React.CSSProperties = {
+  background: "white",
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 24,
+  marginBottom: 18,
+};
+
+const headerRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const pill: React.CSSProperties = {
+  fontSize: 12,
+  padding: "4px 10px",
+  borderRadius: 999,
+  background: "#f3f4f6",
+  border: "1px solid #e5e7eb",
+  color: "#111827",
+};
+
+const newPill: React.CSSProperties = {
+  fontSize: 12,
+  padding: "2px 8px",
+  borderRadius: 999,
+  background: "#111827",
+  color: "white",
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  padding: 14,
+};
+
+const errBox: React.CSSProperties = {
+  marginTop: 12,
+  padding: 12,
+  borderRadius: 12,
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  color: "#991b1b",
+};
+
+const monoWrap: React.CSSProperties = {
+  fontFamily: "monospace",
+  wordBreak: "break-all",
+};
+
+const btnLight: React.CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid #e5e7eb",
+  background: "white",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const btnDark: React.CSSProperties = {
+  ...btnLight,
+  background: "#111827",
+  color: "white",
+  border: "1px solid #111827",
+};
+
+const btnPrimary: React.CSSProperties = {
+  ...btnDark,
+};

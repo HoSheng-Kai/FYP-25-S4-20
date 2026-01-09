@@ -19,4 +19,8 @@ router.delete("/read", c.deleteReadNotifications.bind(c));
 // DELETE /api/notifications/:notificationId?userId=2
 router.delete("/:notificationId", c.deleteOneReadNotification.bind(c));
 
+router.post("/create", c.createNotification.bind(c));
+router.post("/transfer/accept", c.transferAccept.bind(c));
+router.post("/transfer/execute", c.transferExecute.bind(c));
+
 export default router;

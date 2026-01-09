@@ -13,7 +13,6 @@ type BackendProduct = {
   serial_no: string;
   model: string | null;
   category: string | null;
-  status: string | null; // 'registered' | 'verified' | 'suspicious'
   product_pda: string | null;
   tx_hash: string | null;
   track: boolean | null;
@@ -44,7 +43,6 @@ type ProductRow = {
   serialNumber: string;
   category?: string | null;
   productName: string | null;
-  productStatus: "registered" | "verified" | "suspicious";
   lifecycleStatus: "active" | "transferred";
   blockchainStatus: string; // pending / confirmed
   registeredOn: string;
@@ -215,13 +213,6 @@ export default function ManufacturerProductsPage() {
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
   };
 
-  const normalizeStatus = (s: string | null | undefined): ProductRow["productStatus"] => {
-    const v = (s || "").toLowerCase();
-    if (v === "verified") return "verified";
-    if (v === "suspicious") return "suspicious";
-    return "registered";
-  };
-
   // filtered list for the table
   const products = useMemo(() => {
     if (filterMode === "owned") {
@@ -322,7 +313,6 @@ export default function ManufacturerProductsPage() {
           serialNumber: p.serial_no,
           productName: p.model ?? null,
           category: p.category ?? null,
-          productStatus: normalizeStatus(p.status),
           lifecycleStatus,
           blockchainStatus: confirmed ? "confirmed" : "pending",
           registeredOn: p.owned_since || "",
@@ -636,7 +626,7 @@ export default function ManufacturerProductsPage() {
             <th style={th}>Product ID</th>
             <th style={th}>Product Name</th>
             <th style={th}>Category</th>
-            <th style={th}>Registered/Owned Since</th>
+            <th style={th}>Owned Since</th>
             <th style={th}>Status</th>
             <th style={th}>Actions</th>
           </tr>
@@ -681,29 +671,6 @@ export default function ManufacturerProductsPage() {
                 <td style={td}>{safeDate(p.registeredOn)}</td>
 
                 <td style={td}>
-                  <span
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                      textTransform: "capitalize",
-                      background:
-                        p.productStatus === "verified"
-                          ? "#d4f5d4"
-                          : p.productStatus === "registered"
-                          ? "#dbeafe"
-                          : "#fee2e2",
-                      color:
-                        p.productStatus === "verified"
-                          ? "#1b6e1b"
-                          : p.productStatus === "registered"
-                          ? "#1d4ed8"
-                          : "#b91c1c",
-                    }}
-                  >
-                    {p.productStatus}
-                  </span>
-
                   {/* Ownership */}
                   <span
                     style={{
