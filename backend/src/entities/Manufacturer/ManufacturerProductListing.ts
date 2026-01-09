@@ -6,7 +6,7 @@ export type ManufacturerListingRow = {
   model: string | null;
   category: string | null;
 
-  product_status: string;     // registered / verified / suspicious
+  // product_status: string;     // registered / verified / suspicious
   lifecycle_status: string;   // active / transferred
   blockchain_status: string;  // pending / on blockchain
   registered_on: Date;

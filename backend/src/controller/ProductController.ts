@@ -147,7 +147,7 @@ class ProductController {
           serialNumber: row.serial_no,
           productName: row.model,
           category: row.category,
-          productStatus: row.product_status,       // registered / verified / suspicious
+          // productStatus: row.product_status,       // registered / verified / suspicious
           lifecycleStatus: row.lifecycle_status,   // active / transferred
           blockchainStatus: row.blockchain_status, // on blockchain / pending
           registeredOn: row.registered_on,
