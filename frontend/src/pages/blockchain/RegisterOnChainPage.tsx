@@ -33,8 +33,13 @@ type EditProductData = {
   qrImageUrl?: string;
 
   stage?: string | null;
+
+  // backend might return camelCase or snake_case; we handle both below
   txHash?: string | null;
   productPda?: string | null;
+
+  tx_hash?: string | null;
+  product_pda?: string | null;
 };
 
 type GetEditResponse = {
@@ -83,8 +88,11 @@ const styles: Record<string, React.CSSProperties> = {
 
   sectionTitle: { fontWeight: 800, fontSize: 13, marginBottom: 10, color: "#111827" },
 
-  grid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: 14, 
-    alignItems:"start"
+  grid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+    gap: 14,
+    alignItems: "start",
   },
 
   field: { display: "flex", flexDirection: "column", gap: 6 },
@@ -178,7 +186,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 13,
   },
 
-  // Bottom status card
   statusCard: {
     marginTop: 18,
     background: "#fff",
@@ -211,13 +218,26 @@ const styles: Record<string, React.CSSProperties> = {
   },
 
   mono: { fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace" },
+
+  // ✅ error banner
+  alertError: {
+    marginBottom: 12,
+    padding: "10px 12px",
+    borderRadius: 12,
+    background: "#fee2e2",
+    color: "#991b1b",
+    fontSize: 13,
+    fontWeight: 700,
+    border: "1px solid #fecaca",
+  },
 };
 
 export default function RegisterOnChainPage() {
   const wallet = useWallet();
   const [searchParams] = useSearchParams();
 
-  const manufacturerId = useMemo(() => Number(localStorage.getItem("userId")) || 0, []);
+  // ✅ do NOT memoize manufacturerId; keep it current
+  const manufacturerId = Number(localStorage.getItem("userId")) || 0;
 
   const [serialNo, setSerialNo] = useState("");
   const [productName, setProductName] = useState("");
@@ -237,6 +257,9 @@ export default function RegisterOnChainPage() {
 
   // QR (from backend)
   const [qrUrl, setQrUrl] = useState<string>("");
+
+  // ✅ visible UI error instead of swallowing
+  const [uiError, setUiError] = useState<string>("");
 
   const meta: ProductMetadata = useMemo(
     () => ({
@@ -259,20 +282,24 @@ export default function RegisterOnChainPage() {
     };
   }, [qrUrl]);
 
+  const pidStr = searchParams.get("productId");
+  const stageParam = (searchParams.get("stage") || "").toLowerCase();
   useEffect(() => {
-    const pidStr = searchParams.get("productId");
+    setUiError("");
+
     if (!pidStr) return;
 
     const pid = Number(pidStr);
     if (!Number.isFinite(pid) || pid <= 0) return;
 
     setProductId(pid);
+    if (stageParam === "confirmed") setDraftStage("confirmed");
+    else if (stageParam === "draft") setDraftStage("draft");
     void loadProduct(pid);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pidStr]);
 
   async function fetchQr(pid: number) {
-    // clear old url first (and revoke it)
     setQrUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return "";
@@ -289,13 +316,15 @@ export default function RegisterOnChainPage() {
 
   async function loadProduct(pid: number) {
     try {
+      setUiError("");
+
       const res = await axios.get<GetEditResponse>(`${API_BASE}/api/products/${pid}/edit`, {
         params: { manufacturerId },
       });
 
       if (!res.data.success || !res.data.data) throw new Error(res.data.error || "Failed to load product");
 
-      const d = res.data.data;
+      const d: any = res.data.data;
 
       setSerialNo(d.serialNumber ?? "");
       setProductName(d.productName ?? "");
@@ -304,28 +333,35 @@ export default function RegisterOnChainPage() {
       setManufactureDate(d.manufactureDate ? new Date(d.manufactureDate).toISOString().slice(0, 10) : "");
       setDescription(d.productDescription ?? "");
 
-      const stage = (d.stage || "").toLowerCase();
+      const stage = String(d.stage || "").toLowerCase();
       if (stage === "confirmed") setDraftStage("confirmed");
       else if (stage === "draft") setDraftStage("draft");
-      else setDraftStage("unknown");
 
-      if (d.txHash) {
+      // ✅ handle both camelCase and snake_case
+      const tx = d.txHash ?? d.tx_hash ?? null;
+      const pda = d.productPda ?? d.product_pda ?? null;
+
+      if (tx) {
         setIsFinalized(true);
-        setTxSig(d.txHash);
-        if (d.productPda) setProductPdaStr(d.productPda);
+        setTxSig(tx);
+        if (pda) setProductPdaStr(pda);
+      } else {
+        setIsFinalized(false);
+        setTxSig("");
+        setProductPdaStr("");
       }
 
       // Auto-load QR if confirmed/finalized
-      if ((stage === "confirmed" || !!d.txHash) && pid) {
+      if ((stage === "confirmed" || !!tx) && pid) {
         await fetchQr(pid);
       }
-    } catch {
-      // ignore
+    } catch (e: any) {
+      console.error("loadProduct error:", e);
+      setUiError(e?.message || "Failed to load product.");
     }
   }
 
-  // ✅ Safety net:
-  // If UI says confirmed/finalized but qrUrl is still empty, fetch it.
+  // ✅ Safety net: if confirmed/finalized but qr missing, fetch it
   useEffect(() => {
     if (!productId) return;
     if (!(draftStage === "confirmed" || isFinalized)) return;
@@ -357,7 +393,9 @@ export default function RegisterOnChainPage() {
       null;
 
     if (!pid) {
-      throw new Error(`Draft saved but could not parse productId.\nResponse:\n${JSON.stringify(dbRes.data, null, 2)}`);
+      throw new Error(
+        `Draft saved but could not parse productId.\nResponse:\n${JSON.stringify(dbRes.data, null, 2)}`
+      );
     }
 
     setProductId(pid);
@@ -369,7 +407,6 @@ export default function RegisterOnChainPage() {
     setMetadataUri("");
     setMetadataHashHex("");
 
-    // reset QR
     setQrUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
       return "";
@@ -380,14 +417,17 @@ export default function RegisterOnChainPage() {
 
   async function onSaveDraftClick() {
     try {
+      setUiError("");
       await saveDraft();
-    } catch {
-      // ignore
+    } catch (e: any) {
+      console.error("saveDraft error:", e);
+      setUiError(e?.message || "Save draft failed.");
     }
   }
 
   async function deleteDraft() {
     try {
+      setUiError("");
       if (!productId) throw new Error("No productId. Save draft first.");
       if (isLocked) throw new Error("Draft is locked (confirmed/finalized). Cannot delete.");
 
@@ -403,28 +443,32 @@ export default function RegisterOnChainPage() {
         if (prev) URL.revokeObjectURL(prev);
         return "";
       });
-    } catch {
-      // ignore
+    } catch (e: any) {
+      console.error("deleteDraft error:", e);
+      setUiError(e?.message || "Delete draft failed.");
     }
   }
 
   async function confirmDraft() {
     try {
+      setUiError("");
       if (!productId) throw new Error("No productId. Save draft first.");
       if (isLocked) throw new Error("Already locked.");
 
       await axios.post(`${API_BASE}/api/products/${productId}/confirm-draft`, { manufacturerId });
       setDraftStage("confirmed");
 
-      // ✅ generate + show QR immediately
       await fetchQr(productId);
-    } catch {
-      // ignore
+    } catch (e: any) {
+      console.error("confirmDraft error:", e);
+      setUiError(e?.message || "Confirm draft failed.");
     }
   }
 
   async function sendToBlockchain() {
     try {
+      setUiError("");
+
       if (!wallet.publicKey) throw new Error("Connect wallet first");
       const s = serialNo.trim();
       if (!s) throw new Error("Serial number is required");
@@ -442,7 +486,11 @@ export default function RegisterOnChainPage() {
 
       if (!uri || !hashHex) {
         throw new Error(
-          `metadata-final did not return metadataUri/metadataSha256Hex.\nResponse:\n${JSON.stringify(metaRes.data, null, 2)}`
+          `metadata-final did not return metadataUri/metadataSha256Hex.\nResponse:\n${JSON.stringify(
+            metaRes.data,
+            null,
+            2
+          )}`
         );
       }
 
@@ -476,10 +524,11 @@ export default function RegisterOnChainPage() {
 
       setIsFinalized(true);
 
-      // Optional: keep QR visible even after finalize
       if (!qrUrl) await fetchQr(productId);
-    } catch {
-      // ignore
+    } catch (e: any) {
+      console.error("sendToBlockchain error:", e);
+      setUiError(e?.message || "Send to blockchain failed.");
+      alert(e?.message || "Send to blockchain failed.");
     }
   }
 
@@ -509,15 +558,24 @@ export default function RegisterOnChainPage() {
         </div>
 
         <div style={styles.cardBody}>
+          {/* ✅ visible errors */}
+          {uiError && <div style={styles.alertError}>{uiError}</div>}
+
           <div style={styles.sectionTitle}>Enter the details of the product you want to register</div>
 
           <div style={styles.grid}>
             <div style={styles.field}>
               <div style={styles.labelRow}>
                 <span style={styles.label}>Product ID (DB)</span>
-                <span style={styles.helper}>Auto after Save Draft / ?productId=</span>
+                <span style={styles.helper}></span>
               </div>
-              <input type="text" value={productId ?? ""} readOnly placeholder="e.g., 12345" style={styles.inputReadOnly} />
+              <input
+                type="text"
+                value={productId ?? ""}
+                readOnly
+                placeholder="e.g., 12345"
+                style={styles.inputReadOnly}
+              />
             </div>
 
             <div style={styles.field}>
@@ -602,8 +660,14 @@ export default function RegisterOnChainPage() {
             </div>
 
             {(txSig || productPdaStr || metadataUri) && (
-              <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-               gap: 12 }}>
+              <div
+                style={{
+                  gridColumn: "1 / -1",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+                  gap: 12,
+                }}
+              >
                 {txSig && (
                   <div style={styles.field}>
                     <span style={styles.label}>Tx Signature</span>
@@ -637,7 +701,6 @@ export default function RegisterOnChainPage() {
             )}
           </div>
 
-          {/* ===== Bottom Status + QR (status moved here) ===== */}
           <div style={styles.statusCard}>
             <div style={{ fontWeight: 900, marginBottom: 8 }}>Registration Status</div>
             <div style={styles.statusRow}>
@@ -655,7 +718,6 @@ export default function RegisterOnChainPage() {
               </span>
             </div>
 
-            {/* QR right below status */}
             {(draftStage === "confirmed" || isFinalized || !!qrUrl) && productId && (
               <div
                 style={{
@@ -667,8 +729,6 @@ export default function RegisterOnChainPage() {
                 }}
               >
                 <div style={{ fontWeight: 900, marginBottom: 6 }}>QR Code</div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 12 }}>
-                </div>
 
                 <div style={{ display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
                   <div
@@ -711,15 +771,16 @@ export default function RegisterOnChainPage() {
           </div>
 
           <div style={styles.actionsWrap}>
-            <button onClick={onSaveDraftClick} style={styles.btn} disabled={isLocked}>
+            <button type="button" onClick={onSaveDraftClick} style={styles.btn} disabled={isLocked}>
               Save Draft (DB)
             </button>
 
-            <button onClick={deleteDraft} style={styles.btnDanger} disabled={isLocked || !productId}>
+            <button type="button" onClick={deleteDraft} style={styles.btnDanger} disabled={isLocked || !productId}>
               Delete Draft
             </button>
 
             <button
+              type="button"
               onClick={confirmDraft}
               style={styles.btnEmphasis}
               disabled={isLocked || !productId}
@@ -729,6 +790,7 @@ export default function RegisterOnChainPage() {
             </button>
 
             <button
+              type="button"
               onClick={sendToBlockchain}
               style={styles.btnPrimary}
               disabled={draftStage !== "confirmed" || isFinalized || !productId}

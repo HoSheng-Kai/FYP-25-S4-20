@@ -458,7 +458,7 @@ export default function ManufacturerProductsPage() {
       setEditBatch(d.batchNumber ?? "");
       setEditCategory(d.category ?? "");
       setEditDescription(d.productDescription ?? "");
-      // parse into yyyy-mm-dd (only valid for HTML date input if 4-digit year)
+      // parse into yyyy-mm-dd
       const toDateInputValue = (v: string | null | undefined) => {
         if (!v) return "";
         if (typeof v === "string" && v.length >= 10 && /^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
@@ -759,7 +759,7 @@ export default function ManufacturerProductsPage() {
                         <button
                           type="button"
                           style={menuItem}
-                          onClick={() => go(() => navigate(`/manufacturer/products/${p.productId}`))}
+                          onClick={() => go(() => navigate(`/products/${p.productId}/details`))}
                           role="menuitem"
                         >
                           View details
@@ -798,7 +798,7 @@ export default function ManufacturerProductsPage() {
                           style={registerEligible ? menuItem : menuItemDisabled}
                           onClick={() =>
                             registerEligible
-                              ? go(() => navigate(`/manufacturer/register?productId=${p.productId}`))
+                              ? go(() => navigate(`/manufacturer/register?productId=${p.productId}&stage=${encodeURIComponent(p.stage ?? "")}`))
                               : undefined
                           }
                           disabled={!registerEligible}

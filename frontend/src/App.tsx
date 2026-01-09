@@ -42,12 +42,6 @@ import DistributorProductsPage from "./pages/distributor/DistributorProductsPage
 import RetailerProductsPage from "./pages/retailer/RetailerProductsPage";
 import RetailerReviewsPage from "./pages/retailer/RetailerReviewsPage";
 
-// Blockchain transfer flow
-import CreateTransferPage from "./pages/blockchain/CreateTransferPage";
-import AcceptTransferPage from "./pages/blockchain/AcceptTransferPage";
-import ExecuteTransferPage from "./pages/blockchain/ExecuteTransferPage";
-import RegisterTestPage from "./pages/blockchain/RegisterTestPage";
-
 export default function App() {
   return (
     <Routes>
@@ -97,11 +91,8 @@ export default function App() {
       {/* Optional standalone */}
       <Route path="/transaction-history" element={<TransactionHistory />} />
 
-      {/* Blockchain transfer flow (standalone pages) */}
-      <Route path="/blockchain/create" element={<CreateTransferPage />} />
-      <Route path="/blockchain/accept" element={<AcceptTransferPage />} />
-      <Route path="/blockchain/execute" element={<ExecuteTransferPage />} />
-      <Route path="/blockchain/register-test" element={<RegisterTestPage />} />
+      {/* Shared*/}
+      <Route path="/products/:productId/details" element={<ProductDetailsPage />} />
 
       {/* Default */}
       <Route path="/" element={<Navigate to="/login" replace />} />
