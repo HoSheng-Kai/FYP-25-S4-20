@@ -38,6 +38,9 @@ function deriveTransferPda(productPda: PublicKey, fromOwner: PublicKey, toOwner:
 
 class DistributorController {
 
+    // ============================================================
+    // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
+    // ============================================================
     async registerProduct(req: Request, res: Response) {
         const { manufacturer_id, serial_no, product_name, batch_no, category, manufacture_date, description, product_id, tx_hash, product_pda } = req.body;
 
@@ -831,6 +834,9 @@ class DistributorController {
         }
     }
 
+    // ============================================================
+    // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
+    // ============================================================
     async cancelTransfer(req: Request, res: Response) {
         const { from_user_id, to_user_id, product_id, transfer_pda } = req.body;
 

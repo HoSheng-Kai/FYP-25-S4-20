@@ -4,14 +4,27 @@ import pool from '../schema/database';
 // import User from '../db/table'
 
 class UserEntity {
+    // ============================================================
+    // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
+    // ============================================================
     //  Create new account
     static async createAccount(username: string, password: string, email: string, role_id: string, privateKey: string, publicKey: string)
     : Promise<void>{
-        const result = await pool.query(`
+        await pool.query(`
             INSERT INTO users (username, password_hash, email, role_id, private_key, public_key, verified)
             VALUES ($1, $2, $3, $4, $5, $6, $7)
             `, [username, password, email, role_id, privateKey, publicKey, false]);
     }
+    // ============================================================
+    // ✅ UNCOMMENT BELOW WHEN DEPLOYING (no private key)
+    // ============================================================
+    // static async createAccount(username: string, password: string, email: string, role_id: string, publicKey: string)
+    // : Promise<void>{
+    //     await pool.query(`
+    //         INSERT INTO users (username, password_hash, email, role_id, public_key, verified)
+    //         VALUES ($1, $2, $3, $4, $5, $6)
+    //         `, [username, password, email, role_id, publicKey, false]);
+    // }
 
     // Login
     // Check username, password
@@ -46,6 +59,30 @@ class UserEntity {
     `);
 
     return result.rows;
+    }
+
+    static async updatePassword(userId: number, newPassword: string): Promise<void> {
+        const result = await pool.query(`
+            UPDATE users
+            SET password_hash = $1
+            WHERE user_id = $2
+        `, [newPassword, userId]);
+
+        if (result.rowCount === 0) {
+            throw new Error("User not found.");
+        }
+    }
+
+    static async updateEmail(userId: number, newEmail: string): Promise<void> {
+        const result = await pool.query(`
+            UPDATE users
+            SET email = $1
+            WHERE user_id = $2
+        `, [newEmail, userId]);
+
+        if (result.rowCount === 0) {
+            throw new Error("User not found.");
+        }
     }
 }
 

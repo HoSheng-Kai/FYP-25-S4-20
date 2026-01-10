@@ -9,6 +9,9 @@ import bs58 from 'bs58';
 import { encrypt, decrypt } from '../utils/encryption';
 
 class UserController {
+  // ============================================================
+  // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
+  // ============================================================
   async createAccount(req: Request, res: Response){
     try{
       let key_pair = Keypair.generate();
@@ -35,7 +38,7 @@ class UserController {
         req.body.email,
         req.body.role_id,
         private_key,
-        public_key
+        req.body.public_key
       );
 
       res.json({
@@ -50,6 +53,44 @@ class UserController {
       })
     }
   }
+  // ============================================================
+  // ✅ UNCOMMENT BELOW WHEN DEPLOYING (no private key)
+  // ============================================================
+  // async createAccount(req: Request, res: Response){
+  //   try{
+  //
+  //     // // TODO: Encryption
+  //     // let encrypted_email = await encrypt(req.body.email);
+  //     // let encrypted_password = await encrypt(req.body.password);
+  //
+  //     // await User.createAccount(
+  //     //   req.body.username,
+  //     //   encrypted_password,
+  //     //   encrypted_email,
+  //     //   req.body.role_id,
+  //     //   publicKey
+  //     // );
+  //
+  //     await User.createAccount(
+  //       req.body.username,
+  //       req.body.password,
+  //       req.body.email,
+  //       req.body.role_id,
+  //       req.body.public_key
+  //     );
+  //
+  //     res.json({
+  //       success: true
+  //     });
+  //
+  //   } catch(error: any){
+  //     res.status(500).json({
+  //       success: false,
+  //       error: 'Failed to create account',
+  //       details: error.message
+  //     })
+  //   }
+  // }
 
   async loginAccount(req: Request, res: Response){
     try{
@@ -144,6 +185,42 @@ class UserController {
       res.status(500).json({
         success: false,
         error: "Failed to list users",
+        details: error.message,
+      });
+    }
+  }
+
+  async updatePassword(req: Request, res: Response) {
+    try {
+      const { userId, newPassword } = req.body;
+
+      await User.updatePassword(userId, newPassword);
+
+      res.json({
+        success: true,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to update password",
+        details: error.message,
+      });
+    }
+  }
+
+  async updateEmail(req: Request, res: Response) {
+    try {
+      const { userId, newEmail } = req.body;
+
+      await User.updateEmail(userId, newEmail);
+
+      res.json({
+        success: true,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to update email",
         details: error.message,
       });
     }

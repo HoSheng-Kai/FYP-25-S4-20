@@ -3,6 +3,7 @@ import DistributorController from '../controller/DistributorController';
 
 const router = express.Router();
 
+// ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
 // Register product on blockchain
 router.post('/register-product', DistributorController.registerProduct.bind(DistributorController));
 
@@ -25,6 +26,7 @@ router.post('/ownership-history', DistributorController.getOwnershipHistory.bind
 // Get all products for a user (owned or manufactured)
 router.post('/products-by-user', DistributorController.getProductsByUser.bind(DistributorController));
 
+// ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
 // Cancel a pending transfer
 router.post('/cancel-transfer', DistributorController.cancelTransfer.bind(DistributorController));
 

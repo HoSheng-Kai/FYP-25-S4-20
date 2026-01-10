@@ -22,6 +22,9 @@ connection.getVersion()
     console.error('Solana connection error:', err);
   });
 
+// ============================================================
+// ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
+// ============================================================
 async function airdropSol(wallet_private_key: string, amount: number) {
     const senderKeypair = Keypair.fromSecretKey(bs58.decode(wallet_private_key));
     

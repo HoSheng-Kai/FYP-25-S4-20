@@ -5,6 +5,17 @@ class DistributorEntity {
 
     static async getUserById(userId: number) {
         const result = await pool.query(
+            `SELECT user_id, username, public_key FROM fyp_25_s4_20.users WHERE user_id = $1`,
+            [userId]
+        );
+        return result.rows[0] || null;
+    }
+
+    // ============================================================
+    // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
+    // ============================================================
+    static async getUserByIdWithPrivateKey(userId: number) {
+        const result = await pool.query(
             `SELECT user_id, username, public_key, private_key FROM fyp_25_s4_20.users WHERE user_id = $1`,
             [userId]
         );
