@@ -13,10 +13,11 @@ type BackendProduct = {
   serial_no: string;
   model: string | null;
   category: string | null;
-  status: string | null; // 'registered' | 'verified' | 'suspicious'
   product_pda: string | null;
   tx_hash: string | null;
   track: boolean | null;
+
+  stage?: string | null; // 'draft' | 'confirmed' | 'onchain'
 
   owned_since?: string | null;
   relationship?: string | null; // 'owner' | 'manufacturer' | null
@@ -42,13 +43,17 @@ type ProductRow = {
   serialNumber: string;
   category?: string | null;
   productName: string | null;
-  productStatus: "registered" | "verified" | "suspicious";
   lifecycleStatus: "active" | "transferred";
   blockchainStatus: string; // pending / confirmed
   registeredOn: string;
 
-  track: boolean;
+  price: string | null;
+  currency: string | null;
+  listingStatus: string | null;
+  listingCreatedOn: string | null;
+
   relationship?: "owner" | "manufacturer" | null;
+  stage?: string | null;
 };
 
 type FilterMode = "all" | "owned";
@@ -122,21 +127,13 @@ export default function RetailerProductsPage() {
   };
 
   const isTransferEligible = (p: ProductRow) => {
-    // Must be confirmed AND still owned by current user AND still tracked
-    return isOnChainConfirmed(p) && p.lifecycleStatus !== "transferred" && p.track;
+    return isOnChainConfirmed(p) && p.relationship === "owner";
   };
 
   const safeDate = (iso: string) => {
     if (!iso) return "—";
     const d = new Date(iso);
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
-  };
-
-  const normalizeStatus = (s: string | null | undefined): ProductRow["productStatus"] => {
-    const v = (s || "").toLowerCase();
-    if (v === "verified") return "verified";
-    if (v === "suspicious") return "suspicious";
-    return "registered";
   };
 
   // ✅ filtered list
@@ -232,12 +229,15 @@ export default function RetailerProductsPage() {
           serialNumber: p.serial_no,
           productName: p.model ?? null,
           category: p.category ?? null,
-          productStatus: normalizeStatus(p.status),
           lifecycleStatus,
           blockchainStatus: confirmed ? "confirmed" : "pending",
           registeredOn: p.owned_since || "",
-          track: p.track !== false,
+          price: null,
+          currency: null,
+          listingStatus: null,
+          listingCreatedOn: null,
           relationship,
+          stage: p.stage ?? null,
         };
       });
 
@@ -361,7 +361,7 @@ export default function RetailerProductsPage() {
           borderCollapse: "collapse",
           background: "white",
           borderRadius: "10px",
-          overflow: "hidden",
+          overflow: "visible",
         }}
       >
         <thead style={{ background: "#e9ecef" }}>
@@ -388,7 +388,11 @@ export default function RetailerProductsPage() {
           {products.map((p) => {
             const locked = isOnChainConfirmed(p);
             const eligible = isTransferEligible(p);
-
+            
+            const go = (fn: () => void) => {
+              fn();
+              setOpenMenuForId(null);
+            };
             return (
               <tr key={p.productId}>
                 <td style={td}>
@@ -401,8 +405,6 @@ export default function RetailerProductsPage() {
                     title={
                       !locked
                         ? "Cannot transfer: product not confirmed on-chain"
-                        : !p.track
-                        ? "Cannot transfer: tracking ended"
                         : p.lifecycleStatus === "transferred"
                         ? "Cannot transfer: you are no longer the current owner"
                         : "Transfer eligible"
@@ -416,34 +418,27 @@ export default function RetailerProductsPage() {
                 <td style={td}>{safeDate(p.registeredOn)}</td>
 
                 <td style={td}>
-                  <span
-                    style={{
-                      padding: "4px 10px",
-                      borderRadius: "8px",
-                      fontSize: "12px",
-                      textTransform: "capitalize",
-                      background: p.productStatus === "verified" ? "#d4f5d4" : p.productStatus === "registered" ? "#dbeafe" : "#fee2e2",
-                      color: p.productStatus === "verified" ? "#1b6e1b" : p.productStatus === "registered" ? "#1d4ed8" : "#b91c1c",
-                    }}
-                  >
-                    {p.productStatus}
-                  </span>
-
+                  {/* Ownership */}
                   <span
                     style={{
                       marginLeft: 10,
                       padding: "4px 10px",
                       borderRadius: "999px",
                       fontSize: 12,
-                      background: locked ? "#e5e7eb" : "#fff7ed",
-                      color: locked ? "#374151" : "#9a3412",
+                      background: p.lifecycleStatus === "active" ? "#dcfce7" : "#fee2e2",
+                      color: p.lifecycleStatus === "active" ? "#166534" : "#991b1b",
                     }}
-                    title="Blockchain status"
+                    title={
+                      p.lifecycleStatus === "active"
+                        ? "You currently own this product"
+                        : "You have transferred this product"
+                    }
                   >
-                    {p.blockchainStatus}
+                    {p.lifecycleStatus === "active" ? "owned" : "transferred"}
                   </span>
 
-                  {!p.track && (
+                  {/* Stage pill */}
+                  {p.stage && (
                     <span
                       style={{
                         marginLeft: 10,
@@ -451,32 +446,16 @@ export default function RetailerProductsPage() {
                         borderRadius: "999px",
                         fontSize: 12,
                         background: "#f3f4f6",
-                        color: "#374151",
+                        color: "#111827",
                       }}
-                      title="Tracking ended"
+                      title="DB Stage"
                     >
-                      tracking ended
-                    </span>
-                  )}
-
-                  {p.lifecycleStatus === "transferred" && (
-                    <span
-                      style={{
-                        marginLeft: 10,
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: 12,
-                        background: "#fee2e2",
-                        color: "#b91c1c",
-                      }}
-                      title="This product is no longer owned by you"
-                    >
-                      transferred
+                      {p.stage}
                     </span>
                   )}
                 </td>
 
-                {/* Actions Menu (View details only) */}
+                {/* Actions Menu*/}
                 <td style={td}>
                   <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
                     <button
@@ -494,10 +473,7 @@ export default function RetailerProductsPage() {
                         <button
                           type="button"
                           style={menuItem}
-                          onClick={() => {
-                            navigate(`/retailer/products/${p.productId}`);
-                            setOpenMenuForId(null);
-                          }}
+                          onClick={() => go(() => navigate(`/products/${p.productId}/details`))}
                           role="menuitem"
                         >
                           View details

@@ -90,6 +90,12 @@ export default function ManufacturerLayout() {
 
         {/* pinned to bottom of the *viewport-height* sidebar */}
         <div style={{ marginTop: "auto", paddingTop: 16 }}>
+          <NavLink
+            to="settings"
+            style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+          >
+            ⚙ Settings
+          </NavLink>
           <button
             onClick={handleLogout}
             style={{

@@ -37,9 +37,6 @@ type GetProductsByUserResponse = {
   details?: string;
 };
 
-/** =========================
- * Your UI types
- * ========================= */
 type ProductRow = {
   productId: number;
   serialNumber: string;
@@ -60,9 +57,9 @@ type ProductRow = {
 
 type FilterMode = "all" | "owned";
 
-/** =========================
- * Edit modal types (same as before)
- * ========================= */
+/** ===============
+ * Edit modal types
+ * ============= */
 type EditProductData = {
   productId: number;
   serialNumber: string;
@@ -641,7 +638,7 @@ export default function ManufacturerProductsPage() {
           borderCollapse: "collapse",
           background: "white",
           borderRadius: "10px",
-          overflow: "hidden",
+          overflow: "visible",
         }}
       >
         <thead style={{ background: "#e9ecef" }}>

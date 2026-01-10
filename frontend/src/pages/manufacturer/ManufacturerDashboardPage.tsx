@@ -1,12 +1,22 @@
+import { useEffect, useState } from "react";
 import NotificationsPanel from "../../components/notifications/NotificationsPanel";
 
 export default function ManufacturerDashboardPage() {
+  const [username, setUsername] = useState<string>("");
+
+  useEffect(() => {
+    const storedUsername = localStorage.getItem("username");
+    if (storedUsername) setUsername(storedUsername);
+  }, []);
+
   return (
     <div>
-      <h1 style={{ marginBottom: "10px" }}>Manufacturer Dashboard</h1>
-      <p style={{ color: "#555", marginBottom: "22px" }}>
-        Welcome! Use the sidebar to register products, manage your products, and verify authenticity.
-      </p>
+      {/* Page header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ marginBottom: 8, fontSize: 32, color: "#111827" }}>
+          Welcome{username ? `, ${username}` : ""}!
+        </h1>
+      </div>
 
       {/* Notifications */}
       <NotificationsPanel />

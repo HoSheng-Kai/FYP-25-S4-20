@@ -10,10 +10,11 @@ type BackendProduct = {
   serial_no: string;
   model: string | null;
   category: string | null;
-  status: string | null;
   product_pda: string | null;
   tx_hash: string | null;
   track: boolean | null;
+
+  stage?: string | null; // 'draft' | 'confirmed' | 'onchain'
 
   owned_since?: string | null;
   relationship?: string | null; // 'owner' | 'manufacturer' | null
@@ -34,14 +35,19 @@ type GetProductsByUserResponse = {
 type ProductRow = {
   productId: number;
   serialNumber: string;
-  productName: string | null;
   category?: string | null;
-  productStatus: string;
+  productName: string | null;
   lifecycleStatus: "active" | "transferred";
   blockchainStatus: string; // pending / confirmed
-  registeredOn: string; // owned_since
-  track: boolean;
+  registeredOn: string;
+
+  price: string | null;
+  currency: string | null;
+  listingStatus: string | null;
+  listingCreatedOn: string | null;
+
   relationship?: "owner" | "manufacturer" | null;
+  stage?: string | null;
 };
 
 type FilterMode = "all" | "owned";
@@ -112,8 +118,7 @@ export default function DistributorProductsPage() {
   };
 
   const isTransferEligible = (p: ProductRow) => {
-    // Must be confirmed AND still owned by current user AND still tracked
-    return isOnChainConfirmed(p) && p.lifecycleStatus !== "transferred" && p.track;
+    return isOnChainConfirmed(p) && p.relationship === "owner";
   };
 
   const safeDate = (iso: string) => {
@@ -161,7 +166,7 @@ export default function DistributorProductsPage() {
 
   const toggleSelected = (productId: number) => {
     const row = products.find((x) => x.productId === productId);
-    if (row && !isTransferEligible(row)) return; // ✅ don't allow selecting ineligible
+    if (row && !isTransferEligible(row)) return;
 
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -215,12 +220,15 @@ export default function DistributorProductsPage() {
           serialNumber: p.serial_no,
           productName: p.model ?? null,
           category: p.category ?? null,
-          productStatus: p.status ?? "unknown",
           lifecycleStatus,
           blockchainStatus: confirmed ? "confirmed" : "pending",
           registeredOn: p.owned_since || "",
-          track: p.track !== false,
+          price: null,
+          currency: null,
+          listingStatus: null,
+          listingCreatedOn: null,
           relationship,
+          stage: p.stage ?? null,
         };
       });
 
@@ -341,7 +349,7 @@ export default function DistributorProductsPage() {
           borderCollapse: "collapse",
           background: "white",
           borderRadius: "10px",
-          overflow: "hidden",
+          overflow: "visible",
         }}
       >
         <thead style={{ background: "#e9ecef" }}>
@@ -360,7 +368,7 @@ export default function DistributorProductsPage() {
             <th style={th}>Product Name</th>
             <th style={th}>Category</th>
             <th style={th}>Owned Since</th>
-            <th style={th}>Blockchain</th>
+            <th style={th}>Status</th>
             <th style={th}>Actions</th>
           </tr>
         </thead>
@@ -368,7 +376,12 @@ export default function DistributorProductsPage() {
         <tbody>
           {products.map((p) => {
             const locked = !isOnChainConfirmed(p);
-            const eligible = isTransferEligible(p);
+            const transferEligible = isTransferEligible(p);
+
+            const go = (fn: () => void) => {
+              fn();
+              setOpenMenuForId(null);
+            };
 
             return (
               <tr key={p.productId}>
@@ -377,15 +390,13 @@ export default function DistributorProductsPage() {
                     type="checkbox"
                     checked={selectedIds.has(p.productId)}
                     onChange={() => toggleSelected(p.productId)}
-                    disabled={!eligible}
+                    disabled={!transferEligible}
                     aria-label={`Select product ${p.productId}`}
                     title={
-                      locked
-                        ? "Cannot transfer: product not confirmed on-chain"
-                        : !p.track
-                        ? "Cannot transfer: tracking ended"
-                        : p.lifecycleStatus === "transferred"
-                        ? "Cannot transfer: you are no longer the current owner"
+                      !locked
+                        ? "Cannot transfer: product not on-chain yet"
+                        : p.relationship !== "owner"
+                        ? "Cannot transfer: you are not the current owner"
                         : "Transfer eligible"
                     }
                   />
@@ -397,20 +408,27 @@ export default function DistributorProductsPage() {
                 <td style={td}>{safeDate(p.registeredOn)}</td>
 
                 <td style={td}>
+                  {/* Ownership */}
                   <span
                     style={{
+                      marginLeft: 10,
                       padding: "4px 10px",
                       borderRadius: "999px",
                       fontSize: 12,
-                      background: isOnChainConfirmed(p) ? "#e5e7eb" : "#fff7ed",
-                      color: isOnChainConfirmed(p) ? "#374151" : "#9a3412",
+                      background: p.lifecycleStatus === "active" ? "#dcfce7" : "#fee2e2",
+                      color: p.lifecycleStatus === "active" ? "#166534" : "#991b1b",
                     }}
-                    title="Blockchain status"
+                    title={
+                      p.lifecycleStatus === "active"
+                        ? "You currently own this product"
+                        : "You have transferred this product"
+                    }
                   >
-                    {p.blockchainStatus}
+                    {p.lifecycleStatus === "active" ? "owned" : "transferred"}
                   </span>
 
-                  {!p.track && (
+                  {/* Stage pill */}
+                  {p.stage && (
                     <span
                       style={{
                         marginLeft: 10,
@@ -418,32 +436,16 @@ export default function DistributorProductsPage() {
                         borderRadius: "999px",
                         fontSize: 12,
                         background: "#f3f4f6",
-                        color: "#374151",
+                        color: "#111827",
                       }}
-                      title="Tracking ended"
+                      title="DB Stage"
                     >
-                      tracking ended
-                    </span>
-                  )}
-
-                  {p.lifecycleStatus === "transferred" && (
-                    <span
-                      style={{
-                        marginLeft: 10,
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: 12,
-                        background: "#fee2e2",
-                        color: "#b91c1c",
-                      }}
-                      title="This product is no longer owned by you"
-                    >
-                      transferred
+                      {p.stage}
                     </span>
                   )}
                 </td>
 
-                {/* Actions Menu (View details only) */}
+                {/* Actions Menu*/}
                 <td style={td}>
                   <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
                     <button
@@ -461,10 +463,7 @@ export default function DistributorProductsPage() {
                         <button
                           type="button"
                           style={menuItem}
-                          onClick={() => {
-                            navigate(`/distributor/products/${p.productId}`);
-                            setOpenMenuForId(null);
-                          }}
+                          onClick={() => go(() => navigate(`/products/${p.productId}/details`))}
                           role="menuitem"
                         >
                           View details

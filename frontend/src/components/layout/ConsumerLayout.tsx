@@ -142,6 +142,12 @@ export default function ConsumerLayout() {
         </nav>
 
         <div style={{ position: "absolute", bottom: 30, left: 20, right: 20 }}>
+          <NavLink
+            to="settings"
+            style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+          >
+            ⚙ Settings
+          </NavLink>
           <button
             onClick={handleLogout}
             style={{

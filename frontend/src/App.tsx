@@ -44,6 +44,7 @@ import RetailerReviewsPage from "./pages/retailer/RetailerReviewsPage";
 
 // Shared
 import SharedProductDetailsPage from "./pages/shared/ProductDetailsPage";
+import SettingsPage from "./pages/shared/SettingsPage";
 
 
 export default function App() {
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="scan-qr" element={<QrInput />} />
         <Route path="my-products" element={<ManufacturerProductsPage />} />
         <Route path="product/:productId" element={<SharedProductDetailsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* Distributor */}
@@ -71,6 +73,7 @@ export default function App() {
         <Route path="scan-qr" element={<QrInput />} />
         <Route path="products" element={<DistributorProductsPage />} />
         <Route path="product/:productId" element={<SharedProductDetailsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* Retailer */}
@@ -80,6 +83,7 @@ export default function App() {
         <Route path="products" element={<RetailerProductsPage />} />
         <Route path="product/:productId" element={<SharedProductDetailsPage />} />
         <Route path="reviews" element={<RetailerReviewsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* Consumer + Marketplace */}
@@ -93,6 +97,7 @@ export default function App() {
         <Route path="create-listing" element={<CreateListingPage />} />
         <Route path="my-listings/:listingId/edit" element={<EditListingPage />} />
         <Route path="reviews" element={<UserReviewsPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* Optional standalone */}

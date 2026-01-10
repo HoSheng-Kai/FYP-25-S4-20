@@ -549,7 +549,7 @@ export default function NotificationsPanel(props: {
         {loading ? (
           <div style={{ color: "#6b7280" }}>Loading notifications...</div>
         ) : items.length === 0 ? (
-          <div style={{ color: "#6b7280" }}>{onlyUnread ? "No unread notifications 🎉" : "No notifications."}</div>
+          <div style={{ color: "#6b7280" }}>{onlyUnread ? "No unread notifications" : "No notifications."}</div>
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {items.map((n) => (

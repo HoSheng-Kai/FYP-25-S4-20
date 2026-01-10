@@ -16,9 +16,6 @@ export default function RetailerDashboardPage() {
         <h1 style={{ marginBottom: 8, fontSize: 32, color: "#111827" }}>
           Welcome{username ? `, ${username}` : ""}!
         </h1>
-        <p style={{ color: "#6b7280", margin: 0, fontSize: 14 }}>
-          Manage products for sale, verify authenticity, and handle consumer transactions.
-        </p>
       </div>
 
       {/* Notifications */}

@@ -98,6 +98,13 @@ export default function RetailerLayout() {
         </nav>
 
         <div style={{ marginTop: "auto", paddingTop: 16 }}>
+          <NavLink
+            to="settings"
+            style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+          >
+            ⚙ Settings
+          </NavLink>
+          
           <button
             onClick={handleLogout}
             style={{
