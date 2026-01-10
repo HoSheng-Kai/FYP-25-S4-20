@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { PRODUCTS_API_BASE_URL } from "../../config/api";
 import { useNavigate } from "react-router-dom";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 
 /** =========================
@@ -109,6 +111,8 @@ export default function ManufacturerProductsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const wallet = useWallet();
+  const walletConnected = !!wallet.connected && !!wallet.publicKey;
 
   // ======================
   // TRANSFER SELECTION + SHARED MODAL
@@ -340,6 +344,7 @@ export default function ManufacturerProductsPage() {
   }, []);
 
   const openTransferModal = () => {
+    if (!walletConnected) return;
     if (!anyEligibleSelected) return;
     setTransferOpen(true);
   };
@@ -568,25 +573,53 @@ export default function ManufacturerProductsPage() {
       <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>Select products to transfer ownership</h2>
 
       {/* Transfer button row */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10 }}>
-        {anyEligibleSelected && (
-          <button
-            type="button"
-            onClick={openTransferModal}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "none",
-              background: "#111827",
-              color: "white",
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-          >
-            Transfer Ownership
-          </button>
-        )}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10, alignItems: "center" }}>
+        {/* Wallet connect lives here now */}
+        <WalletMultiButton />
+
+        <button
+          type="button"
+          onClick={openTransferModal}
+          disabled={!walletConnected || !anyEligibleSelected}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "none",
+            background: !walletConnected || !anyEligibleSelected ? "#9ca3af" : "#111827",
+            color: "white",
+            cursor: !walletConnected || !anyEligibleSelected ? "not-allowed" : "pointer",
+            fontWeight: 700,
+            opacity: !walletConnected || !anyEligibleSelected ? 0.7 : 1,
+          }}
+          title={
+            !walletConnected
+              ? "Connect your wallet to transfer ownership"
+              : !anyEligibleSelected
+              ? "Select at least one transferable product"
+              : "Transfer selected products"
+          }
+        >
+          Transfer Ownership
+        </button>
       </div>
+
+      {/* Optional hint */}
+      {!walletConnected && (
+        <div
+          style={{
+            marginBottom: 12,
+            fontSize: 12,
+            color: "#b45309",
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            padding: "8px 10px",
+            borderRadius: 10,
+            display: "inline-block",
+          }}
+        >
+          Please connect your wallet before transferring ownership.
+        </div>
+      )}
 
       {error && (
         <div
@@ -818,9 +851,9 @@ export default function ManufacturerProductsPage() {
         }}
       />
 
-      {/* =======================
-          EDIT PRODUCT MODAL (restored)
-      ======================== */}
+      {/* ===================
+          EDIT PRODUCT MODAL
+      =================== */}
       {isEditOpen && (
         <div style={modalOverlay} onMouseDown={closeEditModal}>
           <div

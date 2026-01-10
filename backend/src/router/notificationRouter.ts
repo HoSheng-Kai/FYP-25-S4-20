@@ -20,7 +20,5 @@ router.delete("/read", c.deleteReadNotifications.bind(c));
 router.delete("/:notificationId", c.deleteOneReadNotification.bind(c));
 
 router.post("/create", c.createNotification.bind(c));
-router.post("/transfer/accept", c.transferAccept.bind(c));
-router.post("/transfer/execute", c.transferExecute.bind(c));
 
 export default router;

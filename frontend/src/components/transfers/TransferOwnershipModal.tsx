@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
-
 import { API_ROOT, USERS_API_BASE_URL, NOTIFICATIONS_API_BASE_URL } from "../../config/api";
 import { getProvider, getProgram } from "../../lib/anchorClient";
 import { deriveTransferPda } from "../../lib/pdas";
@@ -27,7 +26,8 @@ type UserOption = {
 };
 
 const USERS_LIST_URL = `${USERS_API_BASE_URL}/list`;
-const PRODUCT_INFO_URL = `${API_ROOT}/distributors/product`; // GET /:productId
+const PRODUCT_INFO_URL = `${API_ROOT}/distributors/product`;
+const PROPOSE_TRANSFER_URL = `${API_ROOT}/distributors/propose-transfer`;
 
 const box: React.CSSProperties = {
   border: "1px solid #e5e7eb",
@@ -51,6 +51,20 @@ function buildTransferPayload(input: {
 }) {
   // store as machine-readable payload in message
   return JSON.stringify(input);
+}
+
+async function postProposeTransfer(payload: {
+  product_id: number;
+  from_user_id: number;
+  to_public_key: string;
+  tx_hash: string;
+  product_pda?: string;
+  transfer_pda?: string;
+}) {
+  const res = await axios.post(PROPOSE_TRANSFER_URL, payload, { withCredentials: true });
+  const ok = res.data?.success ?? res.data?.ok ?? false;
+  if (!ok) throw new Error(res.data?.details || res.data?.error || "Backend propose-transfer failed");
+  return res.data;
 }
 
 export default function TransferOwnershipModal({
@@ -163,13 +177,9 @@ export default function TransferOwnershipModal({
           const productPda = new PublicKey(productPdaStr);
 
           // derive transfer PDA from program seeds
-          const [transferPda] = await deriveTransferPda(
-            productPda,
-            wallet.publicKey,
-            toOwnerPubkey
-          );
+          const [transferPda] = await deriveTransferPda(productPda, wallet.publicKey, toOwnerPubkey);
 
-          // STEP 1: proposeTransfer on-chain (sender signs in Phantom)
+          // STEP 1A: proposeTransfer on-chain (sender signs in Phantom)
           const proposeTx = await program.methods
             .proposeTransfer()
             .accounts({
@@ -180,7 +190,17 @@ export default function TransferOwnershipModal({
             })
             .rpc();
 
-          // Create notification to recipient
+          // ✅ STEP 1B: persist propose in backend (NEW)
+          await postProposeTransfer({
+            product_id: productId,
+            from_user_id: fromUserId,
+            to_public_key: toOwnerPubkey.toBase58(),
+            tx_hash: proposeTx,
+            product_pda: productPda.toBase58(), // optional but recommended
+            transfer_pda: transferPda.toBase58(), // optional but recommended
+          });
+
+          // Create notification to recipient (existing behavior)
           const payload = buildTransferPayload({
             kind: "TRANSFER_REQUEST",
             productId,
@@ -193,13 +213,17 @@ export default function TransferOwnershipModal({
             toOwnerPubkey: toOwnerPubkey.toBase58(),
           });
 
-          await axios.post(`${NOTIFICATIONS_API_BASE_URL}/create`, {
-            userId: toId,
-            title: "Transfer Request",
-            message: payload,
-            productId,
-            txHash: proposeTx,
-          });
+          await axios.post(
+            `${NOTIFICATIONS_API_BASE_URL}/create`,
+            {
+              userId: toId,
+              title: "Transfer Request",
+              message: payload,
+              productId,
+              txHash: proposeTx,
+            },
+            { withCredentials: true }
+          );
 
           out.push({ productId, ok: true, message: `Proposed ✅ (tx: ${proposeTx})` });
         } catch (e: any) {
@@ -226,11 +250,13 @@ export default function TransferOwnershipModal({
         {err && <div style={errBox}>{err}</div>}
 
         <div style={{ marginBottom: 14 }}>
-          <div style={hint}>
-            Sender wallet:{" "}
-            <span style={{ fontFamily: "monospace" }}>
-              {wallet.publicKey ? wallet.publicKey.toBase58() : "Not connected"}
-            </span>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={hint}>
+              Sender wallet:{" "}
+              <span style={{ fontFamily: "monospace" }}>
+                {wallet.publicKey ? wallet.publicKey.toBase58() : "Not connected"}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -296,7 +322,10 @@ export default function TransferOwnershipModal({
             <div style={label}>Results</div>
             <div style={{ ...box, background: "white" }}>
               {results.map((r) => (
-                <div key={r.productId} style={{ fontSize: 13, padding: "6px 0", color: r.ok ? "#116a2b" : "#a11" }}>
+                <div
+                  key={r.productId}
+                  style={{ fontSize: 13, padding: "6px 0", color: r.ok ? "#116a2b" : "#a11" }}
+                >
                   Product {r.productId}: {r.message}
                 </div>
               ))}

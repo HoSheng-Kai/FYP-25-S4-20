@@ -5,27 +5,16 @@ import axios from "axios";
 import AuthLayout from "../../components/layout/AuthLayout";
 import { USERS_API_BASE_URL } from "../../config/api";
 
-type Role = "admin" | "manufacturer" | "distributor" | "retailer" | "consumer";
-
 type CreateAccountResponse = {
   success: boolean;
   error?: string;
   details?: string;
 };
 
-const ROLE_OPTIONS: { label: string; value: Role }[] = [
-  { label: "Admin", value: "admin" },
-  { label: "Manufacturer", value: "manufacturer" },
-  { label: "Distributor", value: "distributor" },
-  { label: "Retailer", value: "retailer" },
-  { label: "Consumer", value: "consumer" },
-];
-
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("consumer");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,7 +33,7 @@ export default function RegisterPage() {
           username,
           email,
           password,
-          role_id: role, // 👈 send lowercase value that matches DB
+          role_id: "consumer",
         }
       );
 
@@ -57,7 +46,6 @@ export default function RegisterPage() {
       setUsername("");
       setEmail("");
       setPassword("");
-      setRole("consumer");
     } catch (err: any) {
       setError(
         err?.response?.data?.error ||
@@ -123,21 +111,6 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-          </label>
-
-          <label className="auth-label">
-            Role
-            <select
-              className="auth-input"
-              value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
-            >
-              {ROLE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
           </label>
 
           {error && <p className="auth-error-text">{error}</p>}

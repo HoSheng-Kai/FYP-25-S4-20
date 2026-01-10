@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 
 /** =========================
@@ -55,8 +57,10 @@ export default function RetailerProductsPage() {
   const navigate = useNavigate();
 
   const retailerId = Number(localStorage.getItem("userId"));
+    
+  const wallet = useWallet();
+  const walletConnected = !!wallet.connected && !!wallet.publicKey;
 
-  // ✅ keep full list, table shows filtered
   const [allProducts, setAllProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,17 +78,47 @@ export default function RetailerProductsPage() {
 
   const GET_BY_USER_URL = "http://localhost:3000/api/distributors/products-by-user";
 
+  // ======================
+  // ACTIONS MENU (⋯)
+  // ======================
+  const [openMenuForId, setOpenMenuForId] = useState<number | null>(null);
+
+  useEffect(() => {
+    const onDocMouseDown = (e: MouseEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (!t) return;
+
+      // click inside menu => don't close
+      if (t.closest?.("[data-actions-menu-root='true']")) return;
+
+      setOpenMenuForId(null);
+    };
+
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpenMenuForId(null);
+    };
+
+    const onScrollOrResize = () => setOpenMenuForId(null);
+
+    document.addEventListener("mousedown", onDocMouseDown);
+    document.addEventListener("keydown", onEsc);
+    window.addEventListener("scroll", onScrollOrResize, true);
+    window.addEventListener("resize", onScrollOrResize);
+
+    return () => {
+      document.removeEventListener("mousedown", onDocMouseDown);
+      document.removeEventListener("keydown", onEsc);
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, []);
+
   // ----------------------
   // HELPERS
   // ----------------------
   const isOnChainConfirmed = (p: ProductRow) => {
     const s = (p.blockchainStatus || "").toLowerCase();
-    return (
-      s.includes("confirmed") ||
-      s.includes("on blockchain") ||
-      s.includes("on-chain") ||
-      s.includes("onchain")
-    );
+    return s.includes("confirmed") || s.includes("on blockchain") || s.includes("on-chain") || s.includes("onchain");
   };
 
   const isTransferEligible = (p: ProductRow) => {
@@ -130,15 +164,9 @@ export default function RetailerProductsPage() {
   // ----------------------
   // Selection helpers (eligible-only)
   // ----------------------
-  const selectedProducts = useMemo(
-    () => products.filter((p) => selectedIds.has(p.productId)),
-    [products, selectedIds]
-  );
+  const selectedProducts = useMemo(() => products.filter((p) => selectedIds.has(p.productId)), [products, selectedIds]);
 
-  const selectedEligibleProducts = useMemo(
-    () => selectedProducts.filter(isTransferEligible),
-    [selectedProducts]
-  );
+  const selectedEligibleProducts = useMemo(() => selectedProducts.filter(isTransferEligible), [selectedProducts]);
 
   const anyEligibleSelected = selectedEligibleProducts.length > 0;
 
@@ -163,8 +191,7 @@ export default function RetailerProductsPage() {
   const toggleSelectAll = () => {
     setSelectedIds((prev) => {
       const eligibleIds = products.filter(isTransferEligible).map((p) => p.productId);
-      const allEligibleSelected =
-        eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
+      const allEligibleSelected = eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
 
       if (allEligibleSelected) return new Set();
       return new Set(eligibleIds);
@@ -198,8 +225,7 @@ export default function RetailerProductsPage() {
         const confirmed = !!(p.tx_hash && p.product_pda);
         const relationship = (p.relationship as any) ?? null;
 
-        const lifecycleStatus: ProductRow["lifecycleStatus"] =
-          relationship === "owner" ? "active" : "transferred";
+        const lifecycleStatus: ProductRow["lifecycleStatus"] = relationship === "owner" ? "active" : "transferred";
 
         return {
           productId: p.product_id,
@@ -218,11 +244,7 @@ export default function RetailerProductsPage() {
       setAllProducts(mapped);
       setError(null);
     } catch (err: any) {
-      setError(
-        err?.response?.data?.error ||
-          err?.response?.data?.details ||
-          "Error fetching products."
-      );
+      setError(err?.response?.data?.error || err?.response?.data?.details || "Error fetching products.");
     } finally {
       setLoading(false);
     }
@@ -237,6 +259,7 @@ export default function RetailerProductsPage() {
   // OPEN TRANSFER MODAL
   // ----------------------
   const openTransferModal = () => {
+    if (!walletConnected) return;
     if (!anyEligibleSelected) return;
     setTransferOpen(true);
   };
@@ -259,12 +282,7 @@ export default function RetailerProductsPage() {
         <h1 style={{ margin: 0 }}>My Products</h1>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <FilterPill
-            active={filterMode === "all"}
-            onClick={() => setFilterMode("all")}
-            label="All"
-            subtitle={`${allProducts.length}`}
-          />
+          <FilterPill active={filterMode === "all"} onClick={() => setFilterMode("all")} label="All" subtitle={`${allProducts.length}`} />
           <FilterPill
             active={filterMode === "owned"}
             onClick={() => setFilterMode("owned")}
@@ -274,27 +292,54 @@ export default function RetailerProductsPage() {
         </div>
       </div>
 
+      <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>Select products to transfer ownership</h2>
+
       {/* Transfer button (opens modal) */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12 }}>
-        {anyEligibleSelected && (
-          <button
-            type="button"
-            onClick={openTransferModal}
-            style={{
-              padding: "10px 14px",
-              borderRadius: 10,
-              border: "none",
-              background: "#111827",
-              color: "white",
-              cursor: "pointer",
-              fontWeight: 700,
-            }}
-            title="Transfer selected products"
-          >
-            Transfer Ownership
-          </button>
-        )}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10, alignItems: "center" }}>
+        <WalletMultiButton />
+
+        <button
+          type="button"
+          onClick={openTransferModal}
+          disabled={!walletConnected || !anyEligibleSelected}
+          style={{
+            padding: "10px 14px",
+            borderRadius: 10,
+            border: "none",
+            background: !walletConnected || !anyEligibleSelected ? "#9ca3af" : "#111827",
+            color: "white",
+            cursor: !walletConnected || !anyEligibleSelected ? "not-allowed" : "pointer",
+            fontWeight: 700,
+            opacity: !walletConnected || !anyEligibleSelected ? 0.7 : 1,
+          }}
+          title={
+            !walletConnected
+              ? "Connect your wallet to transfer ownership"
+              : !anyEligibleSelected
+              ? "Select at least one transferable product"
+              : "Transfer selected products"
+          }
+        >
+          Transfer Ownership
+        </button>
       </div>
+
+      {!walletConnected && (
+        <div
+          style={{
+            marginBottom: 12,
+            fontSize: 12,
+            color: "#b45309",
+            background: "#fffbeb",
+            border: "1px solid #fde68a",
+            padding: "8px 10px",
+            borderRadius: 10,
+            display: "inline-block",
+          }}
+        >
+          Please connect your wallet before transferring ownership.
+        </div>
+      )}
 
       {error && (
         <div
@@ -377,18 +422,8 @@ export default function RetailerProductsPage() {
                       borderRadius: "8px",
                       fontSize: "12px",
                       textTransform: "capitalize",
-                      background:
-                        p.productStatus === "verified"
-                          ? "#d4f5d4"
-                          : p.productStatus === "registered"
-                          ? "#dbeafe"
-                          : "#fee2e2",
-                      color:
-                        p.productStatus === "verified"
-                          ? "#1b6e1b"
-                          : p.productStatus === "registered"
-                          ? "#1d4ed8"
-                          : "#b91c1c",
+                      background: p.productStatus === "verified" ? "#d4f5d4" : p.productStatus === "registered" ? "#dbeafe" : "#fee2e2",
+                      color: p.productStatus === "verified" ? "#1b6e1b" : p.productStatus === "registered" ? "#1d4ed8" : "#b91c1c",
                     }}
                   >
                     {p.productStatus}
@@ -441,14 +476,35 @@ export default function RetailerProductsPage() {
                   )}
                 </td>
 
+                {/* Actions Menu (View details only) */}
                 <td style={td}>
-                  <button
-                    onClick={() => navigate(`/retailer/products/${p.productId}`)}
-                    style={iconBtn}
-                    title="View"
-                  >
-                    👁
-                  </button>
+                  <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenMenuForId((prev) => (prev === p.productId ? null : p.productId))}
+                      style={kebabBtn}
+                      aria-label="Open actions"
+                      title="Actions"
+                    >
+                      ⋯
+                    </button>
+
+                    {openMenuForId === p.productId && (
+                      <div style={menuCard} role="menu" aria-label="Row actions">
+                        <button
+                          type="button"
+                          style={menuItem}
+                          onClick={() => {
+                            navigate(`/retailer/products/${p.productId}`);
+                            setOpenMenuForId(null);
+                          }}
+                          role="menuitem"
+                        >
+                          View details
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </td>
               </tr>
             );
@@ -456,11 +512,7 @@ export default function RetailerProductsPage() {
         </tbody>
       </table>
 
-      {products.length === 0 && (
-        <p style={{ marginTop: 20, opacity: 0.6 }}>
-          No products found for this filter.
-        </p>
-      )}
+      {products.length === 0 && <p style={{ marginTop: 20, opacity: 0.6 }}>No products found for this filter.</p>}
 
       {/* =======================
           TRANSFER OWNERSHIP MODAL
@@ -551,10 +603,38 @@ const td: React.CSSProperties = {
   fontSize: "14px",
 };
 
-const iconBtn: React.CSSProperties = {
-  border: "none",
-  background: "none",
+const kebabBtn: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  background: "white",
   cursor: "pointer",
-  fontSize: "18px",
-  marginRight: "10px",
+  borderRadius: 10,
+  padding: "6px 10px",
+  fontSize: 18,
+  lineHeight: 1,
+};
+
+const menuCard: React.CSSProperties = {
+  position: "absolute",
+  top: "calc(100% + 6px)",
+  right: 0,
+  minWidth: 200,
+  background: "white",
+  border: "1px solid #e5e7eb",
+  borderRadius: 12,
+  boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
+  padding: 6,
+  zIndex: 9999,
+};
+
+const menuItem: React.CSSProperties = {
+  width: "100%",
+  textAlign: "left",
+  border: "none",
+  background: "transparent",
+  padding: "10px 10px",
+  borderRadius: 10,
+  cursor: "pointer",
+  fontSize: 13,
+  fontWeight: 600,
+  color: "#111827",
 };

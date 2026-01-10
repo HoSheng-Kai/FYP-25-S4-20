@@ -1,14 +1,15 @@
 // src/components/notifications/NotificationsPanel.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { NOTIFICATIONS_API_BASE_URL } from "../../config/api";
+import { API_ROOT, NOTIFICATIONS_API_BASE_URL } from "../../config/api";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { getProvider, getProgram } from "../../lib/anchorClient";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-const TRANSFER_ACCEPT_URL = `${NOTIFICATIONS_API_BASE_URL}/transfer/accept`;
-const TRANSFER_EXECUTE_URL = `${NOTIFICATIONS_API_BASE_URL}/transfer/execute`;
+const TRANSFER_ACCEPT_URL = `${API_ROOT}/distributors/accept-transfer`;
+const TRANSFER_EXECUTE_URL = `${API_ROOT}/distributors/execute-transfer`;
+const http = axios.create({ withCredentials: true });
 
 type ApiNotification = {
   notificationId: number;
@@ -180,7 +181,7 @@ export default function NotificationsPanel(props: {
     setLoading(true);
     setError(null);
     try {
-      const res = await axios.get(NOTIFICATIONS_API_BASE_URL, {
+      const res = await http.get(NOTIFICATIONS_API_BASE_URL, {
         params: { userId, onlyUnread: nextOnlyUnread },
       });
       setItems(res.data?.data ?? []);
@@ -205,7 +206,7 @@ export default function NotificationsPanel(props: {
     setItems((prev) => prev.map((n) => (n.notificationId === notificationId ? { ...n, isRead: true } : n)));
 
     try {
-      await axios.put(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}/read`, null, { params: { userId } });
+      await http.put(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}/read`, null, { params: { userId } });
       if (onlyUnread) setItems((prev) => prev.filter((n) => n.notificationId !== notificationId));
     } catch (e: any) {
       setItems((prev) => prev.map((n) => (n.notificationId === notificationId ? { ...n, isRead: false } : n)));
@@ -223,7 +224,7 @@ export default function NotificationsPanel(props: {
     setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
 
     try {
-      await axios.put(`${NOTIFICATIONS_API_BASE_URL}/read`, null, { params: { userId } });
+      await http.put(`${NOTIFICATIONS_API_BASE_URL}/read`, null, { params: { userId } });
       if (onlyUnread) setItems([]);
     } catch (e: any) {
       setError(e?.response?.data?.error ?? e?.message ?? "Failed to mark all as read");
@@ -240,7 +241,7 @@ export default function NotificationsPanel(props: {
     setError(null);
 
     try {
-      await axios.delete(`${NOTIFICATIONS_API_BASE_URL}/read`, { params: { userId } });
+      await http.delete(`${NOTIFICATIONS_API_BASE_URL}/read`, { params: { userId } });
       setItems((prev) => prev.filter((n) => !n.isRead));
     } catch (e: any) {
       setError(e?.response?.data?.error ?? e?.message ?? "Failed to delete read notifications");
@@ -259,7 +260,7 @@ export default function NotificationsPanel(props: {
     setItems((prev) => prev.filter((n) => n.notificationId !== notificationId));
 
     try {
-      await axios.delete(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}`, { params: { userId } });
+      await http.delete(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}`, { params: { userId } });
     } catch (e: any) {
       setItems(snapshot);
       setError(e?.response?.data?.error ?? e?.message ?? "Failed to delete notification");
@@ -304,16 +305,31 @@ export default function NotificationsPanel(props: {
         })
         .rpc();
 
-      await axios.post(TRANSFER_ACCEPT_URL, {
-        notificationId: n.notificationId,
+      await http.post(TRANSFER_ACCEPT_URL, {
+        product_id: payload.productId,
+        to_user_id: payload.toUserId,
+        to_public_key: payload.toOwnerPubkey,
+        tx_hash: acceptTx,
+        transfer_pda: payload.transferPda,
+      });
+      const acceptedPayload = JSON.stringify({
+        kind: "TRANSFER_ACCEPTED",
+        productId: payload.productId,
         fromUserId: payload.fromUserId,
         toUserId: payload.toUserId,
-        productId: payload.productId,
         productPda: payload.productPda,
         transferPda: payload.transferPda,
         acceptTx,
         fromOwnerPubkey: payload.fromOwnerPubkey,
         toOwnerPubkey: payload.toOwnerPubkey,
+      });
+
+      await http.post(`${NOTIFICATIONS_API_BASE_URL}/create`, {
+        userId: payload.fromUserId,
+        title: "Transfer Accepted",
+        message: acceptedPayload,
+        productId: payload.productId,
+        txHash: acceptTx,
       });
 
       await markOneRead(n.notificationId);
@@ -355,14 +371,16 @@ export default function NotificationsPanel(props: {
         })
         .rpc();
 
-      await axios.post(TRANSFER_EXECUTE_URL, {
-        notificationId: n.notificationId,
-        fromUserId: payload.fromUserId,
-        toUserId: payload.toUserId,
-        productId: payload.productId,
-        executeTx,
-        fromPublicKey: payload.fromOwnerPubkey,
-        toPublicKey: payload.toOwnerPubkey,
+      await http.post(TRANSFER_EXECUTE_URL, {
+        product_id: payload.productId,
+        from_user_id: payload.fromUserId,
+        from_public_key: payload.fromOwnerPubkey,
+        to_user_id: payload.toUserId,
+        to_public_key: payload.toOwnerPubkey,
+        tx_hash: executeTx,
+        block_slot: 0,
+        transfer_pda: payload.transferPda,
+        product_pda: payload.productPda,
       });
 
       await markOneRead(n.notificationId);
