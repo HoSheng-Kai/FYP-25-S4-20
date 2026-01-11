@@ -80,9 +80,31 @@ class AdminEntity {
     static async readProductListings()
     :Promise<any[]>{
         const sql = `
-        SELECT *
-        FROM product_listing
-        ORDER BY listing_id ASC;
+        SELECT 
+            pl.listing_id,
+            pl.product_id,
+            pl.seller_id,
+            pl.price,
+            pl.currency,
+            pl.status,
+            pl.created_on,
+            pl.notes,
+            p.serial_no,
+            p.model AS product_name,
+            u.username AS seller_username,
+            COALESCE(o_active.owner_id, p.registered_by) AS current_owner_id,
+            COALESCE(u_owner.username, u_registered.username) AS current_owner_username,
+            COALESCE(u_owner.email, u_registered.email) AS current_owner_email
+        FROM product_listing pl
+        LEFT JOIN product p ON pl.product_id = p.product_id
+        LEFT JOIN users u ON pl.seller_id = u.user_id
+        LEFT JOIN (
+            SELECT * FROM ownership o
+            WHERE o.end_on IS NULL
+        ) o_active ON pl.product_id = o_active.product_id
+        LEFT JOIN users u_owner ON o_active.owner_id = u_owner.user_id
+        LEFT JOIN users u_registered ON p.registered_by = u_registered.user_id
+        ORDER BY pl.listing_id ASC;
         `;
 
         const result = await pool.query(sql);

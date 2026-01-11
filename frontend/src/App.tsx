@@ -11,6 +11,8 @@ import RetailerLayout from "./components/layout/RetailerLayout";
 
 // Dashboards
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
+import AdminUsersPage from "./pages/admin/AdminUsersPage";
+import AdminListingsPage from "./pages/admin/AdminListingsPage";
 import ManufacturerDashboardPage from "./pages/manufacturer/ManufacturerDashboardPage";
 import DistributorDashboardPage from "./pages/distributor/DistributorDashboardPage";
 import RetailerDashboardPage from "./pages/retailer/RetailerDashboardPage";
@@ -54,8 +56,10 @@ export default function App() {
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
 
-      {/* Admin (no special layout in this project) */}
+      {/* Admin routes */}
       <Route path="/admin" element={<AdminDashboardPage />} />
+      <Route path="/admin/users" element={<AdminUsersPage />} />
+      <Route path="/admin/listings" element={<AdminListingsPage />} />
 
       {/* Manufacturer */}
       <Route path="/manufacturer" element={<ManufacturerLayout />}>
