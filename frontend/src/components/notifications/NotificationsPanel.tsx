@@ -154,6 +154,26 @@ function parseTransferPayload(msg: string): TransferPayload | null {
   return { ...(base as any), acceptTx } as TransferPayload;
 }
 
+function hasTransferActions(n: ApiNotification): boolean {
+  if (n.isRead) return false;
+
+  const payload = parseTransferPayload(n.message);
+
+  const isRequest =
+    n.title === "Transfer Request" || payload?.kind === "TRANSFER_REQUEST";
+
+  const isAccepted =
+    n.title === "Transfer Accepted" || payload?.kind === "TRANSFER_ACCEPTED";
+
+  // If it's a transfer request => Accept/Deny exist
+  if (isRequest) return true;
+
+  // If it's transfer accepted => Execute exists
+  if (isAccepted) return true;
+
+  return false;
+}
+
 export default function NotificationsPanel(props: {
   title?: string;
   defaultOnlyUnread?: boolean;
@@ -199,7 +219,11 @@ export default function NotificationsPanel(props: {
 
   async function markOneRead(notificationId: number) {
     if (!userId) return;
-
+    const n = items.find((x) => x.notificationId === notificationId);
+    if (n && hasTransferActions(n)) {
+      setError("This notification requires a transfer action (Accept/Deny/Execute) and cannot be marked as read yet.");
+      return;
+    }
     setBusyId(notificationId);
     setError(null);
 
@@ -455,7 +479,6 @@ export default function NotificationsPanel(props: {
   function renderTransferActions(n: ApiNotification) {
     const payload = parseTransferPayload(n.message);
 
-    // ✅ Accept/Deny for recipient
     if (!n.isRead && (n.title === "Transfer Request" || payload?.kind === "TRANSFER_REQUEST")) {
       if (!payload || payload.kind !== "TRANSFER_REQUEST") return null;
 
@@ -571,11 +594,11 @@ export default function NotificationsPanel(props: {
                   </div>
 
                   <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
-                    {/* ✅ transfer buttons */}
+                    {/* transfer buttons */}
                     {renderTransferActions(n)}
 
                     {/* existing actions */}
-                    {!n.isRead && (
+                    {!n.isRead && !hasTransferActions(n) && (
                       <button
                         onClick={() => markOneRead(n.notificationId)}
                         disabled={busyId === n.notificationId}
