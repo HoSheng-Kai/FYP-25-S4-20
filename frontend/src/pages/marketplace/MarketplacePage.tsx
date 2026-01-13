@@ -100,7 +100,7 @@ const MarketplacePage: React.FC = () => {
   };
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: 24, maxWidth: "100%", overflow: "hidden" }}>
       <h1 style={{ margin: 0, fontSize: 24 }}>Consumer Marketplace</h1>
       <p style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
         Browse blockchain-registered products listed for sale.
@@ -113,8 +113,8 @@ const MarketplacePage: React.FC = () => {
         style={{
           marginTop: 16,
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-          gap: 16,
+          gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
+          gap: 20,
         }}
       >
         {items.map((x) => (

@@ -64,8 +64,10 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
         border: "1px solid #e5e7eb",
         borderRadius: 16,
         padding: 24,
-        minWidth: 400,
         boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
@@ -123,9 +125,8 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
         style={{
           marginTop: 16,
           display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          gap: 10
+          flexDirection: "column",
+          gap: 12,
         }}
       >
         <span
@@ -139,6 +140,7 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
             fontWeight: 600,
             textTransform: "uppercase",
             letterSpacing: "0.5px",
+            alignSelf: "flex-start",
           }}
         >
           {statusBadge}
