@@ -62,11 +62,20 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const [step, setStep] = useState<"credentials" | "otp">("credentials");
+  const [step, setStep] = useState<"credentials" | "otp" | "forgot-password" | "forgot-password-otp" | "forgot-password-reset">("credentials");
   const [serverOtp, setServerOtp] = useState<number | null>(null);
   const [otpInput, setOtpInput] = useState("");
   const [role, setRole] = useState<Role | null>(null);
   const [userId, setUserId] = useState<number | null>(null);
+
+  // Forgot password state
+  const [forgotUsername, setForgotUsername] = useState("");
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [forgotServerOtp, setForgotServerOtp] = useState<number | null>(null);
+  const [forgotUserId, setForgotUserId] = useState<number | null>(null);
+  const [forgotOtpVerified, setForgotOtpVerified] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -190,6 +199,123 @@ export default function LoginPage() {
     }
   };
 
+  // ----------------------------
+  // Forgot Password — Step 1: Request OTP
+  // ----------------------------
+  const handleForgotPasswordRequest = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      const res = await axios.post<LoginResponse>(
+        `${USERS_API_BASE_URL}/forgot-password`,
+        { username: forgotUsername }
+      );
+
+      if (!res.data.success) {
+        setError(res.data.error || "User not found");
+        return;
+      }
+
+      const idFromServer = res.data.userId ?? res.data.userid ?? null;
+
+      setForgotServerOtp(res.data.otp);
+      setForgotUserId(idFromServer);
+      setStep("forgot-password-otp");
+    } catch (err: any) {
+      setError(
+        err?.response?.data?.error ||
+          err?.response?.data?.details ||
+          "User not found"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // ----------------------------
+  // Forgot Password — Step 2: Verify OTP
+  // ----------------------------
+  const handleForgotPasswordVerifyOtp = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+
+    if (!forgotServerOtp) {
+      setError("No OTP found. Please try again.");
+      setStep("forgot-password");
+      return;
+    }
+
+    if (parseInt(forgotOtp, 10) !== forgotServerOtp) {
+      setError("Incorrect OTP. Please try again.");
+      return;
+    }
+
+    // OTP verified, move to password reset
+    setForgotOtpVerified(true);
+    setStep("forgot-password-reset");
+  };
+
+  // ----------------------------
+  // Forgot Password — Step 3: Reset Password
+  // ----------------------------
+  const handleForgotPasswordReset = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    if (!forgotOtpVerified) {
+      setError("Please verify OTP first.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (forgotNewPassword.length < 6) {
+      setError("Password must be at least 6 characters.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setError("Passwords do not match.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!forgotUserId) {
+      setError("User ID not found. Please try again.");
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      const res = await axios.put(`${USERS_API_BASE_URL}/update-password`, {
+        userId: forgotUserId,
+        newPassword: forgotNewPassword,
+      });
+
+      if (res.data?.success) {
+        setError(null);
+        alert("Password reset successfully. You can now login with your new password.");
+        setStep("credentials");
+        setForgotUsername("");
+        setForgotOtp("");
+        setForgotNewPassword("");
+        setForgotConfirmPassword("");
+        setForgotServerOtp(null);
+        setForgotUserId(null);
+        setForgotOtpVerified(false);
+      } else {
+        setError(res.data?.error || "Failed to reset password.");
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || "Failed to reset password.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <AuthLayout>
       <div className="auth-panel">
@@ -204,12 +330,26 @@ export default function LoginPage() {
           <div className="auth-card-header">
             <div>
               <h2 className="auth-card-title">
-                {step === "credentials" ? "Welcome back" : "Enter OTP"}
+                {step === "credentials"
+                  ? "Welcome back"
+                  : step === "otp"
+                  ? "Enter OTP"
+                  : step === "forgot-password"
+                  ? "Forgot Password"
+                  : step === "forgot-password-otp"
+                  ? "Verify OTP"
+                  : "Reset Password"}
               </h2>
               <p className="auth-card-subtitle">
                 {step === "credentials"
                   ? "Login to access your BlockTrace account."
-                  : "We’ve sent a one-time password (OTP) to your email."}
+                  : step === "otp"
+                  ? "We've sent a one-time password (OTP) to your email."
+                  : step === "forgot-password"
+                  ? "Enter your username to reset your password."
+                  : step === "forgot-password-otp"
+                  ? "Enter the OTP sent to your email."
+                  : "Enter your new password."}
               </p>
             </div>
             <div className="auth-info-icon">i</div>
@@ -246,7 +386,10 @@ export default function LoginPage() {
                   <button
                     type="button"
                     className="auth-link-button"
-                    onClick={() => alert("Forgot password flow not implemented yet.")}
+                    onClick={() => {
+                      setStep("forgot-password");
+                      setError(null);
+                    }}
                   >
                     Forgot password?
                   </button>
@@ -257,6 +400,126 @@ export default function LoginPage() {
 
               <button type="submit" className="auth-submit" disabled={isSubmitting}>
                 {isSubmitting ? "Logging in..." : "Continue"}
+              </button>
+            </form>
+          )}
+
+          {step === "forgot-password" && (
+            <form onSubmit={handleForgotPasswordRequest} className="auth-form">
+              <label className="auth-label">
+                Username
+                <input
+                  className="auth-input"
+                  type="text"
+                  placeholder="Enter your username"
+                  value={forgotUsername}
+                  onChange={(e) => setForgotUsername(e.target.value)}
+                  required
+                />
+              </label>
+
+              {error && <p className="auth-error-text">{error}</p>}
+
+              <button type="submit" className="auth-submit" disabled={isSubmitting}>
+                {isSubmitting ? "Sending OTP..." : "Send OTP"}
+              </button>
+
+              <button
+                type="button"
+                className="auth-link-button"
+                onClick={() => {
+                  setStep("credentials");
+                  setForgotUsername("");
+                  setError(null);
+                }}
+              >
+                Back to login
+              </button>
+            </form>
+          )}
+
+          {step === "forgot-password-otp" && (
+            <form onSubmit={handleForgotPasswordVerifyOtp} className="auth-form">
+              <label className="auth-label">
+                OTP
+                <input
+                  className="auth-input"
+                  type="number"
+                  placeholder="Enter the OTP sent to your email"
+                  value={forgotOtp}
+                  onChange={(e) => setForgotOtp(e.target.value)}
+                  required
+                />
+              </label>
+
+              {error && <p className="auth-error-text">{error}</p>}
+
+              <button type="submit" className="auth-submit">
+                Verify OTP
+              </button>
+
+              <button
+                type="button"
+                className="auth-link-button"
+                onClick={() => {
+                  setStep("forgot-password");
+                  setForgotOtp("");
+                  setError(null);
+                }}
+              >
+                Back
+              </button>
+            </form>
+          )}
+
+          {step === "forgot-password-reset" && (
+            <form onSubmit={handleForgotPasswordReset} className="auth-form">
+              <label className="auth-label">
+                New Password
+                <input
+                  className="auth-input"
+                  type="password"
+                  placeholder="Enter new password"
+                  value={forgotNewPassword}
+                  onChange={(e) => setForgotNewPassword(e.target.value)}
+                  required
+                />
+              </label>
+
+              <label className="auth-label">
+                Confirm Password
+                <input
+                  className="auth-input"
+                  type="password"
+                  placeholder="Confirm new password"
+                  value={forgotConfirmPassword}
+                  onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                  required
+                />
+              </label>
+
+              {error && <p className="auth-error-text">{error}</p>}
+
+              <button type="submit" className="auth-submit" disabled={isSubmitting}>
+                {isSubmitting ? "Resetting..." : "Reset Password"}
+              </button>
+
+              <button
+                type="button"
+                className="auth-link-button"
+                onClick={() => {
+                  setStep("credentials");
+                  setForgotUsername("");
+                  setForgotOtp("");
+                  setForgotNewPassword("");
+                  setForgotConfirmPassword("");
+                  setForgotServerOtp(null);
+                  setForgotUserId(null);
+                  setForgotOtpVerified(false);
+                  setError(null);
+                }}
+              >
+                Back to login
               </button>
             </form>
           )}
