@@ -228,6 +228,49 @@ class UserController {
       });
     }
   }
+
+  async forgotPassword(req: Request, res: Response) {
+    try {
+      const { username } = req.body;
+
+      let user = await User.loginAccount(username);
+
+      if (!user) {
+        res.json({
+          success: false,
+          error: 'User not found'
+        });
+        return;
+      }
+
+      // If not verified
+      if(!user.verified){
+        res.json({
+          success: false,
+          error: 'User is not verified',
+          verified: user.verified
+        });
+        return;
+      }
+
+      // Generate OTP and send to email
+      let otp: number = generate_OTP();
+      await sendOTP(user.email, otp);
+
+      res.json({
+        success: true,
+        otp: otp,
+        userId: user.userId,
+        userid: user.userId
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to process forgot password request",
+        details: error.message,
+      });
+    }
+  }
 }
 
 export default new UserController();
