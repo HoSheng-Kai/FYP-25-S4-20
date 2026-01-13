@@ -1,7 +1,8 @@
-import { useEffect, useState, FormEvent } from "react";
+import { useState } from "react";
+import type { FormEvent } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { USERS_API_BASE_URL, ADMIN_API_BASE_URL } from "../../config/api";
+import { USERS_API_BASE_URL } from "../../config/api";
 
 interface RegistrationResponse {
   success: boolean;

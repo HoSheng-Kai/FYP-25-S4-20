@@ -94,6 +94,15 @@ export default function ConsumerLayout() {
             </li>
 
             <li>
+              <NavLink
+                to="chats" // /consumer/chats
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
+                Messages
+              </NavLink>
+            </li>
+
+            <li>
               <div
                 onMouseEnter={() => setShowCreateListing(true)}
                 onMouseLeave={() => setShowCreateListing(false)}

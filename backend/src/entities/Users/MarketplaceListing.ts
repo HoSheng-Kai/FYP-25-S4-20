@@ -30,7 +30,15 @@ export class MarketplaceListing {
         p.product_id,
         p.serial_no,
         p.model,
-        p.status AS product_status,
+        CASE
+          WHEN EXISTS (
+            SELECT 1 FROM fyp_25_s4_20.ownership o
+            WHERE o.product_id = p.product_id
+              AND o.end_on IS NOT NULL
+          )
+          THEN 'transferred'
+          ELSE 'active'
+        END AS product_status,
         p.registered_on,
 
         pl.price::text AS price,
@@ -41,7 +49,7 @@ export class MarketplaceListing {
 
         u.user_id AS seller_id,
         u.username AS seller_username,
-        u.role_id::text AS seller_role,
+        u.role_id AS seller_role,
 
         CASE
           WHEN p.tx_hash IS NULL OR p.tx_hash = '' THEN 'pending'
@@ -56,7 +64,7 @@ export class MarketplaceListing {
 
       WHERE
         pl.status = 'available'
-        AND p.status != 'suspicious'
+        AND u.role_id = 'consumer'
 
       ORDER BY pl.created_on DESC;
       `

@@ -10,6 +10,8 @@ import productRouter from "./router/productRouter";
 import notificationRouter from "./router/notificationRouter";
 import reviewRouter from "./router/reviewRouter";
 import metadataRouter from "./router/metadataRouter";
+import chatRouter from "./router/chatRouter";
+import ChatEntity from "./entities/Chat";
 import { upsertProductMetadata } from "./controller/ProductMetadata";
 import { sanitize } from "./utils/sanitise";
 
@@ -68,6 +70,7 @@ app.use("/api/admins", adminRouter);
 app.use("/api/products", productRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/reviews", reviewRouter);
+app.use("/api/chats", chatRouter);
 
 app.use("/api/distributors", distributorRouter);
 app.use("/api/validate", validationRouter);
@@ -80,4 +83,14 @@ app.use("/metadata", express.static(path.join(process.cwd(), "metadata")));
 // for debugging
 app.get("/api/ping", (_req, res) => res.json({ ok: true }));
 
-app.listen(3000, () => console.log("Server running on port 3000"));
+// Initialize chat tables on boot
+(async () => {
+  try {
+    await ChatEntity.init();
+    console.log("✓ Chat schema initialized");
+  } catch (e) {
+    console.error("⚠ Chat schema init failed:", e instanceof Error ? e.message : e);
+  }
+
+  app.listen(3000, () => console.log("✓ Server running on port 3000"));
+})();

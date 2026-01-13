@@ -18,6 +18,8 @@ import ManufacturerDashboardPage from "./pages/manufacturer/ManufacturerDashboar
 import DistributorDashboardPage from "./pages/distributor/DistributorDashboardPage";
 import RetailerDashboardPage from "./pages/retailer/RetailerDashboardPage";
 import ConsumerDashboardPage from "./pages/consumer/ConsumerDashboardPage";
+import ChatsPage from "./pages/consumer/ChatsPage";
+import ChatThreadPage from "./pages/consumer/ChatThreadPage";
 
 // Product / consumer utilities
 import QrInput from "./components/products/QrInput";
@@ -99,6 +101,8 @@ export default function App() {
         <Route path="my-products" element={<MyProductsPage />} />
         <Route path="product/:productId" element={<ProductDetailsPage />} />
         <Route path="marketplace" element={<MarketplacePage />} />
+        <Route path="chats" element={<ChatsPage />} />
+        <Route path="chats/:threadId" element={<ChatThreadPage />} />
         <Route path="my-listings" element={<MyListingsPage />} />
         <Route path="create-listing" element={<CreateListingPage />} />
         <Route path="my-listings/:listingId/edit" element={<EditListingPage />} />

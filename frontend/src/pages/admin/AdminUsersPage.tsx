@@ -201,7 +201,7 @@ export default function AdminUsersPage() {
     }
   };
 
-  const getRoleName = (roleId: number) => {
+  const getRoleName = (roleId: string) => {
     return roles.find(r => r.role_id === roleId)?.role_name || "Unknown";
   };
 

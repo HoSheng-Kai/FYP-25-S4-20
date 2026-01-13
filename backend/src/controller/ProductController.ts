@@ -927,6 +927,7 @@ class ProductController {
         })),
       });
     } catch (err) {
+      console.error("getMarketplaceListings error:", err instanceof Error ? err.message : err);
       res.status(500).json({
         success: false,
         error: "Failed to fetch marketplace listings",
@@ -1638,9 +1639,10 @@ class ProductController {
           return;
         }
 
-        // 2. Delete the listing (since it's now sold, seller shouldn't see it in My Listings)
+        // 2. Update listing status to 'sold' (keep it for chat history, but hide from seller's listings)
         await client.query(
-          `DELETE FROM fyp_25_s4_20.product_listing 
+          `UPDATE fyp_25_s4_20.product_listing 
+           SET status = 'sold'
            WHERE listing_id = $1`,
           [listingId]
         );

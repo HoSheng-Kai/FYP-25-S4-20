@@ -63,17 +63,16 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
         background: "white",
         border: "1px solid #e5e7eb",
         borderRadius: 16,
-        padding: 16,
+        padding: 24,
+        minWidth: 400,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: 15 }}>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#111827" }}>
             {listing.productName ?? "Unknown Product"}
           </h3>
-          <p style={{ margin: "6px 0 0 0", fontSize: 12, color: "#6b7280" }}>
-            Serial: <strong>{listing.serialNumber}</strong>
-          </p>
         </div>
 
         <span
@@ -93,15 +92,15 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
         </span>
       </div>
 
-      <div style={{ marginTop: 12, display: "flex", justifyContent: "space-between" }}>
+      <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 16 }}>
         <div>
-          <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Price</p>
-          <p style={{ margin: "2px 0 0 0", fontWeight: 700 }}>{priceText}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "#6b7280", fontWeight: 500 }}>Price</p>
+          <p style={{ margin: "4px 0 0 0", fontWeight: 700, fontSize: 16, color: "#111827" }}>{priceText}</p>
         </div>
 
         <div style={{ textAlign: "right" }}>
-          <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Seller</p>
-          <p style={{ margin: "2px 0 0 0", fontSize: 13 }}>
+          <p style={{ margin: 0, fontSize: 12, color: "#6b7280", fontWeight: 500 }}>Seller</p>
+          <p style={{ margin: "4px 0 0 0", fontSize: 14, fontWeight: 500, color: "#111827" }}>
             {listing.seller.username} ({listing.seller.role})
           </p>
         </div>
@@ -109,92 +108,147 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
 
       {listing.notes && (
         <div style={{ 
-          marginTop: 12, 
-          padding: 12, 
+          marginTop: 16, 
+          padding: 14, 
           background: "#f9fafb", 
-          borderRadius: 8,
+          borderRadius: 10,
           borderLeft: "3px solid #3b82f6"
         }}>
-          <p style={{ margin: 0, fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 4 }}>Seller Notes:</p>
-          <p style={{ margin: 0, fontSize: 12, color: "#374151" }}>{listing.notes}</p>
+          <p style={{ margin: 0, fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>Seller Notes</p>
+          <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{listing.notes}</p>
         </div>
       )}
 
       <div
         style={{
-          marginTop: 12,
+          marginTop: 16,
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
+          gap: 10
         }}
       >
         <span
           style={{
             fontSize: 11,
-            padding: "4px 10px",
+            padding: "6px 14px",
             borderRadius: 999,
             background: listing.isAuthentic ? "#dcfce7" : "#fee2e2",
             color: listing.isAuthentic ? "#166534" : "#991b1b",
             whiteSpace: "nowrap",
+            fontWeight: 600,
+            textTransform: "uppercase",
+            letterSpacing: "0.5px",
           }}
         >
           {statusBadge}
         </span>
 
-        <button
-          style={{
-            background: "#6c757d",
-            color: "white",
-            border: "none",
-            borderRadius: 10,
-            padding: "9px 16px",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-            marginRight: 8,
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/consumer/product/${listing.productId}`);
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#545b62";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#6c757d";
-          }}
-          title="View product journey timeline"
-        >
-          🕒 Timeline
-        </button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            style={{
+              background: "#6c757d",
+              color: "white",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 20px",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "all 0.2s",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/consumer/product/${listing.productId}`);
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#545b62";
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#6c757d";
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+            }}
+            title="View product journey timeline"
+          >
+            Timeline
+          </button>
 
-        <button
-          style={{
-            background: purchasing ? "#6c757d" : "#28a745",
-            color: "white",
-            border: "none",
-            borderRadius: 10,
-            padding: "9px 16px",
-            cursor: purchasing ? "not-allowed" : "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-            opacity: purchasing ? 0.6 : 1,
-          }}
-          onClick={handlePurchase}
-          disabled={purchasing}
-          onMouseEnter={(e) => {
-            if (!purchasing) {
-              (e.currentTarget as HTMLButtonElement).style.background = "#218838";
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (!purchasing) {
-              (e.currentTarget as HTMLButtonElement).style.background = "#28a745";
-            }
-          }}
-        >
-          {purchasing ? "Processing..." : "🛒 Buy Now"}
-        </button>
+          <button
+            style={{
+              background: "#2563eb",
+              color: "white",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 20px",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "all 0.2s",
+            }}
+            onClick={async (e) => {
+              e.stopPropagation();
+              const userId = localStorage.getItem("userId");
+              if (!userId) { alert("Please log in to chat"); return; }
+              try {
+                const res = await axios.post("http://localhost:3000/api/chats/create-thread", {
+                  listingId: listing.listingId,
+                  userId: Number(userId),
+                  otherUserId: listing.seller.userId,
+                });
+                if (res.data.success) {
+                  navigate(`/consumer/chats/${res.data.thread.thread_id}`);
+                } else {
+                  alert(res.data.error || "Failed to open chat");
+                }
+              } catch (err: any) {
+                alert(err?.response?.data?.error || "Failed to open chat");
+              }
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#1d4ed8";
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#2563eb";
+              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+            }}
+            title="Chat with seller"
+          >
+            Message
+          </button>
+
+          <button
+            style={{
+              background: purchasing ? "#6c757d" : "#28a745",
+              color: "white",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 20px",
+              cursor: purchasing ? "not-allowed" : "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              opacity: purchasing ? 0.6 : 1,
+              transition: "all 0.2s",
+            }}
+            onClick={handlePurchase}
+            disabled={purchasing}
+            onMouseEnter={(e) => {
+              if (!purchasing) {
+                (e.currentTarget as HTMLButtonElement).style.background = "#218838";
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!purchasing) {
+                (e.currentTarget as HTMLButtonElement).style.background = "#28a745";
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+              }
+            }}
+          >
+            {purchasing ? "Processing..." : "Buy Now"}
+          </button>
+        </div>
       </div>
     </div>
   );
