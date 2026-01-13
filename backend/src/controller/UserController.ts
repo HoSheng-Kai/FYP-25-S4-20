@@ -32,13 +32,16 @@ class UserController {
       //   public_key
       // );
 
+      // Prefer any explicitly provided public_key, else use generated one
+      const resolvedPublicKey = req.body.public_key ?? public_key;
+
       await User.createAccount(
         req.body.username,
         req.body.password,
         req.body.email,
         req.body.role_id,
         private_key,
-        req.body.public_key
+        resolvedPublicKey
       );
 
       res.json({

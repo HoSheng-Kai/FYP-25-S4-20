@@ -223,6 +223,14 @@ export default function AdminListingsPage() {
                 Product Listings
               </NavLink>
             </li>
+            <li>
+              <NavLink
+                to="/admin/register"
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
+                Register Company
+              </NavLink>
+            </li>
           </ul>
         </nav>
 

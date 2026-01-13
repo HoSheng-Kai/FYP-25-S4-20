@@ -13,6 +13,7 @@ import RetailerLayout from "./components/layout/RetailerLayout";
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
 import AdminUsersPage from "./pages/admin/AdminUsersPage";
 import AdminListingsPage from "./pages/admin/AdminListingsPage";
+import AdminRegistrationPage from "./pages/admin/AdminRegistrationPage";
 import ManufacturerDashboardPage from "./pages/manufacturer/ManufacturerDashboardPage";
 import DistributorDashboardPage from "./pages/distributor/DistributorDashboardPage";
 import RetailerDashboardPage from "./pages/retailer/RetailerDashboardPage";
@@ -60,6 +61,7 @@ export default function App() {
       <Route path="/admin" element={<AdminDashboardPage />} />
       <Route path="/admin/users" element={<AdminUsersPage />} />
       <Route path="/admin/listings" element={<AdminListingsPage />} />
+      <Route path="/admin/register" element={<AdminRegistrationPage />} />
 
       {/* Manufacturer */}
       <Route path="/manufacturer" element={<ManufacturerLayout />}>
