@@ -254,6 +254,7 @@ export default function RegisterOnChainPage() {
   const [metadataHashHex, setMetadataHashHex] = useState<string>("");
   const [isFinalized, setIsFinalized] = useState<boolean>(false);
 
+
   // QR (from backend)
   const [qrUrl, setQrUrl] = useState<string>("");
 
@@ -283,6 +284,31 @@ export default function RegisterOnChainPage() {
 
   const pidStr = searchParams.get("productId");
   const stageParam = (searchParams.get("stage") || "").toLowerCase();
+      // ====== Required-field gating ======
+  const isNonEmpty = (v: string) => v.trim().length > 0;
+
+  // ALL fields required.
+  const allFieldsFilled =
+    isNonEmpty(serialNo) &&
+    isNonEmpty(productName) &&
+    isNonEmpty(batchNo) &&
+    isNonEmpty(category) &&
+    isNonEmpty(manufactureDate) &&
+    isNonEmpty(description);
+
+  const hasDraftSaved = !!productId && draftStage === "draft";
+  const hasConfirmed = !!productId && draftStage === "confirmed";
+
+  // Button enable rules
+  const canSaveDraft = !isLocked && !productId && allFieldsFilled;
+  // If want to allow re-saving draft updates, change `!productId` to `draftStage !== "confirmed" && !isFinalized`
+
+  const canDeleteDraft = !isLocked && hasDraftSaved;
+  const canConfirmDraft = !isLocked && hasDraftSaved;
+
+  const canSendToBlockchain =
+    hasConfirmed && !isFinalized && allFieldsFilled && !!wallet.publicKey;
+
   useEffect(() => {
     setUiError("");
 
@@ -770,20 +796,56 @@ export default function RegisterOnChainPage() {
           </div>
 
           <div style={styles.actionsWrap}>
-            <button type="button" onClick={onSaveDraftClick} style={styles.btn} disabled={isLocked}>
+            <button
+              type="button"
+              onClick={onSaveDraftClick}
+              style={{ ...styles.btn, ...(canSaveDraft ? {} : styles.disabled) }}
+              disabled={!canSaveDraft}
+              title={
+                !allFieldsFilled
+                  ? "Fill in all fields first"
+                  : productId
+                    ? "Draft already saved"
+                    : isLocked
+                      ? "Locked"
+                      : ""
+              }
+            >
               Save Draft (DB)
             </button>
 
-            <button type="button" onClick={deleteDraft} style={styles.btnDanger} disabled={isLocked || !productId}>
+            <button
+              type="button"
+              onClick={deleteDraft}
+              style={{ ...styles.btnDanger, ...(canDeleteDraft ? {} : styles.disabled) }}
+              disabled={!canDeleteDraft}
+              title={
+                !productId
+                  ? "Save draft first"
+                  : draftStage !== "draft"
+                    ? "Only drafts can be deleted"
+                    : isLocked
+                      ? "Locked"
+                      : ""
+              }
+            >
               Delete Draft
             </button>
 
             <button
               type="button"
               onClick={confirmDraft}
-              style={styles.btnEmphasis}
-              disabled={isLocked || !productId}
-              title={!productId ? "Save draft first" : isLocked ? "Already locked" : ""}
+              style={{ ...styles.btnEmphasis, ...(canConfirmDraft ? {} : styles.disabled) }}
+              disabled={!canConfirmDraft}
+              title={
+                !productId
+                  ? "Save draft first"
+                  : draftStage !== "draft"
+                    ? "Draft already confirmed"
+                    : isLocked
+                      ? "Locked"
+                      : ""
+              }
             >
               Confirm Draft (Lock)
             </button>
@@ -791,9 +853,21 @@ export default function RegisterOnChainPage() {
             <button
               type="button"
               onClick={sendToBlockchain}
-              style={styles.btnPrimary}
-              disabled={draftStage !== "confirmed" || isFinalized || !productId}
-              title={draftStage !== "confirmed" ? "Confirm draft first" : isFinalized ? "Already finalized" : ""}
+              style={{ ...styles.btnPrimary, ...(canSendToBlockchain ? {} : styles.disabled) }}
+              disabled={!canSendToBlockchain}
+              title={
+                !allFieldsFilled
+                  ? "Fill in all fields first"
+                  : !productId
+                    ? "Save draft first"
+                    : draftStage !== "confirmed"
+                      ? "Confirm draft first"
+                      : isFinalized
+                        ? "Already finalized"
+                        : !wallet.publicKey
+                          ? "Connect wallet first"
+                          : ""
+              }
             >
               Send to Blockchain (Finalize & Lock)
             </button>

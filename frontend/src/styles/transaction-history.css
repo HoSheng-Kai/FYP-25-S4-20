@@ -99,7 +99,8 @@
   background: #ffffff;
   border-radius: 16px;
   padding: 18px 20px 20px;
-  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.12);
+  border: 1px solid #e9edf5;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.06);
 }
 
 .tx-section-title {
@@ -276,4 +277,111 @@
   .tx-value {
     text-align: left;
   }
+}
+
+.tx-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tx-toggle-group {
+  display: flex;
+  gap: 8px;
+}
+
+.tx-toggle {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.tx-toggle-active {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  color: #fff;
+}
+
+/* =========================
+   Embedded mode (inside pd-card)
+   Removes card-on-card look
+========================= */
+.tx-embedded {
+  width: 100%;
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Remove the blue header card background when embedded (optional)
+   If you still want it, delete this block. */
+.tx-embedded .tx-header-card {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Make sections "flat" because pd-card already provides the card UI */
+.tx-embedded .tx-section {
+  background: transparent;
+  border-radius: 0;
+  padding: 12px 14px;
+  box-shadow: none;
+}
+
+/* Tighten timeline content so it resembles your screenshot */
+.tx-embedded .tx-step-content {
+  background: #fff;
+  border: 1px solid #eef2f7;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+/* Make the timeline line a bit lighter */
+.tx-embedded .tx-timeline::before {
+  background: #eef2f7;
+}
+
+/* Keep the table header style consistent with ProductDetails tables */
+.tx-embedded .tx-table thead {
+  background: #f9fafb;
+}
+
+.tx-embedded .tx-table th {
+  font-weight: 800;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.tx-embedded .tx-table td {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.tx-embedded .tx-section-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tx-embedded .tx-step-title {
+  font-size: 13px;
+}
+
+.tx-embedded .tx-step-step {
+  font-size: 11px;
 }

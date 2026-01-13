@@ -217,23 +217,40 @@ export default function NotificationsPanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlyUnread]);
 
-  async function markOneRead(notificationId: number) {
+  async function markOneRead(notificationId: number, opts?: { force?: boolean }) {
     if (!userId) return;
+
     const n = items.find((x) => x.notificationId === notificationId);
-    if (n && hasTransferActions(n)) {
-      setError("This notification requires a transfer action (Accept/Deny/Execute) and cannot be marked as read yet.");
+
+    // Block manual mark-read for transfer notifications, but allow forced mark-read from transfer actions
+    if (!opts?.force && n && hasTransferActions(n)) {
+      setError(
+        "This notification requires a transfer action (Accept/Deny/Execute) and cannot be marked as read yet."
+      );
       return;
     }
+
     setBusyId(notificationId);
     setError(null);
 
-    setItems((prev) => prev.map((n) => (n.notificationId === notificationId ? { ...n, isRead: true } : n)));
+    // optimistic UI
+    setItems((prev) =>
+      prev.map((x) => (x.notificationId === notificationId ? { ...x, isRead: true } : x))
+    );
 
     try {
-      await http.put(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}/read`, null, { params: { userId } });
-      if (onlyUnread) setItems((prev) => prev.filter((n) => n.notificationId !== notificationId));
+      await http.put(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}/read`, null, {
+        params: { userId },
+      });
+
+      if (onlyUnread) {
+        setItems((prev) => prev.filter((x) => x.notificationId !== notificationId));
+      }
     } catch (e: any) {
-      setItems((prev) => prev.map((n) => (n.notificationId === notificationId ? { ...n, isRead: false } : n)));
+      // rollback
+      setItems((prev) =>
+        prev.map((x) => (x.notificationId === notificationId ? { ...x, isRead: false } : x))
+      );
       setError(e?.response?.data?.error ?? e?.message ?? "Failed to mark as read");
     } finally {
       setBusyId(null);
@@ -356,7 +373,7 @@ export default function NotificationsPanel(props: {
         txHash: acceptTx,
       });
 
-      await markOneRead(n.notificationId);
+      await markOneRead(n.notificationId, { force: true });
       await fetchNotifications(onlyUnread);
     } catch (e: any) {
       setError(e?.response?.data?.error ?? e?.response?.data?.details ?? e?.message ?? "Accept failed");
@@ -407,7 +424,7 @@ export default function NotificationsPanel(props: {
         product_pda: payload.productPda,
       });
 
-      await markOneRead(n.notificationId);
+      await markOneRead(n.notificationId, { force: true });
       await fetchNotifications(onlyUnread);
     } catch (e: any) {
       setError(e?.response?.data?.error ?? e?.response?.data?.details ?? e?.message ?? "Execute failed");
@@ -421,7 +438,7 @@ export default function NotificationsPanel(props: {
     setBusyId(n.notificationId);
     setError(null);
     try {
-      await markOneRead(n.notificationId);
+      await markOneRead(n.notificationId, { force: true });
       await fetchNotifications(onlyUnread);
     } finally {
       setBusyId(null);
@@ -431,7 +448,6 @@ export default function NotificationsPanel(props: {
   function renderMessage(n: ApiNotification) {
     const payload = parseTransferPayload(n.message);
 
-    // ✅ Pretty short UI (no long blob)
     if (payload?.kind === "TRANSFER_REQUEST") {
       return (
         <div style={{ marginTop: 6, color: "#4b5563", lineHeight: 1.5 }}>

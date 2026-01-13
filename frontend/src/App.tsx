@@ -114,7 +114,7 @@ export default function App() {
       <Route path="/transaction-history" element={<TransactionHistory />} />
 
       {/* Shared*/}
-      <Route path="/products/:productId/details" element={<ProductDetailsPage />} />
+      <Route path="/products/:productId/details" element={<SharedProductDetailsPage />} />
 
       {/* Default */}
       <Route path="/" element={<Navigate to="/login" replace />} />
