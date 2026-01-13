@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { USERS_API_BASE_URL, ADMIN_API_BASE_URL } from "../../config/api";
+import NotificationsPanel from "../../components/notifications/NotificationsPanel";
 
 interface DashboardStats {
   totalUsers: number;
@@ -164,13 +165,16 @@ export default function AdminDashboardPage() {
         {loading ? (
           <div style={{ textAlign: "center", padding: 40 }}>Loading...</div>
         ) : (
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-              gap: 24,
-            }}
-          >
+          <>
+            {/* Stats Grid */}
+            <div
+              style={{
+                marginTop: 32,
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                gap: 24,
+              }}
+            >
             {/* Total Users Card */}
             <div
               style={{
@@ -238,45 +242,14 @@ export default function AdminDashboardPage() {
                 {stats.totalListings}
               </div>
             </div>
-          </div>
-        )}
+            </div>
 
-        {/* Quick Actions */}
-        <div style={{ marginTop: 32 }}>
-          <h2 style={{ fontSize: 20, marginBottom: 16, color: "#111827" }}>Quick Actions</h2>
-          <div style={{ display: "flex", gap: 12 }}>
-            <button
-              onClick={() => navigate("/admin/users")}
-              style={{
-                background: "#0066cc",
-                color: "white",
-                border: "none",
-                padding: "12px 24px",
-                borderRadius: 8,
-                cursor: "pointer",
-                fontSize: 15,
-                fontWeight: 600,
-              }}
-            >
-              Manage Users
-            </button>
-            <button
-              onClick={() => navigate("/admin/listings")}
-              style={{
-                background: "#059669",
-                color: "white",
-                border: "none",
-                padding: "12px 24px",
-                borderRadius: 8,
-                cursor: "pointer",
-                fontSize: 15,
-                fontWeight: 600,
-              }}
-            >
-              View Listings
-            </button>
-          </div>
-        </div>
+            {/* Notifications */}
+            <div style={{ marginTop: 40 }}>
+              <NotificationsPanel isAdmin={true} />
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

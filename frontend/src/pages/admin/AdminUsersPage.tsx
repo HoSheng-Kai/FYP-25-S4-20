@@ -46,6 +46,9 @@ export default function AdminUsersPage() {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [newRoleId, setNewRoleId] = useState<string>("consumer");
 
+  // Delete confirmation modal
+  const [deleteModalUsers, setDeleteModalUsers] = useState<User[]>([]);
+
   const roles: Role[] = [
     { role_id: "consumer", role_name: "Consumer" },
     { role_id: "manufacturer", role_name: "Manufacturer" },
@@ -132,55 +135,52 @@ export default function AdminUsersPage() {
     }
   };
 
-  // Verify selected users
-  const handleVerifyUsers = async () => {
-    const usernames = users
-      .filter(u => selectedUsers.has(u.user_id))
-      .map(u => u.username);
-
-    if (usernames.length === 0) {
-      alert("Please select users to verify");
+  // Ban single user
+  const handleBanUser = async (user: User) => {
+    if (!confirm(`Confirm ban ${user.username}?`)) {
       return;
     }
 
     try {
-      await axios.post(`${ADMIN_API_BASE_URL}/create-accounts`, {
-        usernames,
+      await axios.post(`${ADMIN_API_BASE_URL}/ban-account`, {
+        userId: user.user_id,
+        banned: !user.banned,
       });
-      alert(`Successfully verified ${usernames.length} user(s)`);
+      alert(`Successfully ${user.banned ? "unbanned" : "banned"} ${user.username}`);
       await loadUsers();
-      setSelectedUsers(new Set());
-    } catch (error: any) {
-      console.error("Failed to verify users:", error);
-      alert(error.response?.data?.details || "Failed to verify users");
-    }
-  };
-
-  // Ban selected users
-  const handleBanUsers = async (ban = true) => {
-    const targetIds = users
-      .filter(u => selectedUsers.has(u.user_id))
-      .map(u => u.user_id);
-
-    if (targetIds.length === 0) {
-      alert("Please select users to update");
-      return;
-    }
-
-    if (!confirm(`${ban ? "Ban" : "Unban"} ${targetIds.length} user(s)?`)) {
-      return;
-    }
-
-    try {
-      for (const id of targetIds) {
-        await axios.post(`${ADMIN_API_BASE_URL}/ban-account`, { userId: id, banned: ban });
-      }
-      alert(`Successfully ${ban ? "banned" : "unbanned"} ${targetIds.length} user(s)`);
-      await loadUsers();
-      setSelectedUsers(new Set());
     } catch (error: any) {
       console.error("Failed to update ban status:", error);
       alert(error.response?.data?.details || "Failed to update ban status");
+    }
+  };
+
+  // Delete single or multiple users
+  const handleDeleteUsers = async (usersToDelete: User[]) => {
+    if (usersToDelete.length === 0) {
+      alert("Please select users to delete");
+      return;
+    }
+
+    const confirmMsg = usersToDelete.length === 1
+      ? `Are you sure you want to delete ${usersToDelete[0].username}? This action cannot be undone.`
+      : `Are you sure you want to delete ${usersToDelete.length} users? This action cannot be undone.`;
+
+    if (!confirm(confirmMsg)) {
+      return;
+    }
+
+    try {
+      // Delete each user individually
+      for (const user of usersToDelete) {
+        await axios.delete(`${USERS_API_BASE_URL}/${user.user_id}`);
+      }
+      alert(`Successfully deleted ${usersToDelete.length} user(s)`);
+      await loadUsers();
+      setSelectedUsers(new Set());
+      setDeleteModalUsers([]);
+    } catch (error: any) {
+      console.error("Failed to delete users:", error);
+      alert(error.response?.data?.details || "Failed to delete users");
     }
   };
 
@@ -384,7 +384,26 @@ export default function AdminUsersPage() {
             </span>
             <div style={{ display: "flex", gap: 12 }}>
               <button
-                onClick={handleVerifyUsers}
+                onClick={() => {
+                  const usersToVerify = users.filter(u => selectedUsers.has(u.user_id));
+                  const usernames = usersToVerify.map(u => u.username);
+                  if (usernames.length === 0) {
+                    alert("Please select users to verify");
+                    return;
+                  }
+                  if (!confirm(`Verify ${usernames.length} user(s)?`)) {
+                    return;
+                  }
+                  axios.post(`${ADMIN_API_BASE_URL}/create-accounts`, { usernames })
+                    .then(() => {
+                      alert(`Successfully verified ${usernames.length} user(s)`);
+                      loadUsers();
+                      setSelectedUsers(new Set());
+                    })
+                    .catch((error: any) => {
+                      alert(error.response?.data?.details || "Failed to verify users");
+                    });
+                }}
                 style={{
                   background: "#10b981",
                   color: "white",
@@ -399,7 +418,10 @@ export default function AdminUsersPage() {
                 Verify Selected
               </button>
               <button
-                onClick={() => handleBanUsers(true)}
+                onClick={() => {
+                  const usersToDelete = users.filter(u => selectedUsers.has(u.user_id));
+                  setDeleteModalUsers(usersToDelete);
+                }}
                 style={{
                   background: "#ef4444",
                   color: "white",
@@ -411,22 +433,7 @@ export default function AdminUsersPage() {
                   fontWeight: 600,
                 }}
               >
-                Ban Selected
-              </button>
-              <button
-                onClick={() => handleBanUsers(false)}
-                style={{
-                  background: "#6b7280",
-                  color: "white",
-                  border: "none",
-                  padding: "8px 16px",
-                  borderRadius: 6,
-                  cursor: "pointer",
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                Unban Selected
+                Delete Selected
               </button>
             </div>
           </div>
@@ -447,14 +454,6 @@ export default function AdminUsersPage() {
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr style={{ background: "#f9fafb", borderBottom: "1px solid #e5e7eb" }}>
-                  <th style={{ padding: 16, textAlign: "left" }}>
-                    <input
-                      type="checkbox"
-                      checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
-                      onChange={toggleSelectAll}
-                      style={{ cursor: "pointer" }}
-                    />
-                  </th>
                   <th style={{ padding: 16, textAlign: "left", fontSize: 14, fontWeight: 600 }}>
                     Username
                   </th>
@@ -469,6 +468,15 @@ export default function AdminUsersPage() {
                   </th>
                   <th style={{ padding: 16, textAlign: "left", fontSize: 14, fontWeight: 600 }}>
                     Created
+                  </th>
+                  <th style={{ padding: 16, textAlign: "center", fontSize: 14, fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedUsers.size === filteredUsers.length && filteredUsers.length > 0}
+                      onChange={toggleSelectAll}
+                      style={{ cursor: "pointer" }}
+                      title="Select all for delete"
+                    />
                   </th>
                   <th style={{ padding: 16, textAlign: "center", fontSize: 14, fontWeight: 600 }}>
                     Actions
@@ -488,14 +496,6 @@ export default function AdminUsersPage() {
                       key={user.user_id}
                       style={{ borderBottom: "1px solid #e5e7eb" }}
                     >
-                      <td style={{ padding: 16 }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedUsers.has(user.user_id)}
-                          onChange={() => toggleSelectUser(user.user_id)}
-                          style={{ cursor: "pointer" }}
-                        />
-                      </td>
                       <td style={{ padding: 16, fontSize: 14 }}>{user.username}</td>
                       <td style={{ padding: 16, fontSize: 14 }}>{user.email}</td>
                       <td style={{ padding: 16, fontSize: 14 }}>{getRoleName(user.role_id)}</td>
@@ -551,7 +551,16 @@ export default function AdminUsersPage() {
                         {new Date(user.created_on).toLocaleDateString()}
                       </td>
                       <td style={{ padding: 16, textAlign: "center" }}>
-                        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                        <input
+                          type="checkbox"
+                          checked={selectedUsers.has(user.user_id)}
+                          onChange={() => toggleSelectUser(user.user_id)}
+                          style={{ cursor: "pointer" }}
+                          title="Select for delete"
+                        />
+                      </td>
+                      <td style={{ padding: 16, textAlign: "center" }}>
+                        <div style={{ display: "flex", gap: 8, justifyContent: "center", flexWrap: "wrap" }}>
                           <button
                             onClick={() => {
                               setEditingUser(user);
@@ -571,7 +580,7 @@ export default function AdminUsersPage() {
                             Edit Role
                           </button>
                           <button
-                            onClick={() => handleBanUsers(!user.banned)}
+                            onClick={() => handleBanUser(user)}
                             style={{
                               background: user.banned ? "#10b981" : "#ef4444",
                               color: "white",
@@ -704,6 +713,87 @@ export default function AdminUsersPage() {
                 }}
               >
                 Update Role
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteModalUsers.length > 0 && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setDeleteModalUsers([])}
+        >
+          <div
+            style={{
+              background: "white",
+              padding: 32,
+              borderRadius: 12,
+              width: 400,
+              maxWidth: "90%",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginTop: 0, marginBottom: 20, fontSize: 20, color: "#dc2626" }}>
+              Delete {deleteModalUsers.length} User{deleteModalUsers.length > 1 ? "s" : ""}?
+            </h2>
+
+            <p style={{ marginBottom: 20, color: "#374151" }}>
+              {deleteModalUsers.length === 1
+                ? `This will permanently delete ${deleteModalUsers[0].username} and cannot be undone.`
+                : `This will permanently delete ${deleteModalUsers.length} users and cannot be undone.`}
+            </p>
+
+            <div style={{ marginBottom: 20, maxHeight: 200, overflowY: "auto" }}>
+              {deleteModalUsers.map(u => (
+                <div key={u.user_id} style={{ padding: "8px 12px", background: "#f3f4f6", borderRadius: 6, marginBottom: 8 }}>
+                  {u.username}
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setDeleteModalUsers([])}
+                style={{
+                  background: "#e5e7eb",
+                  color: "#374151",
+                  border: "none",
+                  padding: "10px 20px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteUsers(deleteModalUsers)}
+                style={{
+                  background: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  padding: "10px 20px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                Delete
               </button>
             </div>
           </div>

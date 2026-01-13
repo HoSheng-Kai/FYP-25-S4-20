@@ -271,6 +271,32 @@ class UserController {
       });
     }
   }
+
+  async deleteUser(req: Request, res: Response) {
+    try {
+      const { userId } = req.params;
+
+      if (!userId || isNaN(Number(userId))) {
+        res.status(400).json({
+          success: false,
+          error: "Invalid userId",
+        });
+        return;
+      }
+
+      await User.deleteUser(Number(userId));
+
+      res.json({
+        success: true,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to delete user",
+        details: error.message,
+      });
+    }
+  }
 }
 
 export default new UserController();

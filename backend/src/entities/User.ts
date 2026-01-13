@@ -84,6 +84,17 @@ class UserEntity {
             throw new Error("User not found.");
         }
     }
+
+    static async deleteUser(userId: number): Promise<void> {
+        const result = await pool.query(`
+            DELETE FROM users
+            WHERE user_id = $1
+        `, [userId]);
+
+        if (result.rowCount === 0) {
+            throw new Error("User not found.");
+        }
+    }
 }
 
 export default UserEntity;

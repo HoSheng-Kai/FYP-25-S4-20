@@ -11,5 +11,6 @@ router.post('/forgot-password', userController.forgotPassword.bind(userControlle
 router.get("/list", userController.listUsers.bind(userController));
 router.put('/update-password', userController.updatePassword.bind(userController));
 router.put('/update-email', userController.updateEmail.bind(userController));
+router.delete('/:userId', userController.deleteUser.bind(userController));
 
 export default router;

@@ -178,8 +178,9 @@ export default function NotificationsPanel(props: {
   title?: string;
   defaultOnlyUnread?: boolean;
   showHeader?: boolean;
+  isAdmin?: boolean;
 }) {
-  const { title = "Notifications", defaultOnlyUnread = true, showHeader = true } = props;
+  const { title = "Notifications", defaultOnlyUnread = true, showHeader = true, isAdmin = false } = props;
 
   const wallet = useWallet();
   const userId = useMemo(() => getUserIdFromStorage(), []);
@@ -530,10 +531,12 @@ export default function NotificationsPanel(props: {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            {/* ✅ WALLET CONNECT UI */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <WalletMultiButton />
-            </div>
+            {/* ✅ WALLET CONNECT UI - Only for non-admin users */}
+            {!isAdmin && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <WalletMultiButton />
+              </div>
+            )}
 
             <div style={{ display: "flex", gap: 8 }}>
               <button onClick={() => setOnlyUnread(true)} style={onlyUnread ? btnDark : btnLight}>
@@ -559,12 +562,14 @@ export default function NotificationsPanel(props: {
         </div>
       )}
 
-      <div style={{ marginTop: 10, color: "#6b7280", fontSize: 12 }}>
-        Wallet:{" "}
-        <span style={{ fontFamily: "monospace" }}>
-          {wallet.publicKey ? wallet.publicKey.toBase58() : "Not connected"}
-        </span>
-      </div>
+      {!isAdmin && (
+        <div style={{ marginTop: 10, color: "#6b7280", fontSize: 12 }}>
+          Wallet:{" "}
+          <span style={{ fontFamily: "monospace" }}>
+            {wallet.publicKey ? wallet.publicKey.toBase58() : "Not connected"}
+          </span>
+        </div>
+      )}
 
       {error && <div style={errBox}>{error}</div>}
 
@@ -597,8 +602,8 @@ export default function NotificationsPanel(props: {
                     {/* transfer buttons */}
                     {renderTransferActions(n)}
 
-                    {/* deep links */}
-                    {n.txHash?.startsWith("thread:") && (
+                    {/* deep links - only for non-admin */}
+                    {!isAdmin && n.txHash?.startsWith("thread:") && (
                       <button
                         onClick={() => {
                           const tid = Number(n.txHash?.split(":")[1]);
