@@ -77,6 +77,13 @@ class AdminEntity {
         await pool.query(sql, usernames);   
     }
 
+    static async banAccount(userId: number, banned: boolean): Promise<void> {
+        await pool.query(
+            `UPDATE users SET banned = $1 WHERE user_id = $2`,
+            [banned, userId]
+        );
+    }
+
     static async readProductListings()
     :Promise<any[]>{
         const sql = `

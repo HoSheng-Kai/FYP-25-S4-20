@@ -132,7 +132,7 @@ class UserController {
       if(user.banned){
         res.json({
         success: false,
-        error: 'User is banned',
+        error: 'Your account is banned. Please email admin@blocktrace.com for any queries',
         banned: user.banned
         });
         return;

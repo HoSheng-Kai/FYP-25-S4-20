@@ -10,6 +10,7 @@ interface User {
   role_id: string; // Changed from number to string ('admin', 'manufacturer', etc.)
   verified: boolean;
   created_on: string;
+  banned?: boolean;
 }
 
 interface Role {
@@ -155,31 +156,31 @@ export default function AdminUsersPage() {
     }
   };
 
-  // Delete selected users
-  const handleDeleteUsers = async () => {
-    const usernames = users
+  // Ban selected users
+  const handleBanUsers = async (ban = true) => {
+    const targetIds = users
       .filter(u => selectedUsers.has(u.user_id))
-      .map(u => u.username);
+      .map(u => u.user_id);
 
-    if (usernames.length === 0) {
-      alert("Please select users to delete");
+    if (targetIds.length === 0) {
+      alert("Please select users to update");
       return;
     }
 
-    if (!confirm(`Delete ${usernames.length} user(s)? This cannot be undone.`)) {
+    if (!confirm(`${ban ? "Ban" : "Unban"} ${targetIds.length} user(s)?`)) {
       return;
     }
 
     try {
-      await axios.delete(`${ADMIN_API_BASE_URL}/delete-accounts`, {
-        data: { usernames },
-      });
-      alert(`Successfully deleted ${usernames.length} user(s)`);
+      for (const id of targetIds) {
+        await axios.post(`${ADMIN_API_BASE_URL}/ban-account`, { userId: id, banned: ban });
+      }
+      alert(`Successfully ${ban ? "banned" : "unbanned"} ${targetIds.length} user(s)`);
       await loadUsers();
       setSelectedUsers(new Set());
     } catch (error: any) {
-      console.error("Failed to delete users:", error);
-      alert(error.response?.data?.details || "Failed to delete users");
+      console.error("Failed to update ban status:", error);
+      alert(error.response?.data?.details || "Failed to update ban status");
     }
   };
 
@@ -398,7 +399,7 @@ export default function AdminUsersPage() {
                 Verify Selected
               </button>
               <button
-                onClick={handleDeleteUsers}
+                onClick={() => handleBanUsers(true)}
                 style={{
                   background: "#ef4444",
                   color: "white",
@@ -410,7 +411,22 @@ export default function AdminUsersPage() {
                   fontWeight: 600,
                 }}
               >
-                Delete Selected
+                Ban Selected
+              </button>
+              <button
+                onClick={() => handleBanUsers(false)}
+                style={{
+                  background: "#6b7280",
+                  color: "white",
+                  border: "none",
+                  padding: "8px 16px",
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                Unban Selected
               </button>
             </div>
           </div>
@@ -484,56 +500,92 @@ export default function AdminUsersPage() {
                       <td style={{ padding: 16, fontSize: 14 }}>{user.email}</td>
                       <td style={{ padding: 16, fontSize: 14 }}>{getRoleName(user.role_id)}</td>
                       <td style={{ padding: 16 }}>
-                        {user.verified ? (
-                          <span
-                            style={{
-                              background: "#d1fae5",
-                              color: "#065f46",
-                              padding: "4px 12px",
-                              borderRadius: 12,
-                              fontSize: 12,
-                              fontWeight: 600,
-                            }}
-                          >
-                            Verified
-                          </span>
-                        ) : (
-                          <span
-                            style={{
-                              background: "#fef3c7",
-                              color: "#92400e",
-                              padding: "4px 12px",
-                              borderRadius: 12,
-                              fontSize: 12,
-                              fontWeight: 600,
-                            }}
-                          >
-                            Unverified
-                          </span>
-                        )}
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {user.verified ? (
+                            <span
+                              style={{
+                                background: "#d1fae5",
+                                color: "#065f46",
+                                padding: "4px 12px",
+                                borderRadius: 12,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                display: "inline-block",
+                              }}
+                            >
+                              Verified
+                            </span>
+                          ) : (
+                            <span
+                              style={{
+                                background: "#fef3c7",
+                                color: "#92400e",
+                                padding: "4px 12px",
+                                borderRadius: 12,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                display: "inline-block",
+                              }}
+                            >
+                              Unverified
+                            </span>
+                          )}
+                          {user.banned && (
+                            <span
+                              style={{
+                                background: "#fee2e2",
+                                color: "#991b1b",
+                                padding: "4px 12px",
+                                borderRadius: 12,
+                                fontSize: 12,
+                                fontWeight: 600,
+                                display: "inline-block",
+                              }}
+                            >
+                              Banned
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td style={{ padding: 16, fontSize: 14, color: "#6b7280" }}>
                         {new Date(user.created_on).toLocaleDateString()}
                       </td>
                       <td style={{ padding: 16, textAlign: "center" }}>
-                        <button
-                          onClick={() => {
-                            setEditingUser(user);
-                            setNewRoleId(user.role_id);
-                          }}
-                          style={{
-                            background: "#3b82f6",
-                            color: "white",
-                            border: "none",
-                            padding: "6px 12px",
-                            borderRadius: 6,
-                            cursor: "pointer",
-                            fontSize: 13,
-                            fontWeight: 600,
-                          }}
-                        >
-                          Edit Role
-                        </button>
+                        <div style={{ display: "flex", gap: 8, justifyContent: "center" }}>
+                          <button
+                            onClick={() => {
+                              setEditingUser(user);
+                              setNewRoleId(user.role_id);
+                            }}
+                            style={{
+                              background: "#3b82f6",
+                              color: "white",
+                              border: "none",
+                              padding: "6px 12px",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              fontSize: 13,
+                              fontWeight: 600,
+                            }}
+                          >
+                            Edit Role
+                          </button>
+                          <button
+                            onClick={() => handleBanUsers(!user.banned)}
+                            style={{
+                              background: user.banned ? "#10b981" : "#ef4444",
+                              color: "white",
+                              border: "none",
+                              padding: "6px 12px",
+                              borderRadius: 6,
+                              cursor: "pointer",
+                              fontSize: 13,
+                              fontWeight: 600,
+                            }}
+                          >
+                            {user.banned ? "Unban" : "Ban"}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))

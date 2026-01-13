@@ -412,6 +412,33 @@ CREATE TABLE IF NOT EXISTS review (
     created_on TIMESTAMP DEFAULT NOW()
 );
 
+-- ===========================
+-- CHAT
+-- ===========================
+CREATE TABLE IF NOT EXISTS chat_thread (
+    thread_id SERIAL PRIMARY KEY,
+    listing_id INTEGER NOT NULL REFERENCES product_listing(listing_id) ON DELETE CASCADE,
+    user_a INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    user_b INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    archived_by INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+    archived_on TIMESTAMPTZ,
+    CONSTRAINT chat_thread_unique UNIQUE (listing_id, user_a, user_b)
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_thread_users ON chat_thread(user_a, user_b);
+
+CREATE TABLE IF NOT EXISTS chat_message (
+    message_id SERIAL PRIMARY KEY,
+    thread_id INTEGER NOT NULL REFERENCES chat_thread(thread_id) ON DELETE CASCADE,
+    sender_id INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    created_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    read_by_other BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chat_message_thread ON chat_message(thread_id, created_on);
+
 ALTER TABLE fyp_25_s4_20.product
 ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'draft';
 

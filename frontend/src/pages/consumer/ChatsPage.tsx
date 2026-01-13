@@ -19,14 +19,18 @@ type Thread = {
   serial_no?: string | null;
   listing_price?: string | null;
   listing_currency?: string | null;
+  archived_by?: number | null;
+  archived_on?: string | null;
 };
 
 export default function ChatsPage() {
   const userId = useMemo(() => Number(localStorage.getItem("userId")), []);
   const [threads, setThreads] = useState<Thread[]>([]);
+  const [archivedThreads, setArchivedThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState<number | null>(null);
+  const [showArchived, setShowArchived] = useState(false);
   const navigate = useNavigate();
 
   const load = async () => {
@@ -35,7 +39,13 @@ export default function ChatsPage() {
     setErr(null);
     try {
       const res = await axios.get(`${API}/threads`, { params: { userId } });
-      if (res.data.success) setThreads(res.data.threads);
+      if (res.data.success) {
+        const all: Thread[] = res.data.threads || [];
+        const active = all.filter((t) => t.archived_by !== userId);
+        const archived = all.filter((t) => t.archived_by === userId);
+        setThreads(active);
+        setArchivedThreads(archived);
+      }
       else setErr(res.data.error || "Failed to load chats");
     } catch (e) {
       setErr("Failed to load chats");
@@ -53,7 +63,7 @@ export default function ChatsPage() {
     
     try {
       await axios.delete(`${API}/${threadId}`, { data: { userId } });
-      setThreads(threads.filter(t => t.thread_id !== threadId));
+      await load();
       setMenuOpen(null);
     } catch (e: any) {
       alert(e?.response?.data?.error || "Failed to delete chat");
@@ -64,7 +74,7 @@ export default function ChatsPage() {
     try {
       const res = await axios.post(`${API}/${threadId}/archive`, { userId });
       if (res.data.success) {
-        setThreads(threads.filter(t => t.thread_id !== threadId));
+        await load();
         setMenuOpen(null);
         alert("Chat archived. You can unarchive it anytime from the Archives section.");
       }
@@ -73,10 +83,46 @@ export default function ChatsPage() {
     }
   };
 
+  const handleUnarchive = async (threadId: number) => {
+    try {
+      const res = await axios.post(`${API}/${threadId}/unarchive`, { userId });
+      if (res.data.success) {
+        await load();
+        setMenuOpen(null);
+        alert("Chat moved back to your active messages.");
+      }
+    } catch (e: any) {
+      alert(e?.response?.data?.error || "Failed to unarchive chat");
+    }
+  };
+
   return (
     <div style={{ padding: 24 }}>
       <h1 style={{ margin: 0, fontSize: 24 }}>Messages</h1>
       <p style={{ marginTop: 6, color: "#6b7280" }}>Conversations about your marketplace listings.</p>
+
+      <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
+        <button
+          onClick={() => setShowArchived(!showArchived)}
+          style={{
+            padding: "8px 14px",
+            borderRadius: 10,
+            border: "1px solid #e5e7eb",
+            background: showArchived ? "#e0f2fe" : "white",
+            color: "#0f172a",
+            cursor: "pointer",
+            fontWeight: 600,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.borderColor = "#3b82f6";
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.borderColor = "#e5e7eb";
+          }}
+        >
+          Archived Chats ({archivedThreads.length})
+        </button>
+      </div>
 
       {loading && <p>Loading…</p>}
       {err && <p style={{ color: "#b91c1c" }}>{err}</p>}
@@ -236,6 +282,131 @@ export default function ChatsPage() {
         ))}
         {!loading && threads.length === 0 && <p style={{ color: "#6b7280" }}>No conversations yet.</p>}
       </div>
+
+      {showArchived && (
+        <div style={{ marginTop: 24 }}>
+          <h2 style={{ margin: "0 0 8px 0", fontSize: 18 }}>Archived</h2>
+          <div style={{ display: "grid", gap: 12 }}>
+            {archivedThreads.map((t) => (
+              <div key={t.thread_id} style={{ display: "flex", gap: 12, alignItems: "stretch", position: "relative", opacity: 0.9 }}>
+                <button
+                  onClick={() => navigate(`/consumer/chats/${t.thread_id}`)}
+                  style={{
+                    flex: 1,
+                    padding: 16,
+                    background: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: 12,
+                    cursor: "pointer",
+                    textAlign: "left",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                        <strong style={{ fontSize: 15, color: "#0f172a" }}>@{t.other_username}</strong>
+                        <span style={{ background: "#e2e8f0", color: "#475569", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>
+                          Archived
+                        </span>
+                      </div>
+                      <div style={{ color: "#475569", fontSize: 13, maxWidth: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t.last_message ? `💬 ${t.last_message}` : "No messages yet."}
+                      </div>
+                    </div>
+                  </div>
+                </button>
+
+                <div style={{ position: "relative" }}>
+                  <button
+                    onClick={() => setMenuOpen(menuOpen === t.thread_id ? null : t.thread_id)}
+                    style={{
+                      padding: "8px 12px",
+                      background: "transparent",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 8,
+                      cursor: "pointer",
+                      fontSize: 18,
+                      color: "#6b7280",
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = "#f3f4f6";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = "transparent";
+                    }}
+                  >
+                    ⋮
+                  </button>
+
+                  {menuOpen === t.thread_id && (
+                    <div style={{
+                      position: "absolute",
+                      top: "100%",
+                      right: 0,
+                      background: "white",
+                      border: "1px solid #e5e7eb",
+                      borderRadius: 8,
+                      marginTop: 4,
+                      boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
+                      zIndex: 10,
+                      minWidth: 160,
+                    }}>
+                      <button
+                        onClick={() => handleUnarchive(t.thread_id)}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          padding: "10px 16px",
+                          background: "transparent",
+                          border: "none",
+                          borderBottom: "1px solid #f3f4f6",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          fontSize: 13,
+                          color: "#111827",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#f9fafb";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        ↩️ Unarchive
+                      </button>
+                      <button
+                        onClick={() => handleDelete(t.thread_id)}
+                        style={{
+                          display: "block",
+                          width: "100%",
+                          padding: "10px 16px",
+                          background: "transparent",
+                          border: "none",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          fontSize: 13,
+                          color: "#dc2626",
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = "#fee2e2";
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = "transparent";
+                        }}
+                      >
+                        🗑️ Delete
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            {!loading && archivedThreads.length === 0 && (
+              <p style={{ color: "#6b7280" }}>No archived conversations.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

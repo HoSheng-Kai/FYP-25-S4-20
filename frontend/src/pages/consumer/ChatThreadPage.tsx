@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 
 const API = "http://localhost:3000/api/chats";
@@ -22,10 +22,12 @@ type ThreadDetails = {
   serial_no?: string | null;
   listing_price?: string | null;
   listing_currency?: string | null;
+  listing_status?: string | null;
 };
 
 export default function ChatThreadPage() {
   const { threadId } = useParams<{ threadId: string }>();
+  const navigate = useNavigate();
   const userId = useMemo(() => Number(localStorage.getItem("userId")), []);
   const [messages, setMessages] = useState<Message[]>([]);
   const [thread, setThread] = useState<ThreadDetails | null>(null);
@@ -37,6 +39,9 @@ export default function ChatThreadPage() {
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [reportReason, setReportReason] = useState("Fraudulent activity");
+  const [reportSubmitting, setReportSubmitting] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
@@ -98,6 +103,7 @@ export default function ChatThreadPage() {
       if (res.data.success) {
         alert(`Purchase successful! You now own ${thread.product_model || 'this product'}`);
         setShowReviewForm(true);
+        setThread((prev) => (prev ? { ...prev, listing_status: "sold" } : prev));
         await load();
       }
     } catch (e: any) {
@@ -154,8 +160,62 @@ export default function ChatThreadPage() {
     }
   };
 
+  const handleReportSeller = async () => {
+    if (!threadId || !reportReason) return;
+    setReportSubmitting(true);
+    try {
+      const res = await axios.post(`http://localhost:3000/api/chats/${threadId}/report`, {
+        userId,
+        reason: reportReason,
+      });
+      if (res.data.success) {
+        alert("Report sent to admin");
+        setShowReportModal(false);
+      }
+    } catch (e: any) {
+      alert(e?.response?.data?.error || "Failed to submit report");
+    } finally {
+      setReportSubmitting(false);
+    }
+  };
+
   return (
     <div style={{ height: "calc(100vh - 60px)", padding: 24, display: "grid", gridTemplateRows: "auto auto 1fr auto", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <button
+          onClick={() => navigate(-1)}
+          title="return to previous"
+          style={{
+            border: "1px solid #e5e7eb",
+            background: "white",
+            borderRadius: 10,
+            padding: "6px 10px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          ← Back
+        </button>
+        {thread && (
+          <button
+            onClick={() => setShowReportModal(true)}
+            style={{
+              border: "1px solid #f87171",
+              background: "#fef2f2",
+              color: "#b91c1c",
+              borderRadius: 10,
+              padding: "6px 12px",
+              cursor: "pointer",
+              fontWeight: 600,
+            }}
+          >
+            Report seller
+          </button>
+        )}
+      </div>
+
       {thread && (
         <div style={{
           background: "white",
@@ -178,57 +238,70 @@ export default function ChatThreadPage() {
       {thread && (
         <div style={{ 
           background: "#f9fafb", 
-          padding: 14, 
-          borderRadius: 10,
-          borderLeft: "4px solid #3b82f6"
+          padding: 12, 
+          borderRadius: 8,
+          borderLeft: "3px solid #3b82f6"
         }}>
-          <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 8, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>
             About This Listing
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 4 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 3 }}>
                 {thread.product_model || "Unknown Product"}
               </div>
               <div style={{ fontSize: 13, color: "#6b7280" }}>
                 Serial: <strong>{thread.serial_no || "N/A"}</strong>
               </div>
             </div>
-            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
               <div>
-                <div style={{ fontSize: 13, color: "#6b7280", marginBottom: 2 }}>Price</div>
+                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 2 }}>Price</div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>
                   {thread.listing_price && thread.listing_currency ? `${thread.listing_price} ${thread.listing_currency}` : "N/A"}
                 </div>
               </div>
-              {thread.seller_id !== userId && (
-                <button 
-                  onClick={handlePurchase}
-                  disabled={purchasing}
-                  style={{
-                    background: purchasing ? "#6c757d" : "#28a745",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 8,
-                    padding: "8px 16px",
-                    cursor: purchasing ? "not-allowed" : "pointer",
-                    fontSize: 12,
-                    fontWeight: 600,
-                    opacity: purchasing ? 0.6 : 1,
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!purchasing) {
-                      (e.currentTarget as HTMLButtonElement).style.background = "#218838";
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!purchasing) {
-                      (e.currentTarget as HTMLButtonElement).style.background = "#28a745";
-                    }
-                  }}
-                >
-                  {purchasing ? "Processing..." : "Buy Now"}
-                </button>
+              {thread.listing_status === "sold" ? (
+                <span style={{
+                  background: "#e5e7eb",
+                  color: "#374151",
+                  borderRadius: 6,
+                  padding: "6px 12px",
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}>
+                  Sold
+                </span>
+              ) : (
+                thread.seller_id !== userId && (
+                  <button 
+                    onClick={handlePurchase}
+                    disabled={purchasing}
+                    style={{
+                      background: purchasing ? "#6c757d" : "#28a745",
+                      color: "white",
+                      border: "none",
+                      borderRadius: 6,
+                      padding: "7px 14px",
+                      cursor: purchasing ? "not-allowed" : "pointer",
+                      fontSize: 12,
+                      fontWeight: 600,
+                      opacity: purchasing ? 0.6 : 1,
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!purchasing) {
+                        (e.currentTarget as HTMLButtonElement).style.background = "#218838";
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!purchasing) {
+                        (e.currentTarget as HTMLButtonElement).style.background = "#28a745";
+                      }
+                    }}
+                  >
+                    {purchasing ? "Processing..." : "Buy Now"}
+                  </button>
+                )
               )}
             </div>
           </div>
@@ -364,6 +437,77 @@ export default function ChatThreadPage() {
       )}
 
       {err && <p style={{ color: "#b91c1c" }}>{err}</p>}
+
+      {showReportModal && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 200,
+        }}
+          onClick={() => !reportSubmitting && setShowReportModal(false)}
+        >
+          <div
+            style={{
+              background: "white",
+              padding: 20,
+              borderRadius: 10,
+              width: 360,
+              maxWidth: "90%",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 style={{ marginTop: 0, marginBottom: 12 }}>Report seller</h3>
+            <label style={{ display: "block", fontSize: 13, marginBottom: 8, color: "#374151" }}>
+              Reason
+            </label>
+            <select
+              value={reportReason}
+              onChange={(e) => setReportReason(e.target.value)}
+              style={{ width: "100%", padding: 10, border: "1px solid #d1d5db", borderRadius: 8, marginBottom: 12 }}
+            >
+              <option>Fraudulent activity</option>
+              <option>Harassment or abuse</option>
+              <option>Scam or phishing</option>
+              <option>Counterfeit product</option>
+              <option>Other policy violation</option>
+            </select>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button
+                onClick={() => setShowReportModal(false)}
+                disabled={reportSubmitting}
+                style={{
+                  background: "#e5e7eb",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReportSeller}
+                disabled={reportSubmitting}
+                style={{
+                  background: "#dc2626",
+                  color: "white",
+                  border: "none",
+                  borderRadius: 8,
+                  padding: "8px 14px",
+                  cursor: reportSubmitting ? "not-allowed" : "pointer",
+                }}
+              >
+                {reportSubmitting ? "Sending..." : "Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

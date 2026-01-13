@@ -1531,7 +1531,7 @@ class ProductController {
           FROM fyp_25_s4_20.product_listing pl
           JOIN fyp_25_s4_20.product p
             ON pl.product_id = p.product_id
-          WHERE pl.seller_id = $1
+          WHERE pl.seller_id = $1 AND pl.status != 'sold'
           ORDER BY pl.created_on DESC;
           `,
           [userId]

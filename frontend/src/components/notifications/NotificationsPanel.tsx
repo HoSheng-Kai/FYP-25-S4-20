@@ -597,6 +597,19 @@ export default function NotificationsPanel(props: {
                     {/* transfer buttons */}
                     {renderTransferActions(n)}
 
+                    {/* deep links */}
+                    {n.txHash?.startsWith("thread:") && (
+                      <button
+                        onClick={() => {
+                          const tid = Number(n.txHash?.split(":")[1]);
+                          if (!Number.isNaN(tid)) window.location.href = `/consumer/chats/${tid}`;
+                        }}
+                        style={btnLight}
+                      >
+                        Open chat
+                      </button>
+                    )}
+
                     {/* existing actions */}
                     {!n.isRead && !hasTransferActions(n) && (
                       <button

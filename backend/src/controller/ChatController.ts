@@ -96,4 +96,35 @@ export default class ChatController {
       res.status(status).json({ success: false, error: e.message });
     }
   }
+
+  static async unarchiveThread(req: Request, res: Response) {
+    try {
+      const threadId = Number(req.params.threadId);
+      const userId = Number(req.body.userId);
+      if (!threadId || !userId) {
+        return res.status(400).json({ success: false, error: "Missing parameters" });
+      }
+      await ChatEntity.unarchiveThread(threadId, userId);
+      res.json({ success: true, message: "Chat unarchived" });
+    } catch (e: any) {
+      const status = e.message === "Forbidden" ? 403 : 500;
+      res.status(status).json({ success: false, error: e.message });
+    }
+  }
+
+  static async reportThread(req: Request, res: Response) {
+    try {
+      const threadId = Number(req.params.threadId);
+      const userId = Number(req.body.userId);
+      const reason = (req.body.reason || "Unspecified reason").toString().trim();
+      if (!threadId || !userId) {
+        return res.status(400).json({ success: false, error: "Missing parameters" });
+      }
+      await ChatEntity.reportThread(threadId, userId, reason);
+      res.json({ success: true, message: "Report submitted" });
+    } catch (e: any) {
+      const status = e.message === "Forbidden" ? 403 : 500;
+      res.status(status).json({ success: false, error: e.message });
+    }
+  }
 }

@@ -27,5 +27,7 @@ router.get("/:threadId/messages", ChatController.listMessages);
 router.post("/:threadId/messages", rateLimit, ChatController.sendMessage);
 router.delete("/:threadId", ChatController.deleteThread);
 router.post("/:threadId/archive", ChatController.archiveThread);
+router.post("/:threadId/unarchive", ChatController.unarchiveThread);
+router.post("/:threadId/report", ChatController.reportThread);
 
 export default router;

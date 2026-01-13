@@ -5,11 +5,12 @@
 // Sidebar links are RELATIVE so navigation stays within /consumer.
 // -----------------------------------------------------------------------------
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
 
 const USERS_API_BASE_URL = "http://localhost:3000/api/users";
+const CHATS_API_BASE_URL = "http://localhost:3000/api/chats";
 
 const linkBaseStyle: React.CSSProperties = {
   color: "white",
@@ -26,6 +27,28 @@ const activeStyle: React.CSSProperties = {
 export default function ConsumerLayout() {
   const navigate = useNavigate();
   const [showCreateListing, setShowCreateListing] = React.useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    const userId = Number(localStorage.getItem("userId"));
+    if (!userId) return;
+
+    const load = async () => {
+      try {
+        const res = await axios.get(`${CHATS_API_BASE_URL}/threads`, { params: { userId } });
+        if (res.data.success && Array.isArray(res.data.threads)) {
+          const total = res.data.threads.reduce((sum: number, t: any) => sum + (t.unread_count || 0), 0);
+          setUnreadCount(total);
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    load();
+    const id = setInterval(load, 10000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -98,7 +121,18 @@ export default function ConsumerLayout() {
                 to="chats" // /consumer/chats
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
-                Messages
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  Messages
+                  {unreadCount > 0 && (
+                    <span style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: "50%",
+                      background: "#ef4444",
+                      display: "inline-block",
+                    }} />
+                  )}
+                </span>
               </NavLink>
             </li>
 

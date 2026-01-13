@@ -86,6 +86,24 @@ class AdminController{
         } 
     }
 
+    async banAccount(req: Request, res: Response){
+        try{
+            const userId = Number(req.body.userId);
+            const banned = req.body.banned !== false; // default to true
+            if (!userId) {
+                return res.status(400).json({ success: false, error: 'Missing userId' });
+            }
+            await AdminEntity.banAccount(userId, banned);
+            res.json({ success: true });
+        }catch(error: any){
+            res.status(500).json({
+                success: false,
+                error: 'Failed to update ban status',
+                details: error.message
+            })
+        }
+    }
+
     async readProductListings(req: Request, res: Response){
         try{
             let listings = await AdminEntity.readProductListings();
