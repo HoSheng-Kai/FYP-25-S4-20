@@ -129,23 +129,6 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
           gap: 12,
         }}
       >
-        <span
-          style={{
-            fontSize: 11,
-            padding: "6px 14px",
-            borderRadius: 999,
-            background: listing.isAuthentic ? "#dcfce7" : "#fee2e2",
-            color: listing.isAuthentic ? "#166534" : "#991b1b",
-            whiteSpace: "nowrap",
-            fontWeight: 600,
-            textTransform: "uppercase",
-            letterSpacing: "0.5px",
-            alignSelf: "flex-start",
-          }}
-        >
-          {statusBadge}
-        </span>
-
         <div style={{ display: "flex", gap: 10 }}>
           <button
             style={{

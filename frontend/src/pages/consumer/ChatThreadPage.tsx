@@ -180,7 +180,8 @@ export default function ChatThreadPage() {
   };
 
   return (
-    <div style={{ height: "calc(100vh - 60px)", padding: 24, display: "grid", gridTemplateRows: "auto auto 1fr auto", gap: 12 }}>
+    <div style={{ height: "calc(100vh - 60px)", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+      {/* Header with Back and Report buttons */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button
           onClick={() => navigate(-1)}
@@ -189,11 +190,21 @@ export default function ChatThreadPage() {
             border: "1px solid #e5e7eb",
             background: "white",
             borderRadius: 10,
-            padding: "6px 10px",
+            padding: "8px 14px",
             cursor: "pointer",
             display: "flex",
             alignItems: "center",
             gap: 6,
+            fontSize: 14,
+            fontWeight: 600,
+            color: "#374151",
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "#f9fafb";
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLButtonElement).style.background = "white";
           }}
         >
           ← Back
@@ -206,9 +217,17 @@ export default function ChatThreadPage() {
               background: "#fef2f2",
               color: "#b91c1c",
               borderRadius: 10,
-              padding: "6px 12px",
+              padding: "8px 16px",
               cursor: "pointer",
               fontWeight: 600,
+              fontSize: 14,
+              transition: "all 0.2s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#fee2e2";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.background = "#fef2f2";
             }}
           >
             Report seller
@@ -216,86 +235,105 @@ export default function ChatThreadPage() {
         )}
       </div>
 
-      {thread && (
-        <div style={{
-          background: "white",
-          padding: 12,
-          borderRadius: 10,
-          border: "1px solid #e5e7eb",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center"
-        }}>
-          <div>
-            <div style={{ fontSize: 12, color: "#6b7280" }}>Chatting with</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginTop: 2 }}>
-              @{thread.other_username}
+      <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
+        {/* Left: About This Listing - FIXED SIZE */}
+        {thread && (
+          <div style={{ 
+            width: 340,
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: 12,
+          }}>
+            <div style={{
+              background: "white",
+              padding: 16,
+              borderRadius: 12,
+              border: "1px solid #e5e7eb",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+            }}>
+              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4, fontWeight: 500 }}>Chatting with</div>
+              <div style={{ fontSize: 17, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: "50%",
+                  background: "#10b981",
+                  display: "inline-block",
+                }}></span>
+                @{thread.other_username}
+              </div>
             </div>
-          </div>
-        </div>
-      )}
 
-      {thread && (
-        <div style={{ 
-          background: "#f9fafb", 
-          padding: 12, 
-          borderRadius: 8,
-          borderLeft: "3px solid #3b82f6"
-        }}>
-          <div style={{ fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>
-            About This Listing
-          </div>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#111827", marginBottom: 3 }}>
-                {thread.product_model || "Unknown Product"}
+            <div style={{ 
+              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", 
+              padding: 18, 
+              borderRadius: 12,
+              boxShadow: "0 4px 12px rgba(102, 126, 234, 0.2)",
+              color: "white",
+            }}>
+              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 12, textTransform: "uppercase", letterSpacing: "1px", opacity: 0.9 }}>
+                About This Listing
               </div>
-              <div style={{ fontSize: 13, color: "#6b7280" }}>
-                Serial: <strong>{thread.serial_no || "N/A"}</strong>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>
+                  {thread.product_model || "Unknown Product"}
+                </div>
+                <div style={{ fontSize: 13, opacity: 0.9 }}>
+                  Serial: <strong style={{ fontWeight: 600 }}>{thread.serial_no || "N/A"}</strong>
+                </div>
               </div>
-            </div>
-            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
-              <div>
-                <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 2 }}>Price</div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#111827" }}>
-                  {thread.listing_price && thread.listing_currency ? `${thread.listing_price} ${thread.listing_currency}` : "N/A"}
+              <div style={{ 
+                background: "rgba(255,255,255,0.15)", 
+                backdropFilter: "blur(10px)",
+                borderRadius: 10, 
+                padding: 14,
+                marginBottom: 12,
+              }}>
+                <div style={{ fontSize: 11, marginBottom: 4, opacity: 0.9 }}>Price</div>
+                <div style={{ fontSize: 24, fontWeight: 700 }}>
+                  {thread.listing_price && thread.listing_currency ? `${thread.listing_currency} ${thread.listing_price}` : "N/A"}
                 </div>
               </div>
               {thread.listing_status === "sold" ? (
-                <span style={{
-                  background: "#e5e7eb",
-                  color: "#374151",
-                  borderRadius: 6,
-                  padding: "6px 12px",
-                  fontSize: 12,
+                <div style={{
+                  background: "rgba(255,255,255,0.25)",
+                  borderRadius: 8,
+                  padding: "10px 16px",
+                  fontSize: 13,
                   fontWeight: 700,
+                  textAlign: "center",
                 }}>
-                  Sold
-                </span>
+                  ✓ Sold
+                </div>
               ) : (
                 thread.seller_id !== userId && (
                   <button 
                     onClick={handlePurchase}
                     disabled={purchasing}
                     style={{
-                      background: purchasing ? "#6c757d" : "#28a745",
-                      color: "white",
+                      background: purchasing ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.95)",
+                      color: purchasing ? "rgba(255,255,255,0.7)" : "#667eea",
                       border: "none",
-                      borderRadius: 6,
-                      padding: "7px 14px",
+                      borderRadius: 8,
+                      padding: "12px 20px",
                       cursor: purchasing ? "not-allowed" : "pointer",
-                      fontSize: 12,
-                      fontWeight: 600,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      width: "100%",
+                      transition: "all 0.2s",
                       opacity: purchasing ? 0.6 : 1,
                     }}
                     onMouseEnter={(e) => {
                       if (!purchasing) {
-                        (e.currentTarget as HTMLButtonElement).style.background = "#218838";
+                        (e.currentTarget as HTMLButtonElement).style.background = "white";
+                        (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!purchasing) {
-                        (e.currentTarget as HTMLButtonElement).style.background = "#28a745";
+                        (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.95)";
+                        (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
                       }
                     }}
                   >
@@ -305,34 +343,133 @@ export default function ChatThreadPage() {
               )}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div ref={listRef} style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 12, padding: 16, overflowY: "auto" }}>
-        {messages.map((m) => (
-          <div key={m.message_id} style={{ display: "flex", justifyContent: m.sender_id === userId ? "flex-end" : "flex-start", marginBottom: 6 }}>
-            <div style={{
-              maxWidth: 520,
-              padding: "8px 12px",
-              borderRadius: 12,
-              background: m.sender_id === userId ? "#3b82f6" : "#f3f4f6",
-              color: m.sender_id === userId ? "white" : "#111827",
-              whiteSpace: "pre-wrap",
-              wordBreak: "break-word"
-            }}>
-              {m.content}
-            </div>
+        {/* Right: Messages - FLEXIBLE SCROLLABLE */}
+        <div style={{ 
+          flex: 1, 
+          display: "flex", 
+          flexDirection: "column",
+          gap: 12,
+          minHeight: 0,
+        }}>
+          <div 
+            ref={listRef} 
+            style={{ 
+              flex: 1,
+              background: "#fafbfc", 
+              border: "1px solid #e5e7eb", 
+              borderRadius: 12, 
+              padding: 20, 
+              overflowY: "auto",
+              boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)",
+            }}
+          >
+            {messages.map((m) => {
+              const isOwn = m.sender_id === userId;
+              return (
+                <div key={m.message_id} style={{ 
+                  display: "flex", 
+                  justifyContent: isOwn ? "flex-end" : "flex-start", 
+                  marginBottom: 12,
+                  animation: "fadeIn 0.2s ease-in",
+                }}>
+                  <div style={{
+                    maxWidth: "65%",
+                    padding: "10px 16px",
+                    borderRadius: isOwn ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                    background: isOwn 
+                      ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" 
+                      : "white",
+                    color: isOwn ? "white" : "#111827",
+                    whiteSpace: "pre-wrap",
+                    wordBreak: "break-word",
+                    fontSize: 14,
+                    lineHeight: 1.5,
+                    boxShadow: isOwn 
+                      ? "0 2px 8px rgba(102, 126, 234, 0.25)"
+                      : "0 1px 3px rgba(0,0,0,0.08)",
+                    border: isOwn ? "none" : "1px solid #e5e7eb",
+                  }}>
+                    {m.content}
+                  </div>
+                </div>
+              );
+            })}
+            {messages.length === 0 && (
+              <div style={{ 
+                textAlign: "center", 
+                color: "#9ca3af", 
+                padding: "60px 20px",
+                fontSize: 15,
+              }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
+                <div style={{ fontWeight: 600, marginBottom: 4 }}>No messages yet</div>
+                <div style={{ fontSize: 13 }}>Start the conversation!</div>
+              </div>
+            )}
           </div>
-        ))}
-        {messages.length === 0 && <p style={{ color: "#6b7280" }}>No messages yet.</p>}
-      </div>
 
-      <div style={{ display: "flex", gap: 8 }}>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} placeholder="Type your message" rows={2}
-          style={{ flex: 1, padding: 10, borderRadius: 10, border: "1px solid #d1d5db", resize: "none" }}
-          maxLength={1000}
-        />
-        <button onClick={send} style={{ background: "#3b82f6", color: "white", border: "none", borderRadius: 10, padding: "10px 16px", cursor: "pointer" }}>Send</button>
+          <div style={{ 
+            display: "flex", 
+            gap: 10,
+            background: "white",
+            padding: 12,
+            borderRadius: 12,
+            border: "1px solid #e5e7eb",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+          }}>
+            <textarea 
+              value={text} 
+              onChange={(e) => setText(e.target.value)} 
+              placeholder="Type your message..." 
+              rows={2}
+              style={{ 
+                flex: 1, 
+                padding: 12, 
+                borderRadius: 10, 
+                border: "1px solid #e5e7eb", 
+                resize: "none",
+                fontSize: 14,
+                fontFamily: "inherit",
+                outline: "none",
+                transition: "border-color 0.2s",
+              }}
+              onFocus={(e) => {
+                (e.currentTarget as HTMLTextAreaElement).style.borderColor = "#667eea";
+              }}
+              onBlur={(e) => {
+                (e.currentTarget as HTMLTextAreaElement).style.borderColor = "#e5e7eb";
+              }}
+              maxLength={1000}
+            />
+            <button 
+              onClick={send} 
+              style={{ 
+                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                color: "white", 
+                border: "none", 
+                borderRadius: 10, 
+                padding: "12px 24px", 
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: 14,
+                transition: "all 0.2s",
+                boxShadow: "0 2px 8px rgba(102, 126, 234, 0.3)",
+              }}
+              onMouseEnter={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 12px rgba(102, 126, 234, 0.4)";
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 8px rgba(102, 126, 234, 0.3)";
+              }}
+            >
+              Send
+            </button>
+          </div>
+        </div>
       </div>
 
       {showReviewForm && !hasReviewed && thread?.seller_id !== userId && (
