@@ -30,98 +30,46 @@ export default function UserReviewsPage() {
     return raw ? Number(raw) : NaN;
   }, []);
 
-  const [activeTab, setActiveTab] = useState<"browse" | "my-reviews">("browse");
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [reviews, setReviews] = useState<Review[]>([]);
-  const [myReviews, setMyReviews] = useState<Review[]>([]);
-  const [users, setUsers] = useState<UserOption[]>([]);
+  const [activeTab, setActiveTab] = useState<"about-me" | "posted">("about-me");
+  const [reviewsAboutMe, setReviewsAboutMe] = useState<Review[]>([]);
+  const [reviewsPosted, setReviewsPosted] = useState<Review[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showCreateModal, setShowCreateModal] = useState(false);
 
-  // Load all users
+  // Load reviews about current user
   useEffect(() => {
-    const loadUsers = async () => {
-      try {
-        // Get both consumers and retailers
-        const [consumersRes, retailersRes] = await Promise.all([
-          axios.get(`http://localhost:3000/api/admins/view-accounts`, {
-            params: { role_id: "consumer" },
-          }),
-          axios.get(`http://localhost:3000/api/admins/view-accounts`, {
-            params: { role_id: "retailer" },
-          })
-        ]);
-        
-        const allUsers: any[] = [];
-        
-        if (consumersRes.data.success && consumersRes.data.data) {
-          allUsers.push(...consumersRes.data.data);
-        }
-        
-        if (retailersRes.data.success && retailersRes.data.data) {
-          allUsers.push(...retailersRes.data.data);
-        }
-        
-        // Filter out current user
-        const filteredUsers = allUsers.filter(
-          (u: any) => u.user_id !== currentUserId
-        );
-        
-        setUsers(
-          filteredUsers.map((u: any) => ({
-            user_id: u.user_id,
-            username: u.username,
-            role: u.role_id || 'consumer'
-          }))
-        );
-      } catch (e: any) {
-        console.error("Failed to load users:", e);
-      }
-    };
-
     if (Number.isFinite(currentUserId)) {
-      loadUsers();
+      if (activeTab === "about-me") {
+        loadReviewsAboutMe();
+      } else {
+        loadReviewsPosted();
+      }
     }
-  }, [currentUserId]);
+  }, [currentUserId, activeTab]);
 
-  // Load reviews for selected user
-  useEffect(() => {
-    if (activeTab === "browse" && selectedUserId) {
-      loadReviewsForUser(selectedUserId);
-    }
-  }, [activeTab, selectedUserId]);
-
-  // Load my reviews
-  useEffect(() => {
-    if (activeTab === "my-reviews" && Number.isFinite(currentUserId)) {
-      loadMyReviews();
-    }
-  }, [activeTab, currentUserId]);
-
-  const loadReviewsForUser = async (userId: number) => {
+  const loadReviewsAboutMe = async () => {
     setLoading(true);
     setError(null);
 
     try {
       const res = await axios.get<{ success: boolean; data?: Review[] }>(API, {
-        params: { owner_id: userId },
+        params: { owner_id: currentUserId },
       });
 
       if (res.data.success && res.data.data) {
-        setReviews(res.data.data);
+        setReviewsAboutMe(res.data.data);
       } else {
-        setReviews([]);
+        setReviewsAboutMe([]);
       }
     } catch (e: any) {
       setError(e?.response?.data?.error || "Failed to load reviews");
-      setReviews([]);
+      setReviewsAboutMe([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadMyReviews = async () => {
+  const loadReviewsPosted = async () => {
     setLoading(true);
     setError(null);
 
@@ -134,24 +82,16 @@ export default function UserReviewsPage() {
       );
 
       if (res.data.success && res.data.data) {
-        setMyReviews(res.data.data);
+        setReviewsPosted(res.data.data);
       } else {
-        setMyReviews([]);
+        setReviewsPosted([]);
       }
     } catch (e: any) {
       setError(e?.response?.data?.error || "Failed to load your reviews");
-      setMyReviews([]);
+      setReviewsPosted([]);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleReviewCreated = () => {
-    setShowCreateModal(false);
-    if (selectedUserId) {
-      loadReviewsForUser(selectedUserId);
-    }
-    loadMyReviews();
   };
 
   const handleReviewDeleted = async (reviewId: number) => {
@@ -164,7 +104,11 @@ export default function UserReviewsPage() {
       });
 
       // Refresh the list
-      loadMyReviews();
+      if (activeTab === "posted") {
+        loadReviewsPosted();
+      } else {
+        loadReviewsAboutMe();
+      }
       alert("Review deleted successfully");
     } catch (e: any) {
       alert(
@@ -175,19 +119,19 @@ export default function UserReviewsPage() {
     }
   };
 
-  const selectedUser = users.find((u) => u.user_id === selectedUserId);
+  const displayReviews = activeTab === "about-me" ? reviewsAboutMe : reviewsPosted;
   const averageRating =
-    reviews.length > 0
-      ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
+    displayReviews.length > 0
+      ? (displayReviews.reduce((sum, r) => sum + r.rating, 0) / displayReviews.length).toFixed(1)
       : "N/A";
 
   return (
     <div>
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
-        <h1 style={{ marginBottom: 8 }}>User Reviews</h1>
+        <h1 style={{ marginBottom: 8 }}>Reviews</h1>
         <p style={{ color: "#666", margin: 0 }}>
-          View reviews of other users to assess trustworthiness, or manage your own reviews.
+          Manage your reputation and review history.
         </p>
       </div>
 
@@ -201,41 +145,48 @@ export default function UserReviewsPage() {
         }}
       >
         <button
-          onClick={() => setActiveTab("browse")}
+          onClick={() => setActiveTab("about-me")}
           style={{
             padding: "12px 24px",
             background: "none",
             border: "none",
-            borderBottom: activeTab === "browse" ? "3px solid #007bff" : "3px solid transparent",
-            color: activeTab === "browse" ? "#007bff" : "#666",
+            borderBottom: activeTab === "about-me" ? "3px solid #007bff" : "3px solid transparent",
+            color: activeTab === "about-me" ? "#007bff" : "#666",
             fontWeight: 600,
             cursor: "pointer",
             fontSize: 15,
+            transition: "all 0.2s",
+          }}
+          onMouseEnter={(e) => {
+            if (activeTab !== "about-me") {
+              (e.currentTarget as HTMLButtonElement).color = "#007bff";
+            }
           }}
         >
-          Browse Reviews
+          Reviews About You
         </button>
         <button
-          onClick={() => setActiveTab("my-reviews")}
+          onClick={() => setActiveTab("posted")}
           style={{
             padding: "12px 24px",
             background: "none",
             border: "none",
-            borderBottom: activeTab === "my-reviews" ? "3px solid #007bff" : "3px solid transparent",
-            color: activeTab === "my-reviews" ? "#007bff" : "#666",
+            borderBottom: activeTab === "posted" ? "3px solid #007bff" : "3px solid transparent",
+            color: activeTab === "posted" ? "#007bff" : "#666",
             fontWeight: 600,
             cursor: "pointer",
             fontSize: 15,
+            transition: "all 0.2s",
           }}
         >
-          My Reviews
+          Reviews You Posted
         </button>
       </div>
 
-      {/* Browse Tab */}
-      {activeTab === "browse" && (
+      {/* About Me Tab */}
+      {activeTab === "about-me" && (
         <div>
-          {/* User Selection */}
+          {/* User Stats */}
           <div
             style={{
               background: "white",
@@ -243,186 +194,31 @@ export default function UserReviewsPage() {
               borderRadius: 12,
               marginBottom: 24,
               border: "1px solid #e0e0e0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
             }}
           >
-            <label
-              style={{
-                display: "block",
-                marginBottom: 8,
-                fontWeight: 600,
-                fontSize: 14,
-              }}
-            >
-              Select a user to view their reviews:
-            </label>
-            <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-              <select
-                value={selectedUserId || ""}
-                onChange={(e) => setSelectedUserId(Number(e.target.value))}
-                style={{
-                  flex: 1,
-                  padding: 12,
-                  borderRadius: 8,
-                  border: "1px solid #ddd",
-                  fontSize: 14,
-                }}
-              >
-                <option value="">-- Choose a user --</option>
-                {users.map((user) => (
-                  <option key={user.user_id} value={user.user_id}>
-                    {user.username} {user.role && `(${user.role})`}
-                  </option>
-                ))}
-              </select>
-
-              {selectedUserId && (
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  style={{
-                    padding: "12px 24px",
-                    background: "#28a745",
-                    color: "white",
-                    border: "none",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontWeight: 600,
-                    fontSize: 14,
-                  }}
-                >
-                  ✍️ Write Review
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Reviews Display */}
-          {selectedUserId && (
             <div>
-              {/* User Stats */}
-              <div
-                style={{
-                  background: "white",
-                  padding: 20,
-                  borderRadius: 12,
-                  marginBottom: 24,
-                  border: "1px solid #e0e0e0",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div>
-                  <h2 style={{ margin: 0, fontSize: 20 }}>
-                    Reviews for {selectedUser?.username}
-                  </h2>
-                  <p style={{ margin: "4px 0 0 0", color: "#666", fontSize: 14 }}>
-                    {reviews.length} review{reviews.length !== 1 ? "s" : ""}
-                  </p>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 32, fontWeight: 700, color: "#007bff" }}>
-                    {averageRating}
-                  </div>
-                  <div style={{ fontSize: 12, color: "#666" }}>Average Rating</div>
-                </div>
-              </div>
-
-              {/* Loading/Error */}
-              {loading && (
-                <div style={{ textAlign: "center", padding: 40, color: "#999" }}>
-                  Loading reviews...
-                </div>
-              )}
-              {error && (
-                <div
-                  style={{
-                    background: "#fee",
-                    border: "1px solid #f88",
-                    color: "#c00",
-                    padding: 16,
-                    borderRadius: 8,
-                  }}
-                >
-                  {error}
-                </div>
-              )}
-
-              {/* Reviews List */}
-              {!loading && !error && reviews.length === 0 && (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: 60,
-                    background: "#f9f9f9",
-                    borderRadius: 8,
-                    border: "1px dashed #ddd",
-                  }}
-                >
-                  <p style={{ fontSize: 16, color: "#666" }}>
-                    No reviews yet for this user.
-                  </p>
-                  <p style={{ color: "#999", fontSize: 14 }}>
-                    Be the first to write a review!
-                  </p>
-                </div>
-              )}
-
-              {!loading && reviews.length > 0 && (
-                <div style={{ display: "grid", gap: 16 }}>
-                  {reviews.map((review) => (
-                    <ReviewCard
-                      key={review.review_id}
-                      review={review}
-                      showDelete={false}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {!selectedUserId && !loading && (
-            <div
-              style={{
-                textAlign: "center",
-                padding: 60,
-                background: "#f9f9f9",
-                borderRadius: 8,
-                border: "1px dashed #ddd",
-              }}
-            >
-              <p style={{ fontSize: 16, color: "#666" }}>
-                Select a user from the dropdown to view their reviews
+              <h2 style={{ margin: 0, fontSize: 20 }}>Your Reputation</h2>
+              <p style={{ margin: "4px 0 0 0", color: "#666", fontSize: 14 }}>
+                {reviewsAboutMe.length} review{reviewsAboutMe.length !== 1 ? "s" : ""}
               </p>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* My Reviews Tab */}
-      {activeTab === "my-reviews" && (
-        <div>
-          <div
-            style={{
-              background: "white",
-              padding: 20,
-              borderRadius: 12,
-              marginBottom: 24,
-              border: "1px solid #e0e0e0",
-            }}
-          >
-            <h2 style={{ margin: 0, fontSize: 18 }}>Your Reviews</h2>
-            <p style={{ margin: "4px 0 0 0", color: "#666", fontSize: 14 }}>
-              {myReviews.length} review{myReviews.length !== 1 ? "s" : ""} written
-            </p>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 40, fontWeight: 700, color: "#007bff" }}>
+                {averageRating}
+              </div>
+              <div style={{ fontSize: 13, color: "#666" }}>Average Rating</div>
+            </div>
           </div>
 
+          {/* Loading/Error */}
           {loading && (
             <div style={{ textAlign: "center", padding: 40, color: "#999" }}>
-              Loading your reviews...
+              Loading reviews...
             </div>
           )}
-
           {error && (
             <div
               style={{
@@ -437,7 +233,8 @@ export default function UserReviewsPage() {
             </div>
           )}
 
-          {!loading && !error && myReviews.length === 0 && (
+          {/* Reviews List */}
+          {!loading && !error && reviewsAboutMe.length === 0 && (
             <div
               style={{
                 textAlign: "center",
@@ -448,17 +245,90 @@ export default function UserReviewsPage() {
               }}
             >
               <p style={{ fontSize: 16, color: "#666" }}>
-                You haven't written any reviews yet.
+                No reviews yet.
               </p>
               <p style={{ color: "#999", fontSize: 14 }}>
-                Switch to "Browse Reviews" to write your first review!
+                Complete transactions and earn positive reviews from other users!
               </p>
             </div>
           )}
 
-          {!loading && myReviews.length > 0 && (
+          {!loading && reviewsAboutMe.length > 0 && (
             <div style={{ display: "grid", gap: 16 }}>
-              {myReviews.map((review) => (
+              {reviewsAboutMe.map((review) => (
+                <ReviewCard
+                  key={review.review_id}
+                  review={review}
+                  showDelete={false}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Posted Tab */}
+      {activeTab === "posted" && (
+        <div>
+          {/* Stats */}
+          <div
+            style={{
+              background: "white",
+              padding: 24,
+              borderRadius: 12,
+              marginBottom: 24,
+              border: "1px solid #e0e0e0",
+            }}
+          >
+            <h2 style={{ margin: 0, fontSize: 20 }}>Reviews You Posted</h2>
+            <p style={{ margin: "4px 0 0 0", color: "#666", fontSize: 14 }}>
+              {reviewsPosted.length} review{reviewsPosted.length !== 1 ? "s" : ""} written
+            </p>
+          </div>
+
+          {/* Loading/Error */}
+          {loading && (
+            <div style={{ textAlign: "center", padding: 40, color: "#999" }}>
+              Loading your reviews...
+            </div>
+          )}
+          {error && (
+            <div
+              style={{
+                background: "#fee",
+                border: "1px solid #f88",
+                color: "#c00",
+                padding: 16,
+                borderRadius: 8,
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          {/* Reviews List */}
+          {!loading && !error && reviewsPosted.length === 0 && (
+            <div
+              style={{
+                textAlign: "center",
+                padding: 60,
+                background: "#f9f9f9",
+                borderRadius: 8,
+                border: "1px dashed #ddd",
+              }}
+            >
+              <p style={{ fontSize: 16, color: "#666" }}>
+                You haven't posted any reviews yet.
+              </p>
+              <p style={{ color: "#999", fontSize: 14 }}>
+                Complete transactions and share your experience with other users!
+              </p>
+            </div>
+          )}
+
+          {!loading && reviewsPosted.length > 0 && (
+            <div style={{ display: "grid", gap: 16 }}>
+              {reviewsPosted.map((review) => (
                 <ReviewCard
                   key={review.review_id}
                   review={review}
@@ -469,17 +339,6 @@ export default function UserReviewsPage() {
             </div>
           )}
         </div>
-      )}
-
-      {/* Create Review Modal */}
-      {showCreateModal && selectedUserId && (
-        <CreateReviewModal
-          targetUserId={selectedUserId}
-          targetUsername={selectedUser?.username || "User"}
-          currentUserId={currentUserId}
-          onClose={() => setShowCreateModal(false)}
-          onSuccess={handleReviewCreated}
-        />
       )}
     </div>
   );
