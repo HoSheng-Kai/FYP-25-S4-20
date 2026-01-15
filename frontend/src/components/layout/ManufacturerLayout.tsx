@@ -15,6 +15,15 @@ const activeStyle: React.CSSProperties = {
 
 export default function ManufacturerLayout() {
   const navigate = useNavigate();
+  const [username, setUsername] = React.useState("");
+  const [userRole, setUserRole] = React.useState("");
+
+  React.useEffect(() => {
+    const storedUsername = localStorage.getItem("username");
+    const storedRole = localStorage.getItem("userRole");
+    setUsername(storedUsername || "");
+    setUserRole(storedRole || "");
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem("isAuthenticated");
@@ -45,6 +54,22 @@ export default function ManufacturerLayout() {
           boxSizing: "border-box",
         }}
       >
+        {/* User Info Section */}
+        <div style={{
+          background: "rgba(255,255,255,0.1)",
+          borderRadius: 10,
+          padding: 14,
+          marginBottom: 24,
+          borderLeft: "3px solid #3b82f6",
+        }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Logged In As
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "white" }}>
+            @{username}
+          </div>
+        </div>
+
         <h2 style={{ marginBottom: 30 }}>Manufacturer</h2>
 
         <nav>

@@ -28,6 +28,15 @@ export default function ConsumerLayout() {
   const navigate = useNavigate();
   const [showCreateListing, setShowCreateListing] = React.useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [username, setUsername] = useState("");
+  const [userRole, setUserRole] = useState("");
+
+  useEffect(() => {
+    const storedUsername = localStorage.getItem("username");
+    const storedRole = localStorage.getItem("userRole");
+    setUsername(storedUsername || "");
+    setUserRole(storedRole || "");
+  }, []);
 
   useEffect(() => {
     const userId = Number(localStorage.getItem("userId"));
@@ -75,6 +84,22 @@ export default function ConsumerLayout() {
           position: "relative",
         }}
       >
+        {/* User Info Section */}
+        <div style={{
+          background: "rgba(255,255,255,0.1)",
+          borderRadius: 10,
+          padding: 14,
+          marginBottom: 24,
+          borderLeft: "3px solid #3b82f6",
+        }}>
+          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+            Logged In As
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "white" }}>
+            @{username}
+          </div>
+        </div>
+
         <h2 style={{ marginBottom: 30 }}>Consumer</h2>
 
         <nav>

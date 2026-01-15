@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import TransactionHistory from '../../components/products/TransactionHistory';
 
 const API_BASE = 'http://localhost:3000/api';
 
@@ -54,7 +55,6 @@ export default function ProductDetailsPage() {
   const [details, setDetails] = useState<ProductDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('timeline');
 
   useEffect(() => {
     loadProductDetails();
@@ -241,145 +241,8 @@ export default function ProductDetailsPage() {
 
       {/* Ownership History Section */}
       <div style={{ background: 'white', borderRadius: '8px', padding: '24px', border: '1px solid #e5e7eb' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600', color: '#111827' }}>Product Journey Timeline</h2>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => setViewMode('timeline')}
-              style={{
-                padding: '6px 12px',
-                background: viewMode === 'timeline' ? '#2563eb' : 'white',
-                color: viewMode === 'timeline' ? 'white' : '#6b7280',
-                border: '1px solid #e5e7eb',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: '500'
-              }}
-            >
-              Timeline View
-            </button>
-            <button
-              onClick={() => setViewMode('table')}
-              style={{
-                padding: '6px 12px',
-                background: viewMode === 'table' ? '#2563eb' : 'white',
-                color: viewMode === 'table' ? 'white' : '#6b7280',
-                border: '1px solid #e5e7eb',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: '500'
-              }}
-            >
-              Table View
-            </button>
-          </div>
-        </div>
-
-        {viewMode === 'timeline' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {ownershipHistory.map((record, index) => (
-              <div
-                key={record.ownership_id}
-                style={{
-                  background: '#f9fafb',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '8px',
-                  padding: '16px',
-                  position: 'relative'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '16px' }}>
-                  <div style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: !record.end_on ? '#2563eb' : '#9ca3af',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '14px',
-                    fontWeight: '600',
-                    flexShrink: 0
-                  }}>
-                    {index + 1}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
-                      <div>
-                        <h4 style={{ margin: '0 0 4px 0', fontSize: '14px', fontWeight: '600', color: '#111827' }}>
-                          Transferred
-                        </h4>
-                      </div>
-                      <span style={{ fontSize: '12px', color: '#2563eb', fontWeight: '500' }}>
-                        Step {index + 1}
-                      </span>
-                    </div>
-                    <div style={{ display: 'grid', gap: '8px', fontSize: '13px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#6b7280' }}>From</span>
-                        <span style={{ color: '#111827', fontWeight: '500' }}>
-                          {index === ownershipHistory.length - 1 ? product.manufacturer_name : ownershipHistory[index + 1]?.owner_name || 'Unknown'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#6b7280' }}>To</span>
-                        <span style={{ color: '#111827', fontWeight: '500' }}>{record.owner_name}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#6b7280' }}>Date / Time</span>
-                        <span style={{ color: '#111827', fontWeight: '500' }}>{formatDate(record.start_on)}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: '#6b7280' }}>Blockchain Tx</span>
-                        <span style={{ color: '#111827', fontWeight: '500', fontSize: '11px', fontFamily: 'monospace' }}>
-                          {record.tx_hash ? `${record.tx_hash.substring(0, 20)}...` : 'Off-chain transfer'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
-              <thead>
-                <tr style={{ background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#6b7280' }}>Event</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#6b7280' }}>From</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#6b7280' }}>To</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#6b7280' }}>Date / Time</th>
-                  <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#6b7280' }}>Blockchain Tx</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ownershipHistory.map((record, index) => (
-                  <tr key={record.ownership_id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                    <td style={{ padding: '12px', color: '#111827' }}>Transferred</td>
-                    <td style={{ padding: '12px', color: '#111827' }}>
-                      {index === ownershipHistory.length - 1 ? product.manufacturer_name : ownershipHistory[index + 1]?.owner_name || 'Unknown'}
-                    </td>
-                    <td style={{ padding: '12px', color: '#111827' }}>{record.owner_name}</td>
-                    <td style={{ padding: '12px', color: '#111827' }}>{formatDate(record.start_on)}</td>
-                    <td style={{ padding: '12px', color: '#111827', fontSize: '11px', fontFamily: 'monospace' }}>
-                      {record.tx_hash ? `${record.tx_hash.substring(0, 25)}...` : 'Off-chain'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {ownershipHistory.length === 0 && (
-          <p style={{ textAlign: 'center', color: '#9ca3af', padding: '40px 0', margin: 0 }}>
-            No ownership records found
-          </p>
-        )}
+        <h2 style={{ margin: '0 0 20px 0', fontSize: '18px', fontWeight: '600', color: '#111827' }}>Product Journey Timeline</h2>
+        <TransactionHistory serial={product.serial_no} hideHeader={true} defaultView="timeline" embedded={true} />
       </div>
     </div>
   );
