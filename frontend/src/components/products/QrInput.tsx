@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react";
+// src/components/verify/QrInput.tsx (or wherever your file is)
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import jsQR from "jsqr";
 
@@ -183,7 +184,6 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
         return;
       }
 
-      // ✅ In your backend, product fields are directly in `data`
       const mapped: VerifyData = {
         serial: payload.serialNumber ?? serial,
         model: payload.productName ?? null,
@@ -202,12 +202,11 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
           ? {
               user_id: Number(payload.currentOwner.userId ?? 0) || 0,
               username: payload.currentOwner.username,
-              role_id: "consumer", // backend doesn't send role; keep generic
+              role_id: "consumer",
               start_on: "",
             }
           : null,
 
-        // Your verify response doesn't include listing info (keep null)
         latestListing: null,
 
         isAuthentic:
@@ -217,7 +216,6 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       setResult(mapped);
       setSerialEverywhere(mapped.serial);
       setStatusMessage(null);
-
     } catch (err: any) {
       setStatusMessage(
         err.response?.data?.error ||
@@ -237,10 +235,18 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
+
+    // Detach stream from video to avoid black frame / stale stream
+    if (videoRef.current) {
+      videoRef.current.pause();
+      videoRef.current.srcObject = null;
+    }
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+
     setIsCameraOpen(false);
   };
 
@@ -252,6 +258,8 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       animationRef.current = requestAnimationFrame(scanFrame);
       return;
     }
+
+    // Need metadata ready or videoWidth/videoHeight will be 0
     if (video.readyState !== video.HAVE_ENOUGH_DATA) {
       animationRef.current = requestAnimationFrame(scanFrame);
       return;
@@ -263,8 +271,16 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       return;
     }
 
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    // Some browsers can report 0 briefly
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    if (!vw || !vh) {
+      animationRef.current = requestAnimationFrame(scanFrame);
+      return;
+    }
+
+    canvas.width = vw;
+    canvas.height = vh;
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
@@ -301,16 +317,44 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       streamRef.current = stream;
       setIsCameraOpen(true);
       setStatusMessage("Point your camera at the QR code.");
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-        animationRef.current = requestAnimationFrame(scanFrame);
-      }
+      // ✅ Do NOT touch videoRef here; it might not exist yet.
     } catch {
       setStatusMessage("Unable to access camera. Check permissions.");
     }
   };
+
+  // ✅ KEY FIX: attach stream AFTER <video> mounts (after React render)
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+
+    if (!isCameraOpen || !video || !stream) return;
+
+    video.srcObject = stream;
+
+    const start = async () => {
+      try {
+        await video.play();
+        animationRef.current = requestAnimationFrame(scanFrame);
+      } catch {
+        setStatusMessage("Camera started but video could not play.");
+      }
+    };
+
+    if (video.readyState >= 2) start();
+    else video.onloadedmetadata = start;
+
+    return () => {
+      video.onloadedmetadata = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCameraOpen]);
+
+  // Stop camera on unmount (prevents webcam staying on)
+  useEffect(() => {
+    return () => stopCamera();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ========= IMAGE UPLOAD SCANNING =========
 
@@ -442,14 +486,15 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
             {isCameraOpen && (
               <video
                 ref={videoRef}
+                autoPlay
+                muted
+                playsInline
                 style={{
                   width: "100%",
                   maxWidth: 420,
                   borderRadius: 12,
                   background: "black",
                 }}
-                muted
-                playsInline
               />
             )}
 

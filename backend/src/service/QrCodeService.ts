@@ -12,16 +12,14 @@ export class QrCodeService {
   static buildPayload(productId: number, serialNo: string, manufacturerId: number) {
     const ts = Math.floor(Date.now() / 1000);
 
-    const base = `productId=${productId}&serial=${encodeURIComponent(
-      serialNo
-    )}&manufacturerId=${manufacturerId}&ts=${ts}`;
+    const base = `http://localhost:5173/products/${productId}/details`;
 
-    const sig = crypto
-      .createHmac("sha256", this.secret())
-      .update(base, "utf8")
-      .digest("hex");
+    // const sig = crypto
+    //   .createHmac("sha256", this.secret())
+    //   .update(base, "utf8")
+    //   .digest("hex");
 
-    return `${base}&sig=${sig}`;
+    return `${base}`;
   }
 
   static verifyPayload(payload: string) {
@@ -36,9 +34,7 @@ export class QrCodeService {
       return { ok: false, reason: "Missing fields" as const };
     }
 
-    const base = `productId=${productId}&serial=${encodeURIComponent(
-      serial
-    )}&manufacturerId=${manufacturerId}&ts=${ts}`;
+    const base = `http://localhost:5173/products/${productId}/details`;
 
     const expected = crypto
       .createHmac("sha256", this.secret())
