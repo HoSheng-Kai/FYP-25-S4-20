@@ -435,6 +435,12 @@ export default function ChatThreadPage() {
                 outline: "none",
                 transition: "border-color 0.2s",
               }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
               onFocus={(e) => {
                 (e.currentTarget as HTMLTextAreaElement).style.borderColor = "#667eea";
               }}
