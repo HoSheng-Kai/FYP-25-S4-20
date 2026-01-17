@@ -2,7 +2,7 @@ import DistributorEntity from "../entities/Distributor";
 import { decrypt } from "../utils/encryption";
 import { Request, Response } from "express";
 import { connection, airdropSol } from "../schema/solana";
-import { PublicKey, Keypair } from '@solana/web3.js';
+import { PublicKey, Keypair, SystemProgram, Transaction } from '@solana/web3.js';
 import { AnchorProvider, Program, type Idl } from "@coral-xyz/anchor";
 import bs58 from 'bs58';
 import crypto from 'crypto';
@@ -436,6 +436,7 @@ class DistributorController {
 
     // POST /api/distributors/execute-transfer
     // Called after seller signs executeTransfer() on-chain - updates ownership in DB
+    // Also sends SOL to buyer if sol_amount is provided
     async executeTransfer(req: Request, res: Response) {
         const {
             product_id,
@@ -446,7 +447,8 @@ class DistributorController {
             tx_hash,
             block_slot,
             transfer_pda,
-            product_pda
+            product_pda,
+            sol_amount
         } = req.body;
 
         if (!product_id || !from_public_key || !to_public_key || !tx_hash) {
@@ -526,6 +528,36 @@ class DistributorController {
             };
             await DistributorEntity.createOwnership(newOwnership);
 
+            // Send SOL to buyer if sol_amount is provided
+            let solTransferTxHash: string | null = null;
+            if (sol_amount && sol_amount > 0 && seller?.private_key) {
+                const solAmountLamports = Math.floor(sol_amount * 1e9);
+                const sellerKeypair = Keypair.fromSecretKey(bs58.decode(seller.private_key));
+                const buyerPublicKey = new PublicKey(to_public_key);
+
+                // Check seller has enough balance
+                const balance = await connection.getBalance(sellerKeypair.publicKey);
+                if (balance >= solAmountLamports + 5000) { // 5000 lamports for tx fee
+                    const transferIx = SystemProgram.transfer({
+                        fromPubkey: sellerKeypair.publicKey,
+                        toPubkey: buyerPublicKey,
+                        lamports: solAmountLamports,
+                    });
+
+                    const tx = new Transaction().add(transferIx);
+                    const { blockhash } = await connection.getLatestBlockhash();
+                    tx.recentBlockhash = blockhash;
+                    tx.feePayer = sellerKeypair.publicKey;
+                    tx.sign(sellerKeypair);
+
+                    solTransferTxHash = await connection.sendRawTransaction(tx.serialize(), {
+                        skipPreflight: false,
+                        preflightCommitment: "confirmed",
+                    });
+                    await connection.confirmTransaction(solTransferTxHash, "confirmed");
+                }
+            }
+
             res.json({
                 success: true,
                 data: {
@@ -539,7 +571,12 @@ class DistributorController {
                     product_pda: product_pda || product.product_pda,
                     transfer_pda,
                     stage: 'executed',
-                    ownership_transferred: true
+                    ownership_transferred: true,
+                    sol_transfer: solTransferTxHash ? {
+                        tx_hash: solTransferTxHash,
+                        amount: sol_amount,
+                        amount_lamports: Math.floor(sol_amount * 1e9)
+                    } : null
                 }
             });
 
@@ -834,108 +871,54 @@ class DistributorController {
         }
     }
 
-    // ============================================================
-    // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
-    // ============================================================
+    // POST /api/distributors/cancel-transfer
+    // Called after buyer signs cancelTransfer() on-chain via wallet
+    // Alternative to accept-transfer: Buyer declines the proposal
     async cancelTransfer(req: Request, res: Response) {
-        const { from_user_id, to_user_id, product_id, transfer_pda } = req.body;
+        const { product_id, to_user_id, to_public_key, tx_hash, transfer_pda } = req.body;
 
-        if (!from_user_id || (!transfer_pda && (!to_user_id || !product_id))) {
+        if (!tx_hash || !to_public_key) {
             return res.status(400).json({
                 success: false,
-                error: "Missing required fields: from_user_id and either transfer_pda OR (to_user_id + product_id)"
+                error: "Missing required fields: tx_hash, to_public_key"
             });
         }
 
         try {
-            // Get from_user
-            const fromUser = await DistributorEntity.getUserById(from_user_id);
-            if (!fromUser) {
-                return res.status(404).json({
-                    success: false,
-                    error: `User not found: ${from_user_id}`
-                });
-            }
-
-            const fromKeypair = Keypair.fromSecretKey(bs58.decode(fromUser.private_key));
-
-            // Determine transfer PDA
-            let transferPda: PublicKey;
-
-            if (transfer_pda) {
-                transferPda = new PublicKey(transfer_pda);
+            // Look up buyer
+            let buyer = null;
+            if (to_user_id) {
+                buyer = await DistributorEntity.getUserById(to_user_id);
             } else {
-                // Derive it from product + from + to
-                const toUser = await DistributorEntity.getUserById(to_user_id);
-                const product = await DistributorEntity.getProductById(product_id);
-
-                if (!toUser || !product) {
-                    return res.status(404).json({
-                        success: false,
-                        error: `Missing data: toUser=${!!toUser}, product=${!!product}`
-                    });
-                }
-
-                const productPda = new PublicKey(product.product_pda);
-                const toPublicKey = new PublicKey(toUser.public_key);
-                [transferPda] = deriveTransferPda(productPda, fromKeypair.publicKey, toPublicKey);
+                buyer = await DistributorEntity.getUserByPublicKey(to_public_key);
             }
 
-            // Check if transfer exists
-            const existingTransfer = await connection.getAccountInfo(transferPda);
-            if (!existingTransfer) {
-                return res.status(404).json({
-                    success: false,
-                    error: "Transfer request not found on-chain",
-                    transfer_pda: transferPda.toBase58()
-                });
+            // Get product info if provided
+            let product = null;
+            if (product_id) {
+                product = await DistributorEntity.getProductById(product_id);
             }
-
-            // Airdrop if needed
-            const minBalance = 0.01 * 1e9;
-            let balance = await connection.getBalance(fromKeypair.publicKey);
-            if (balance < minBalance) {
-                try {
-                    await airdropSol(fromUser.private_key, 0.1 * 1e9);
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                } catch (e: any) {}
-            }
-
-            // Create provider and program
-            const wallet = {
-                publicKey: fromKeypair.publicKey,
-                signTransaction: async (tx: any) => { tx.sign(fromKeypair); return tx; },
-                signAllTransactions: async (txs: any) => { txs.forEach((tx: any) => tx.sign(fromKeypair)); return txs; },
-            };
-            const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
-            const program = new Program(idlJson as unknown as Idl, provider);
-
-            // Cancel the transfer
-            const tx = await program.methods
-                .cancelTransfer()
-                .accounts({
-                    fromOwner: fromKeypair.publicKey,
-                    transferRequest: transferPda,
-                })
-                .signers([fromKeypair])
-                .rpc();
 
             res.json({
                 success: true,
                 data: {
-                    message: "Transfer cancelled successfully",
-                    transfer_pda: transferPda.toBase58(),
-                    tx_hash: tx
+                    product_id: product_id || null,
+                    serial_no: product?.serial_no || null,
+                    to_user: buyer?.username || null,
+                    to_user_id: buyer?.user_id || null,
+                    to_public_key,
+                    tx_hash,
+                    transfer_pda,
+                    stage: 'cancelled'
                 }
             });
 
         } catch (error: any) {
-            console.error("Cancel transfer failed:", error);
+            console.error("cancelTransfer error:", error);
             res.status(500).json({
                 success: false,
-                error: "Failed to cancel transfer",
-                details: error.message,
-                logs: error.logs || null
+                error: "Failed to record transfer cancellation",
+                details: error.message
             });
         }
     }
