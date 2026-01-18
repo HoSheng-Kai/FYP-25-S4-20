@@ -1278,7 +1278,7 @@ class ProductController {
         return;
       }
 
-      const { userId, price, currency, status } = req.body || {};
+      const { userId, price, currency, status, notes } = req.body || {};
       if (!userId) {
         res.status(400).json({ success: false, error: 'userId is required in request body' });
         return;
@@ -1297,6 +1297,7 @@ class ProductController {
           price,
           currency,
           status,
+          notes,
         });
 
         res.json({
@@ -1309,6 +1310,7 @@ class ProductController {
             price: updated.price,
             currency: updated.currency,
             status: updated.status,
+            notes: updated.notes,
             updatedOn: updated.created_on,
           },
         });

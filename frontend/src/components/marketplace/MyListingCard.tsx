@@ -10,6 +10,9 @@ type Props = {
 
   // US-019
   onUpdateAvailability: (listingId: number, nextStatus: ListingStatus) => void;
+  
+  // Edit listing
+  onEdit: (listingId: number) => void;
 };
 
 export default function MyListingCard({
@@ -17,6 +20,7 @@ export default function MyListingCard({
   isBusy,
   onDelete,
   onUpdateAvailability,
+  onEdit,
 }: Props) {
   const priceText = useMemo(() => {
     return listing.price && listing.currency
@@ -115,7 +119,7 @@ export default function MyListingCard({
         )}
       </div>
 
-      {/* US-018: Delete Listing */}
+      {/* Edit and Delete Actions */}
       <div
         style={{
           marginTop: 14,
@@ -124,6 +128,22 @@ export default function MyListingCard({
           justifyContent: "flex-end",
         }}
       >
+        <button
+          disabled={isBusy}
+          onClick={() => onEdit(listing.listing_id)}
+          style={{
+            background: isBusy ? "#93c5fd" : "#0066cc",
+            color: "white",
+            border: "none",
+            borderRadius: 10,
+            padding: "9px 12px",
+            cursor: isBusy ? "not-allowed" : "pointer",
+            fontSize: 13,
+            fontWeight: 700,
+          }}
+        >
+          Edit
+        </button>
         <button
           disabled={isBusy}
           onClick={() => onDelete(listing.listing_id)}

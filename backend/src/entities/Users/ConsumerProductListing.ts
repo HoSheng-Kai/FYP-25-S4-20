@@ -10,6 +10,7 @@ export interface ListingForEdit {
   price: string | null;     // NUMERIC(10,2) comes back as string
   currency: string | null;  // enum 'SGD' | 'USD' | 'EUR'
   status: ListingStatus;
+  notes: string | null;
   created_on: Date;
 }
 
@@ -19,6 +20,7 @@ export interface UpdateListingInput {
   price?: number;
   currency?: string;
   status?: ListingStatus;
+  notes?: string | null;
 }
 
 export interface ListingRow {
@@ -29,6 +31,7 @@ export interface ListingRow {
   price: string | null;
   currency: string | null;
   status: ListingStatus;
+  notes: string | null;
   created_on: Date; // you can treat this as updatedOn if you don't add updated_on column
 }
 
@@ -55,6 +58,7 @@ export class ConsumerProductListing {
           pl.price,
           pl.currency,
           pl.status,
+          pl.notes,
           pl.created_on,
           p.serial_no,
           p.model
@@ -106,6 +110,7 @@ export class ConsumerProductListing {
         price: row.price,
         currency: row.currency,
         status: row.status,
+        notes: row.notes,
         created_on: row.created_on,
       };
     } finally {
@@ -217,6 +222,7 @@ export class ConsumerProductListing {
         price: row.price,
         currency: row.currency,
         status: row.status as ListingStatus,
+        notes: row.notes,
         created_on: row.created_on,
       };
     } catch (err) {
@@ -248,6 +254,8 @@ export class ConsumerProductListing {
       const newCurrency =
         typeof input.currency === 'string' ? input.currency : existing.currency;
       const newStatus = input.status ?? existing.status;
+      const newNotes =
+        input.notes !== undefined ? input.notes : existing.notes;
 
       // 3) Update listing
       const updatedRes = await client.query(
@@ -255,17 +263,19 @@ export class ConsumerProductListing {
         UPDATE fyp_25_s4_20.product_listing
         SET price = $1,
             currency = $2,
-            status = $3
-        WHERE listing_id = $4
+            status = $3,
+            notes = $4
+        WHERE listing_id = $5
         RETURNING
           listing_id,
           product_id,
           price,
           currency,
           status,
+          notes,
           created_on;
         `,
-        [newPrice, newCurrency, newStatus, input.listingId]
+        [newPrice, newCurrency, newStatus, newNotes, input.listingId]
       );
 
       const updated = updatedRes.rows[0];
@@ -292,6 +302,7 @@ export class ConsumerProductListing {
         price: updated.price,
         currency: updated.currency,
         status: updated.status,
+        notes: updated.notes,
         created_on: updated.created_on,
       };
     } catch (err) {
@@ -316,6 +327,7 @@ export class ConsumerProductListing {
         pl.price,
         pl.currency,
         pl.status,
+        pl.notes,
         pl.created_on
       FROM fyp_25_s4_20.product_listing pl
       JOIN fyp_25_s4_20.product p
@@ -425,6 +437,7 @@ export class ConsumerProductListing {
       price: row.price ?? null,
       currency: row.currency ?? null,
       status: row.status as ListingStatus,
+      notes: row.notes ?? null,
       created_on: row.created_on,
     };
   }

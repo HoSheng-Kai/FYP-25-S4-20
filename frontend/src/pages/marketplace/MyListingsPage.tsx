@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import MyListingCard from "../../components/marketplace/MyListingCard";
+import EditListingModal from "../../components/marketplace/EditListingModal";
 
 const API = "http://localhost:3000/api/products";
 
@@ -18,6 +19,7 @@ export type MyListing = {
   price: string | null;
   currency: string | null;
   status: ListingStatus;
+  notes: string | null;
   created_on: string;
 };
 
@@ -31,6 +33,9 @@ export default function MyListingsPage() {
   const [items, setItems] = useState<MyListing[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  // Edit listing modal state
+  const [editingListing, setEditingListing] = useState<MyListing | null>(null);
 
   // Track per-listing action state
   const [busyListingIds, setBusyListingIds] = useState<Record<number, boolean>>(
@@ -166,6 +171,51 @@ export default function MyListingsPage() {
     }
   };
 
+  // ---------------------------
+  // Edit listing
+  // ---------------------------
+  const handleEditListing = (listingId: number) => {
+    const listing = items.find((x) => x.listing_id === listingId);
+    if (listing) {
+      setEditingListing(listing);
+    }
+  };
+
+  const handleSaveEdit = async (
+    listingId: number,
+    price: string,
+    currency: string,
+    notes: string
+  ) => {
+    if (!Number.isFinite(userId)) {
+      throw new Error("No userId found. Please login again.");
+    }
+
+    try {
+      // Call PUT /api/products/listings/:listingId
+      const res = await axios.put(`${API}/listings/${listingId}`, {
+        userId,
+        price: parseFloat(price),
+        currency,
+        notes,
+      });
+
+      if (res.data.success) {
+        // Update local state with new values
+        setItems((prev) =>
+          prev.map((x) =>
+            x.listing_id === listingId
+              ? { ...x, price, currency, notes }
+              : x
+          )
+        );
+        alert("Listing updated successfully. Changes are now visible in the marketplace.");
+      }
+    } catch (e: any) {
+      throw e;
+    }
+  };
+
   return (
     <div style={{ padding: 24 }}>
       <div
@@ -237,9 +287,20 @@ export default function MyListingsPage() {
               isBusy={!!busyListingIds[x.listing_id]}
               onDelete={handleDeleteListing}
               onUpdateAvailability={handleUpdateAvailability}
+              onEdit={handleEditListing}
             />
           ))}
         </div>
+      )}
+
+      {/* Edit Listing Modal */}
+      {editingListing && (
+        <EditListingModal
+          listing={editingListing}
+          isOpen={!!editingListing}
+          onClose={() => setEditingListing(null)}
+          onSave={handleSaveEdit}
+        />
       )}
     </div>
   );
