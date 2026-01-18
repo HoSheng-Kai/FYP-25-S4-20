@@ -21,7 +21,7 @@ export type UpdatedProductRow = {
   category: string | null;
   manufacture_date: Date | null;
   description: string | null;
-  status: string;
+  status: string; // Not sure if need delete, so far nothing is breaking so im keeping it
   registered_on: Date;
   registered_by: number | null;
   tx_hash: string | null;
@@ -94,7 +94,6 @@ export class ProductUpdate {
           category,
           manufacture_date,
           description,
-          status,
           registered_on,
           registered_by,
           tx_hash,

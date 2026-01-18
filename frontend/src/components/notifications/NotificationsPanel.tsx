@@ -529,7 +529,7 @@ export default function NotificationsPanel(props: {
           disabled={busyId === n.notificationId}
           style={btnPrimary}
         >
-          Execute
+          Confirm Transfer
         </button>
       );
     }

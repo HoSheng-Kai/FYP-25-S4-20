@@ -1,4 +1,4 @@
-// src/components/verify/QrInput.tsx (or wherever your file is)
+// src/components/verify/QrInput.tsx
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import jsQR from "jsqr";
@@ -34,10 +34,9 @@ type LatestListing =
     }
   | null;
 
-/** What YOUR UI wants to render */
 type VerifyData = {
   serial: string;
-  model: string | null; // display title
+  model: string | null;
   status: ProductStatus;
   registeredOn: string;
   registeredBy: RegisteredBy;
@@ -46,7 +45,6 @@ type VerifyData = {
   isAuthentic: boolean | null;
 };
 
-/** What BACKEND actually returns now (blockchain-integrated) */
 type VerifyResponse = {
   success: boolean;
   data?: {
@@ -81,31 +79,58 @@ type VerifyResponse = {
   details?: string;
 };
 
+// NEW: resolve serial response
+type ResolveSerialResponse = {
+  success: boolean;
+  data?: {
+    productId?: number;
+    serialNumber?: string;
+  };
+  error?: string;
+  details?: string;
+};
+
 type QrInputProps = {
   onSerialChange?: (serial: string) => void;
 };
 
+// ✅ If your backend route differs, change ONLY this
+const RESOLVE_SERIAL_URL = `${PRODUCTS_API_BASE_URL}/resolve-serial`;
+
 /**
- * Accepts:
- * - QR payload from your app (varies): "FYP25|NIKE-AIR-001|2|hash..." OR "FYP25|productId|SERIAL|manufacturerId|hash"
- * - or direct serial: "NIKE-AIR-001"
+ * QR payload is now URL like:
+ *   http://localhost:5173/products/12/details
+ * Extract productId from it.
  */
+const extractProductIdFromUrl = (inputRaw: string): number | null => {
+  const input = (inputRaw ?? "").trim();
+  if (!input) return null;
+
+  try {
+    const u = new URL(input);
+    const path = u.pathname; // /products/12/details
+    const m = path.match(/^\/products\/(\d+)\/details\/?$/);
+    if (!m) return null;
+    const id = Number(m[1]);
+    return Number.isNaN(id) ? null : id;
+  } catch {
+    return null;
+  }
+};
+
 const extractSerial = (inputRaw: string): string => {
   const input = (inputRaw ?? "").trim();
   if (!input) return "";
 
+  // If it's a URL QR, don't treat as serial
+  if (/^https?:\/\//i.test(input)) return "";
+
   const parts = input.split("|").map((p) => p.trim());
 
-  // If QR is delimited, try to find the part that looks like a serial
   if (parts.length >= 2) {
-    // Common patterns:
-    // - FYP25|NIKE-AIR-001|...
-    // - FYP25|productId|NIKE-AIR-001|...
     if (parts[0].toUpperCase().includes("FYP25")) {
-      // If parts[1] looks like serial, use it; else use parts[2]
       const candidate1 = parts[1] || "";
       const candidate2 = parts[2] || "";
-      // heuristic: serial usually contains letters/numbers and a dash, e.g. NIKE-AIR-001
       if (candidate1 && /[A-Za-z].*-.*\d/.test(candidate1)) return candidate1;
       if (candidate2) return candidate2;
     }
@@ -143,20 +168,14 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
     onSerialChange?.(trimmed);
   };
 
-  const verifyProduct = async (code: string) => {
-    const raw = code.trim();
-    if (!raw) {
-      setStatusMessage("Please scan or enter a product code first.");
+  const verifyProductBySerial = async (serial: string) => {
+    const trimmed = serial.trim();
+    if (!trimmed) {
+      setStatusMessage("Missing serial number.");
       return;
     }
 
-    const serial = extractSerial(raw);
-    if (!serial) {
-      setStatusMessage("Invalid QR payload. Cannot extract serial number.");
-      return;
-    }
-
-    setSerialEverywhere(serial);
+    setSerialEverywhere(trimmed);
     setStatusMessage(null);
     setResult(null);
 
@@ -165,7 +184,7 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
 
       const res = await axios.get<VerifyResponse>(
         `${PRODUCTS_API_BASE_URL}/verify`,
-        { params: { serial } }
+        { params: { serial: trimmed } }
       );
 
       if (!res.data.success || !res.data.data) {
@@ -178,14 +197,8 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
 
       const payload = res.data.data;
 
-      if (!payload) {
-        setStatusMessage("Product data missing from server response.");
-        setResult(null);
-        return;
-      }
-
       const mapped: VerifyData = {
-        serial: payload.serialNumber ?? serial,
+        serial: payload.serialNumber ?? trimmed,
         model: payload.productName ?? null,
         status: (payload.status ?? "registered") as ProductStatus,
         registeredOn: payload.registeredOn ?? "",
@@ -228,6 +241,63 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
     }
   };
 
+  const resolveSerialByProductId = async (productId: number) => {
+    const res = await axios.get<ResolveSerialResponse>(RESOLVE_SERIAL_URL, {
+      params: { productId },
+    });
+
+    if (!res.data.success || !res.data.data?.serialNumber) {
+      throw new Error(res.data.details || res.data.error || "Unable to resolve serial.");
+    }
+    return res.data.data.serialNumber;
+  };
+
+  /**
+   * ✅ NEW behavior:
+   * - If QR is a details URL: resolve productId -> serial -> verify by serial (stay on this page)
+   * - Else: verify by serial extraction (legacy)
+   */
+  const handleScannedPayload = async (payloadRaw: string) => {
+    const raw = (payloadRaw ?? "").trim();
+    if (!raw) {
+      setStatusMessage("Please scan or enter a product code first.");
+      return;
+    }
+
+    // If it's URL payload: productId -> resolve serial -> verify
+    const productId = extractProductIdFromUrl(raw);
+    if (productId !== null) {
+      try {
+        setStatusMessage("QR detected. Resolving product...");
+        setResult(null);
+        setSerialForHistory(undefined);
+        onSerialChange?.("");
+
+        setIsVerifying(true);
+        const serial = await resolveSerialByProductId(productId);
+
+        setProductCode(serial); // show serial in input for transparency
+        setStatusMessage("Product resolved. Verifying...");
+        await verifyProductBySerial(serial);
+      } catch (e: any) {
+        setStatusMessage(e?.message || "Failed to resolve product from QR.");
+        setResult(null);
+      } finally {
+        setIsVerifying(false);
+      }
+      return;
+    }
+
+    // Otherwise treat as serial payload
+    const serial = extractSerial(raw);
+    if (!serial) {
+      setStatusMessage("Invalid QR payload. Cannot extract serial number.");
+      return;
+    }
+
+    await verifyProductBySerial(serial);
+  };
+
   // ========= CAMERA SCANNING =========
 
   const stopCamera = () => {
@@ -236,7 +306,6 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       animationRef.current = null;
     }
 
-    // Detach stream from video to avoid black frame / stale stream
     if (videoRef.current) {
       videoRef.current.pause();
       videoRef.current.srcObject = null;
@@ -259,7 +328,6 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       return;
     }
 
-    // Need metadata ready or videoWidth/videoHeight will be 0
     if (video.readyState !== video.HAVE_ENOUGH_DATA) {
       animationRef.current = requestAnimationFrame(scanFrame);
       return;
@@ -271,7 +339,6 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       return;
     }
 
-    // Some browsers can report 0 briefly
     const vw = video.videoWidth;
     const vh = video.videoHeight;
     if (!vw || !vh) {
@@ -289,9 +356,8 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
     if (qrCode?.data) {
       const code = qrCode.data.trim();
       setProductCode(code);
-      setStatusMessage("QR code detected from camera. Verifying...");
       stopCamera();
-      void verifyProduct(code);
+      void handleScannedPayload(code);
       return;
     }
 
@@ -317,13 +383,12 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       streamRef.current = stream;
       setIsCameraOpen(true);
       setStatusMessage("Point your camera at the QR code.");
-      // ✅ Do NOT touch videoRef here; it might not exist yet.
     } catch {
       setStatusMessage("Unable to access camera. Check permissions.");
     }
   };
 
-  // ✅ KEY FIX: attach stream AFTER <video> mounts (after React render)
+  // Attach stream after <video> mounts
   useEffect(() => {
     const video = videoRef.current;
     const stream = streamRef.current;
@@ -350,7 +415,7 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isCameraOpen]);
 
-  // Stop camera on unmount (prevents webcam staying on)
+  // Stop camera on unmount
   useEffect(() => {
     return () => stopCamera();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -385,8 +450,8 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       if (qrCode?.data) {
         const code = qrCode.data.trim();
         setProductCode(code);
-        setStatusMessage("QR code detected from image. Verifying...");
-        void verifyProduct(code);
+        setStatusMessage(null);
+        void handleScannedPayload(code);
       } else {
         setStatusMessage("No QR code found in the uploaded image.");
       }
@@ -399,7 +464,7 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
 
   const handleVerifySubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    void verifyProduct(productCode);
+    void handleScannedPayload(productCode);
   };
 
   // ========= STATUS COLOURS =========
@@ -530,11 +595,11 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
 
           <form onSubmit={handleVerifySubmit}>
             <p style={{ fontSize: 13, color: "#9ca3af", marginBottom: 6 }}>
-              Or enter serial number manually
+              Or enter serial number manually (or paste QR URL)
             </p>
             <input
               type="text"
-              placeholder="Enter Serial (e.g., NIKE-AIR-001)"
+              placeholder="Enter Serial (e.g., NIKE-AIR-001) or paste QR URL"
               value={productCode}
               onChange={(e) => setProductCode(e.target.value)}
               style={{
@@ -568,7 +633,7 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
                 fontWeight: 500,
               }}
             >
-              {isVerifying ? "Verifying..." : "Verify Product"}
+              {isVerifying ? "Verifying..." : "Verify"}
             </button>
           </form>
         </section>
@@ -638,19 +703,26 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
                 <div style={{ fontSize: 13 }}>
                   <p style={{ margin: 0, marginBottom: 4 }}>
                     <strong>Registered by:</strong>{" "}
-                    {result.registeredBy ? result.registeredBy.username : "Unknown"}
+                    {result.registeredBy
+                      ? result.registeredBy.username
+                      : "Unknown"}
                   </p>
                   <p style={{ margin: 0, marginBottom: 4 }}>
                     <strong>Current owner:</strong>{" "}
-                    {result.currentOwner ? result.currentOwner.username : "Unknown"}
+                    {result.currentOwner
+                      ? result.currentOwner.username
+                      : "Unknown"}
                   </p>
 
                   {result.latestListing && (
                     <p style={{ margin: 0 }}>
                       <strong>Latest listing:</strong>{" "}
-                      {result.latestListing.price} {result.latestListing.currency} (
+                      {result.latestListing.price}{" "}
+                      {result.latestListing.currency} (
                       {result.latestListing.status}) on{" "}
-                      {new Date(result.latestListing.created_on).toLocaleDateString()}
+                      {new Date(
+                        result.latestListing.created_on
+                      ).toLocaleDateString()}
                     </p>
                   )}
                 </div>
@@ -671,7 +743,7 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
                 Product Verification
               </h4>
               <p style={{ margin: 0 }}>
-                Scan/upload to auto-verify and see product details. Transaction
+                Scan/upload to verify and see product details here. Transaction
                 history will appear below after a serial is detected.
               </p>
             </div>

@@ -262,4 +262,24 @@ export class ProductScan {
       isAuthentic,
     };
   }
+  static async findByProductId(productId: number): Promise<ProductScanResult | null> {
+    const r = await pool.query(
+      `
+      SELECT *
+      FROM fyp_25_s4_20.v_product_read
+      WHERE product_id = $1
+      LIMIT 1;
+      `,
+      [productId]
+    );
+
+    if (r.rows.length === 0) return null;
+
+    // Reuse your existing logic by calling findBySerial
+    // This guarantees you keep the same blockchain/auth checks.
+    const serial = r.rows[0].serial_no as string | null;
+    if (!serial) return null;
+
+    return await ProductScan.findBySerial(serial);
+  }
 }

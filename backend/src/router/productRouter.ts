@@ -12,6 +12,8 @@ const router = Router();
 // GET /api/products/verify?serial=NIKE-AIR-001
 router.get('/verify', productController.verifyProductBySerial.bind(productController));
 
+router.get("/resolve-serial", productController.resolveSerialByProductId);
+
 // Example:
 // GET /api/products/history?serial=NIKE-AIR-001
 router.get('/history', productController.getTransactionHistory.bind(productController));

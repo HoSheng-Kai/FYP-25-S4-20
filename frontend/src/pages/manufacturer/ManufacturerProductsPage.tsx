@@ -18,9 +18,7 @@ type BackendProduct = {
   product_pda: string | null;
   tx_hash: string | null;
   track: boolean | null;
-
   stage?: string | null; // 'draft' | 'confirmed' | 'onchain'
-
   owned_since?: string | null;
   relationship?: string | null; // 'owner' | 'manufacturer' | null
 };
@@ -45,12 +43,10 @@ type ProductRow = {
   lifecycleStatus: "active" | "transferred";
   blockchainStatus: string; // pending / confirmed
   registeredOn: string;
-
   price: string | null;
   currency: string | null;
   listingStatus: string | null;
   listingCreatedOn: string | null;
-
   relationship?: "owner" | "manufacturer" | null;
   stage?: string | null;
 };
@@ -68,7 +64,7 @@ type EditProductData = {
   category: string | null;
   manufactureDate: string | null;
   productDescription: string | null;
-  status: string;
+  //status: string;
   registeredOn: string;
   qrImageUrl?: string;
 };
@@ -90,7 +86,7 @@ type UpdateResponse = {
     category: string | null;
     manufactureDate: string | null;
     productDescription: string | null;
-    status: string;
+    //status: string;
     registeredOn: string;
     qrPayload?: string;
     qrImageUrl?: string;

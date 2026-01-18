@@ -77,6 +77,46 @@ class ProductController {
     }
   }
 
+  // GET /api/products/resolve-serial?productId=12
+  async resolveSerialByProductId(req: Request, res: Response): Promise<void> {
+    try {
+      const productId = Number(req.query.productId);
+
+      if (!productId || Number.isNaN(productId)) {
+        res.status(400).json({
+          success: false,
+          error: "Missing or invalid 'productId' query parameter",
+          example: "/api/products/resolve-serial?productId=12",
+        });
+        return;
+      }
+
+      const result = await ProductScan.findByProductId(productId);
+
+      if (!result) {
+        res.status(404).json({
+          success: false,
+          error: "Product not found",
+        });
+        return;
+      }
+
+      res.json({
+        success: true,
+        data: {
+          productId: result.productId,
+          serialNumber: result.serialNumber,
+        },
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to resolve serial",
+        details: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   // GET /api/products/history?serial=NIKE-AIR-001
   async getTransactionHistory(req: Request, res: Response) {
     try {
