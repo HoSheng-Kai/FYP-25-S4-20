@@ -15,22 +15,19 @@ const getStatusBadgeStyle = (
 ): { bg: string; text: string; label: string } => {
   switch (status) {
     case "available":
+    case "reserved":
+      // Both available and reserved mean it's actively listed in marketplace
       return {
         bg: "#d4edda",
         text: "#155724",
         label: "📌 Listed in Marketplace",
       };
-    case "reserved":
-      return {
-        bg: "#fff3cd",
-        text: "#856404",
-        label: "⏳ Reserved",
-      };
     case "sold":
+      // Sold items shouldn't appear in My Products, but if they do, show as Not Listed
       return {
-        bg: "#f8d7da",
-        text: "#721c24",
-        label: "✓ Sold",
+        bg: "#e2e3e5",
+        text: "#383d41",
+        label: "Not Listed",
       };
     case "none":
     default:
