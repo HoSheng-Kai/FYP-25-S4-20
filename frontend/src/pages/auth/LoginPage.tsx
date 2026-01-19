@@ -270,9 +270,10 @@ export default function LoginPage() {
       setIsSubmitting(false);
       return;
     }
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 
-    if (forgotNewPassword.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (!passwordRegex.test(forgotNewPassword)) {
+      setError("Password must be at least 8 characters and include at least 1 uppercase letter, 1 lowercase letter, and 1 number.");
       setIsSubmitting(false);
       return;
     }
@@ -484,6 +485,9 @@ export default function LoginPage() {
                   onChange={(e) => setForgotNewPassword(e.target.value)}
                   required
                 />
+                <small className="auth-helper-text">
+                  Must be at least 8 characters and include 1 uppercase letter, 1 lowercase letter, and 1 number.
+                </small>
               </label>
 
               <label className="auth-label">

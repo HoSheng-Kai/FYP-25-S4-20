@@ -24,6 +24,16 @@ export default function RegisterPage() {
     e.preventDefault();
     setError(null);
     setSuccess(null);
+
+    // ✅ Password validation: min 8, 1 lowercase, 1 uppercase, 1 number
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+    if (!passwordRegex.test(password)) {
+      setError(
+        "Password must be at least 8 characters and include at least 1 uppercase letter, 1 lowercase letter, and 1 number."
+      );
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -111,6 +121,11 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+            
+            <small className="auth-helper-text">
+              Must be at least 8 characters and include 1 uppercase letter, 1 lowercase letter, and 1 number.
+            </small>
+
           </label>
 
           {error && <p className="auth-error-text">{error}</p>}
