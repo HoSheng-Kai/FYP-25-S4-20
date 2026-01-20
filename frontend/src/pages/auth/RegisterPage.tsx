@@ -1,9 +1,12 @@
 import type { FormEvent } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import AuthLayout from "../../components/layout/AuthLayout";
 import { USERS_API_BASE_URL } from "../../config/api";
+
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 type CreateAccountResponse = {
   success: boolean;
@@ -20,17 +23,30 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const { publicKey, connected } = useWallet();
+
+  const walletPubkey = useMemo(
+    () => (publicKey ? publicKey.toBase58() : null),
+    [publicKey]
+  );
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
-    // ✅ Password validation: min 8, 1 lowercase, 1 uppercase, 1 number
+    // Password validation
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(password)) {
       setError(
         "Password must be at least 8 characters and include at least 1 uppercase letter, 1 lowercase letter, and 1 number."
       );
+      return;
+    }
+
+    // Optional but recommended: require wallet
+    if (!connected || !walletPubkey) {
+      setError("Please connect your Solana wallet to register.");
       return;
     }
 
@@ -44,6 +60,7 @@ export default function RegisterPage() {
           email,
           password,
           role_id: "consumer",
+          public_key: walletPubkey, // ✅ send wallet pubkey
         }
       );
 
@@ -80,10 +97,18 @@ export default function RegisterPage() {
         <div className="auth-card-header">
           <div>
             <h2 className="auth-card-title">Create an account</h2>
-            <p className="auth-card-subtitle">
-              Register to start using BlockTrace.
-            </p>
+            <p className="auth-card-subtitle">Register to start using BlockTrace.</p>
           </div>
+        </div>
+
+        {/* ✅ Wallet connect */}
+        <div style={{ marginBottom: 12 }}>
+          <WalletMultiButton />
+          {walletPubkey && (
+            <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
+              Connected: {walletPubkey}
+            </div>
+          )}
         </div>
 
         <form className="auth-form" onSubmit={handleSubmit}>
@@ -121,11 +146,9 @@ export default function RegisterPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
-            
             <small className="auth-helper-text">
               Must be at least 8 characters and include 1 uppercase letter, 1 lowercase letter, and 1 number.
             </small>
-
           </label>
 
           {error && <p className="auth-error-text">{error}</p>}
