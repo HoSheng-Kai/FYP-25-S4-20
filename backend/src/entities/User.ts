@@ -8,23 +8,24 @@ class UserEntity {
     // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
     // ============================================================
     //  Create new account
-    static async createAccount(username: string, password: string, email: string, role_id: string, privateKey: string, publicKey: string)
-    : Promise<void>{
-        await pool.query(`
-            INSERT INTO users (username, password_hash, email, role_id, private_key, public_key, verified)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
-            `, [username, password, email, role_id, privateKey, publicKey, false]);
-    }
+    // static async createAccount(username: string, password: string, email: string, role_id: string, privateKey: string, publicKey: string)
+    // : Promise<void>{
+    //     await pool.query(`
+    //         INSERT INTO users (username, password_hash, email, role_id, private_key, public_key, verified)
+    //         VALUES ($1, $2, $3, $4, $5, $6, $7)
+    //         `, [username, password, email, role_id, privateKey, publicKey, false]);
+    // }
+
     // ============================================================
     // ✅ UNCOMMENT BELOW WHEN DEPLOYING (no private key)
     // ============================================================
-    // static async createAccount(username: string, password: string, email: string, role_id: string, publicKey: string)
-    // : Promise<void>{
-    //     await pool.query(`
-    //         INSERT INTO users (username, password_hash, email, role_id, public_key, verified)
-    //         VALUES ($1, $2, $3, $4, $5, $6)
-    //         `, [username, password, email, role_id, publicKey, false]);
-    // }
+    static async createAccount(username: string, password: string, email: string, role_id: string, publicKey: string)
+    : Promise<void>{
+        await pool.query(`
+            INSERT INTO users (username, password_hash, email, role_id, public_key, verified)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            `, [username, password, email, role_id, publicKey, false]);
+    }
 
     // Login
     // Check username, password

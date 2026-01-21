@@ -12,80 +12,42 @@ class UserController {
   // ============================================================
   // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
   // ============================================================
-  async createAccount(req: Request, res: Response){
-    try{
-      let key_pair = Keypair.generate();
-      let public_key = key_pair.publicKey.toBase58();
-      let private_key = bs58.encode(key_pair.secretKey);
-
-      // // TODO: Encryption
-      // let encrypted_email = await encrypt(req.body.email);
-      // let encrypted_password = await encrypt(req.body.password);
-      // let encrypted_private_key = await encrypt(private_key);
-
-      // await User.createAccount(
-      //   req.body.username,
-      //   encrypted_password,
-      //   encrypted_email,
-      //   req.body.role_id,
-      //   encrypted_private_key,
-      //   public_key
-      // );
-
-      // Prefer any explicitly provided public_key, else use generated one
-      const resolvedPublicKey = req.body.public_key ?? public_key;
-
-      await User.createAccount(
-        req.body.username,
-        req.body.password,
-        req.body.email,
-        req.body.role_id,
-        private_key,
-        resolvedPublicKey
-      );
-
-      res.json({
-        success: true
-      });
-
-    } catch(error: any){
-      res.status(500).json({
-        success: false,
-        error: 'Failed to create account',
-        details: error.message
-      })
-    }
-  }
-  // ============================================================
-  // ✅ UNCOMMENT BELOW WHEN DEPLOYING (no private key)
-  // ============================================================
   // async createAccount(req: Request, res: Response){
   //   try{
-  //
+  //     let key_pair = Keypair.generate();
+  //     let public_key = key_pair.publicKey.toBase58();
+  //     let private_key = bs58.encode(key_pair.secretKey);
+
   //     // // TODO: Encryption
   //     // let encrypted_email = await encrypt(req.body.email);
   //     // let encrypted_password = await encrypt(req.body.password);
-  //
+  //     // let encrypted_private_key = await encrypt(private_key);
+
   //     // await User.createAccount(
   //     //   req.body.username,
   //     //   encrypted_password,
   //     //   encrypted_email,
   //     //   req.body.role_id,
-  //     //   publicKey
+  //     //   encrypted_private_key,
+  //     //   public_key
   //     // );
-  //
+
+  //     // Prefer any explicitly provided public_key, else use generated one
+  //     const resolvedPublicKey = req.body.public_key ?? public_key;
+
   //     await User.createAccount(
   //       req.body.username,
   //       req.body.password,
   //       req.body.email,
   //       req.body.role_id,
-  //       req.body.public_key
+  //       private_key,
+  //       resolvedPublicKey
   //     );
-  //
+
   //     res.json({
   //       success: true
   //     });
-  //
+
   //   } catch(error: any){
   //     res.status(500).json({
   //       success: false,
@@ -94,6 +56,42 @@ class UserController {
   //     })
   //   }
   // }
+
+  async createAccount(req: Request, res: Response){
+    try{
+  
+      // // TODO: Encryption
+      // let encrypted_email = await encrypt(req.body.email);
+      // let encrypted_password = await encrypt(req.body.password);
+  
+      // await User.createAccount(
+      //   req.body.username,
+      //   encrypted_password,
+      //   encrypted_email,
+      //   req.body.role_id,
+      //   publicKey
+      // );
+  
+      await User.createAccount(
+        req.body.username,
+        req.body.password,
+        req.body.email,
+        req.body.role_id,
+        req.body.public_key
+      );
+  
+      res.json({
+        success: true
+      });
+  
+    } catch(error: any){
+      res.status(500).json({
+        success: false,
+        error: 'Failed to create account',
+        details: error.message
+      })
+    }
+  }
 
   async loginAccount(req: Request, res: Response){
     try{
