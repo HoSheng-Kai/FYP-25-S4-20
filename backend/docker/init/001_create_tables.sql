@@ -40,7 +40,6 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     email TEXT NOT NULL UNIQUE,
     role_id user_role NOT NULL,
-    private_key TEXT,
     public_key TEXT,
     verified BOOLEAN,
     banned BOOLEAN DEFAULT FALSE,
