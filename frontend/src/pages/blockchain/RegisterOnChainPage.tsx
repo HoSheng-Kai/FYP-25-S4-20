@@ -250,8 +250,6 @@ export default function RegisterOnChainPage() {
   const [draftStage, setDraftStage] = useState<"draft" | "confirmed" | "unknown">("unknown");
   const [txSig, setTxSig] = useState<string>("");
   const [productPdaStr, setProductPdaStr] = useState<string>("");
-  const [metadataUri, setMetadataUri] = useState<string>("");
-  const [metadataHashHex, setMetadataHashHex] = useState<string>("");
   const [isFinalized, setIsFinalized] = useState<boolean>(false);
 
 
@@ -429,8 +427,6 @@ export default function RegisterOnChainPage() {
     setIsFinalized(false);
     setTxSig("");
     setProductPdaStr("");
-    setMetadataUri("");
-    setMetadataHashHex("");
 
     setQrUrl((prev) => {
       if (prev) URL.revokeObjectURL(prev);
@@ -519,9 +515,6 @@ export default function RegisterOnChainPage() {
         );
       }
 
-      setMetadataUri(uri);
-      setMetadataHashHex(hashHex);
-
       const metadataHash = Buffer.from(hashHex, "hex");
 
       const [productPda, _bump, serialHash] = await deriveProductPda(wallet.publicKey, s);
@@ -583,7 +576,7 @@ export default function RegisterOnChainPage() {
         </div>
 
         <div style={styles.cardBody}>
-          {/* ✅ visible errors */}
+          {/* visible errors */}
           {uiError && <div style={styles.alertError}>{uiError}</div>}
 
           <div style={styles.sectionTitle}>Enter the details of the product you want to register</div>
@@ -591,7 +584,7 @@ export default function RegisterOnChainPage() {
           <div style={styles.grid}>
             <div style={styles.field}>
               <div style={styles.labelRow}>
-                <span style={styles.label}>Product ID (DB)</span>
+                <span style={styles.label}>Product ID</span>
                 <span style={styles.helper}></span>
               </div>
               <input
@@ -684,44 +677,12 @@ export default function RegisterOnChainPage() {
               />
             </div>
 
-            {(txSig || productPdaStr || metadataUri) && (
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-                  gap: 12,
-                }}
-              >
-                {txSig && (
-                  <div style={styles.field}>
-                    <span style={styles.label}>Tx Signature</span>
-                    <div style={{ ...styles.inputReadOnly, ...styles.mono, overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {txSig}
-                    </div>
-                  </div>
-                )}
-                {productPdaStr && (
-                  <div style={styles.field}>
-                    <span style={styles.label}>Product PDA</span>
-                    <div style={{ ...styles.inputReadOnly, ...styles.mono, overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {productPdaStr}
-                    </div>
-                  </div>
-                )}
-                {metadataUri && (
-                  <div style={{ ...styles.field, gridColumn: "1 / -1" }}>
-                    <span style={styles.label}>Metadata URI</span>
-                    <div style={{ ...styles.inputReadOnly, ...styles.mono, overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {metadataUri}
-                    </div>
-                    {metadataHashHex ? (
-                      <div style={{ ...styles.helper, marginTop: 4 }}>
-                        Hash: <span style={styles.mono}>{metadataHashHex}</span>
-                      </div>
-                    ) : null}
-                  </div>
-                )}
+            {(txSig || productPdaStr) && (
+              <div style={{ gridColumn: "1 / -1", marginTop: 6 }}>
+                <div style={styles.statusRow}>
+                  {txSig && <span style={styles.badge}>Registered on blockchain</span>}
+                  {productPdaStr && <span style={styles.badge}>Metadata verified</span>}
+                </div>
               </div>
             )}
           </div>
@@ -811,7 +772,7 @@ export default function RegisterOnChainPage() {
                       : ""
               }
             >
-              Save Draft (DB)
+              Save Draft
             </button>
 
             <button
@@ -847,7 +808,7 @@ export default function RegisterOnChainPage() {
                       : ""
               }
             >
-              Confirm Draft (Lock)
+              Lock Draft
             </button>
 
             <button
@@ -869,7 +830,7 @@ export default function RegisterOnChainPage() {
                           : ""
               }
             >
-              Send to Blockchain (Finalize & Lock)
+              Register on Blockchain
             </button>
           </div>
         </div>

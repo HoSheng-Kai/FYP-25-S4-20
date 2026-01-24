@@ -1,5 +1,5 @@
 // src/components/notifications/NotificationsPanel.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import axios from "axios";
 import { API_ROOT, NOTIFICATIONS_API_BASE_URL } from "../../config/api";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -89,11 +89,9 @@ function getUserIdFromStorage(): number | null {
   return null;
 }
 
-/**
- * ✅ Robust parser:
- * - Accepts valid JSON stringified payload
- * - ALSO accepts pseudo format: {kind:TRANSFER_REQUEST,productId:11,...}
- */
+
+ // Parser for transfer payloads in notification messages
+
 function parseTransferPayload(msg: string): TransferPayload | null {
   if (!msg) return null;
 
@@ -231,6 +229,17 @@ export default function NotificationsPanel(props: {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [items, setItems] = useState<ApiNotification[]>([]);
+  // auto refresh controls
+  const pollMs = 3000; // 3s
+  const pollTimerRef = useRef<number | null>(null);
+  const inFlightRef = useRef(false);
+  const lastFingerprintRef = useRef<string>("");
+
+  function fingerprint(list: ApiNotification[]) {
+    return list
+      .map((n) => `${n.notificationId}:${n.isRead ? 1 : 0}:${n.createdOn}`)
+      .join("|");
+  }
 
   const unreadCount = useMemo(
     () => items.filter((n) => !n.isRead).length,
@@ -245,24 +254,83 @@ export default function NotificationsPanel(props: {
       return;
     }
 
-    setLoading(true);
+    // prevent overlapping polling calls
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+
+    // Only show the loading spinner on the very first load / manual refresh
+    // (poll refresh should be silent)
+    // If you want spinner always, remove this block and keep setLoading(true) always.
+    const showSpinner = items.length === 0;
+    if (showSpinner) setLoading(true);
+
     setError(null);
+
     try {
       const res = await http.get(NOTIFICATIONS_API_BASE_URL, {
         params: { userId, onlyUnread: nextOnlyUnread },
       });
-      setItems(res.data?.data ?? []);
+
+      const next: ApiNotification[] = res.data?.data ?? [];
+      const fp = fingerprint(next);
+
+      // Update state only if changed (reduces rerenders)
+      if (fp !== lastFingerprintRef.current) {
+        lastFingerprintRef.current = fp;
+        setItems(next);
+      }
     } catch (e: any) {
-      setError(e?.response?.data?.error ?? e?.message ?? "Failed to load notifications");
+      setError(
+        e?.response?.data?.error ?? e?.message ?? "Failed to load notifications"
+      );
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
+      inFlightRef.current = false;
     }
   }
 
+
+  // Initial load + when filter changes
   useEffect(() => {
     fetchNotifications(onlyUnread);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlyUnread]);
+
+  // Auto refresh
+  useEffect(() => {
+    // clear any existing timer
+    if (pollTimerRef.current) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+
+    // refresh only if there's an userid
+    if (!userId) return;
+
+    const tick = () => {
+      // Don’t auto-refresh when tab is hidden
+      if (document.hidden) return;
+
+      // If user is doing an action, don't refresh
+      if (busyId !== null) return;
+
+      fetchNotifications(onlyUnread);
+    };
+
+    // Start interval
+    pollTimerRef.current = window.setInterval(tick, pollMs);
+
+    // immediate “silent” tick shortly after mount
+    tick();
+
+    return () => {
+      if (pollTimerRef.current) {
+        window.clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, onlyUnread, busyId]);
 
   async function markOneRead(notificationId: number, opts?: { force?: boolean }) {
     if (!userId) return;
@@ -706,10 +774,6 @@ export default function NotificationsPanel(props: {
                 All
               </button>
             </div>
-
-            <button onClick={() => fetchNotifications(onlyUnread)} disabled={loading} style={btnLight}>
-              Refresh
-            </button>
 
             <button onClick={markAllRead} disabled={loading || items.length === 0} style={btnLight}>
               Mark all read
