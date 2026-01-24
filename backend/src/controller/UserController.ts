@@ -295,6 +295,24 @@ class UserController {
       });
     }
   }
+
+  async updatePublicKey(req: Request, res: Response) {
+    try {
+      const { userId, newPublicKey } = req.body;
+
+      await User.updatePublicKey(userId, newPublicKey);
+
+      res.json({
+        success: true,
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to update public key",
+        details: error.message,
+      });
+    }
+  }
 }
 
 export default new UserController();

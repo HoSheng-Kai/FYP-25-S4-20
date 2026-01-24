@@ -96,6 +96,18 @@ class UserEntity {
             throw new Error("User not found.");
         }
     }
+
+    static async updatePublicKey(userId: number, newPublicKey: string): Promise<void> {
+        const result = await pool.query(`
+            UPDATE users
+            SET public_key = $1
+            WHERE user_id = $2
+        `, [newPublicKey, userId]);
+
+        if (result.rowCount === 0) {
+            throw new Error("User not found.");
+        }
+    }
 }
 
 export default UserEntity;
