@@ -3,6 +3,9 @@ import type { FormEvent } from "react";
 import axios from "axios";
 import { USERS_API_BASE_URL } from "../../config/api";
 
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+
 function getUserIdFromStorage(): number | null {
   const raw = localStorage.getItem("userId");
   if (!raw) return null;
@@ -13,12 +16,18 @@ function getUserIdFromStorage(): number | null {
 export default function SettingsPage() {
   const userId = useMemo(() => getUserIdFromStorage(), []);
 
+  // wallet hook
+  const { publicKey, connected } = useWallet();
+
   const [newEmail, setNewEmail] = useState("");
   const [emailSubmitting, setEmailSubmitting] = useState(false);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwSubmitting, setPwSubmitting] = useState(false);
+
+  // wallet updating state
+  const [walletSubmitting, setWalletSubmitting] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -93,10 +102,37 @@ export default function SettingsPage() {
     }
   };
 
-  /* ===== Layout styles (left-flushed) ===== */
+  // Update wallet/public key
+  const handleUpdateWallet = async () => {
+    resetMessages();
+
+    if (!userId) return setError("Missing userId. Please log in again.");
+    if (!publicKey) return setError("Please connect your wallet first.");
+
+    try {
+      setWalletSubmitting(true);
+
+      const res = await axios.put(`${USERS_API_BASE_URL}/update-public-key`, {
+        userId,
+        newPublicKey: publicKey.toBase58(),
+      });
+
+      if (res.data?.success) {
+        setSuccess("Wallet public key updated successfully.");
+      } else {
+        setError(res.data?.error || "Failed to update public key.");
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || "Failed to update public key.");
+    } finally {
+      setWalletSubmitting(false);
+    }
+  };
+
+  /* ===== Layout styles ===== */
 
   const pageStyle: React.CSSProperties = {
-    padding: "24px 24px 24px 12px", // ⬅ reduced left padding
+    padding: "24px 24px 24px 12px",
     maxWidth: 760,
     boxSizing: "border-box",
   };
@@ -119,11 +155,18 @@ export default function SettingsPage() {
     display: "block",
   };
 
+  const buttonStyle: React.CSSProperties = {
+    marginTop: 14,
+    padding: "10px 16px",
+    borderRadius: 10,
+    border: "none",
+  };
+
   return (
     <div style={pageStyle}>
       <h1 style={{ marginBottom: 6 }}>Settings</h1>
       <p style={{ opacity: 0.8, marginTop: 0 }}>
-        Update your email and password.
+        Update your email, password, and wallet.
       </p>
 
       {(error || success) && (
@@ -145,9 +188,7 @@ export default function SettingsPage() {
       <div style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>Change Email</h2>
         <form onSubmit={handleUpdateEmail}>
-          <label style={{ display: "block", marginBottom: 8 }}>
-            New Email
-          </label>
+          <label style={{ display: "block", marginBottom: 8 }}>New Email</label>
 
           <input
             type="email"
@@ -161,10 +202,7 @@ export default function SettingsPage() {
             type="submit"
             disabled={emailSubmitting}
             style={{
-              marginTop: 14,
-              padding: "10px 16px",
-              borderRadius: 10,
-              border: "none",
+              ...buttonStyle,
               cursor: emailSubmitting ? "not-allowed" : "pointer",
               opacity: emailSubmitting ? 0.7 : 1,
             }}
@@ -206,10 +244,7 @@ export default function SettingsPage() {
             type="submit"
             disabled={pwSubmitting}
             style={{
-              marginTop: 14,
-              padding: "10px 16px",
-              borderRadius: 10,
-              border: "none",
+              ...buttonStyle,
               cursor: pwSubmitting ? "not-allowed" : "pointer",
               opacity: pwSubmitting ? 0.7 : 1,
             }}
@@ -218,6 +253,51 @@ export default function SettingsPage() {
           </button>
         </form>
       </div>
+      {/* Update Wallet */}
+      <div style={cardStyle}>
+        <h2 style={{ marginTop: 0 }}>Update Wallet</h2>
+
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <WalletMultiButton />
+
+          <button
+            type="button"
+            onClick={handleUpdateWallet}
+            disabled={!connected || !publicKey || walletSubmitting}
+            style={{
+              ...buttonStyle,
+              cursor:
+                !connected || !publicKey || walletSubmitting ? "not-allowed" : "pointer",
+              opacity:
+                !connected || !publicKey || walletSubmitting ? 0.7 : 1,
+            }}
+          >
+            {walletSubmitting ? "Updating..." : "Save Wallet"}
+          </button>
+        </div>
+
+        <div style={{ marginTop: 12, fontSize: 14, opacity: 0.85 }}>
+          <div>
+            <strong>Connected:</strong> {connected ? "Yes" : "No"}
+          </div>
+          <div style={{ marginTop: 6 }}>
+            <strong>Current wallet pubkey:</strong>
+            <div
+              style={{
+                marginTop: 6,
+                padding: "10px 12px",
+                borderRadius: 10,
+                border: "1px solid rgba(0,0,0,0.12)",
+                background: "rgba(0,0,0,0.03)",
+                wordBreak: "break-all",
+              }}
+            >
+              {publicKey ? publicKey.toBase58() : "—"}
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }
