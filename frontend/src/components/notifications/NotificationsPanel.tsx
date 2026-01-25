@@ -234,6 +234,9 @@ export default function NotificationsPanel(props: {
   const pollTimerRef = useRef<number | null>(null);
   const inFlightRef = useRef(false);
   const lastFingerprintRef = useRef<string>("");
+  // SSE
+  const sseRef = useRef<EventSource | null>(null);
+  const [sseConnected, setSseConnected] = useState(false);
 
   function fingerprint(list: ApiNotification[]) {
     return list
@@ -249,7 +252,7 @@ export default function NotificationsPanel(props: {
   async function fetchNotifications(nextOnlyUnread = onlyUnread) {
     if (!userId) {
       setError(
-        "No userId found. Store userId in localStorage or update getUserIdFromStorage()."
+        "No userId found"
       );
       return;
     }
@@ -258,9 +261,7 @@ export default function NotificationsPanel(props: {
     if (inFlightRef.current) return;
     inFlightRef.current = true;
 
-    // Only show the loading spinner on the very first load / manual refresh
-    // (poll refresh should be silent)
-    // If you want spinner always, remove this block and keep setLoading(true) always.
+    // Show loading spinner on the very first load
     const showSpinner = items.length === 0;
     if (showSpinner) setLoading(true);
 
@@ -296,7 +297,7 @@ export default function NotificationsPanel(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onlyUnread]);
 
-  // Auto refresh
+  // Auto refresh (fallback if SSE is not connected)
   useEffect(() => {
     // clear any existing timer
     if (pollTimerRef.current) {
@@ -306,6 +307,9 @@ export default function NotificationsPanel(props: {
 
     // refresh only if there's an userid
     if (!userId) return;
+
+    // If SSE is connected, don't poll
+    if (sseConnected) return;
 
     const tick = () => {
       // Don’t auto-refresh when tab is hidden
@@ -330,7 +334,50 @@ export default function NotificationsPanel(props: {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, onlyUnread, busyId]);
+  }, [userId, onlyUnread, busyId, sseConnected]);
+
+  // SSE
+  useEffect(() => {
+    if (!userId) return;
+
+    // Close previous connection
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
+    }
+
+    setSseConnected(false);
+
+    const url = `${NOTIFICATIONS_API_BASE_URL}/stream?userId=${userId}`;
+
+    let es: EventSource;
+    try {
+      es = new EventSource(url, { withCredentials: true });
+    } catch {
+      es = new EventSource(url);
+    }
+
+    sseRef.current = es;
+
+    const onConnected = () => {
+      setSseConnected(true);
+    };
+
+    const onNotification = (_e: MessageEvent) => {
+      fetchNotifications(onlyUnread);
+    };
+
+    es.addEventListener("connected", onConnected as any);
+    es.addEventListener("notification", onNotification as any);
+
+    return () => {
+      es.removeEventListener("connected", onConnected as any);
+      es.removeEventListener("notification", onNotification as any);
+      es.close();
+      if (sseRef.current === es) sseRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, onlyUnread]);
 
   async function markOneRead(notificationId: number, opts?: { force?: boolean }) {
     if (!userId) return;

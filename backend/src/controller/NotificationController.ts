@@ -260,6 +260,16 @@ export class NotificationController {
         txHash: txHash ?? null,
         isRead: false,
       });
+      emitToUser(Number(userId), "notification", {
+        notificationId: row.notification_id,
+        userId: row.user_id,
+        title: row.title,
+        message: row.message,
+        isRead: row.is_read,
+        createdOn: row.created_on,
+        productId: row.product_id,
+        txHash: row.tx_hash,
+      });
 
       res.json({ success: true, data: row });
     } catch (err) {
