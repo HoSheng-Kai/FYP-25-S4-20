@@ -7,6 +7,8 @@ const c = new NotificationController();
 // GET /api/notifications?userId=2&onlyUnread=true
 router.get("/", c.getUserNotifications.bind(c));
 
+router.get("/stream", c.stream.bind(c));
+
 // PUT /api/notifications/:notificationId/read?userId=2
 router.put("/:notificationId/read", c.markOneRead.bind(c));
 

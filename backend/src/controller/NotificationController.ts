@@ -1,8 +1,51 @@
 // src/controllers/NotificationController.ts
 import type { Request, Response } from "express";
 import { Notification } from "../entities/Notification";
+import { addClient, removeClient, emitToUser } from "../service/NotificationSse";
 
 export class NotificationController {
+
+// GET /api/notifications/stream?userId=2
+  async stream(req: Request, res: Response): Promise<void> {
+    const userIdParam = req.query.userId as string | undefined;
+    if (!userIdParam) {
+      res.status(400).json({ success: false, error: "Missing 'userId' query parameter" });
+      return;
+    }
+
+    const userId = Number(userIdParam);
+    if (Number.isNaN(userId)) {
+      res.status(400).json({ success: false, error: "Invalid 'userId' – must be a number" });
+      return;
+    }
+
+    // SSE headers
+    res.status(200);
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+
+    // If you’re behind nginx sometimes this helps:
+    // res.setHeader("X-Accel-Buffering", "no");
+
+    // Send an initial event so frontend knows it's connected
+    res.write(`event: connected\ndata: ${JSON.stringify({ ok: true })}\n\n`);
+
+    addClient(userId, res);
+
+    // Heartbeat to keep connection alive (every 25s)
+    const heartbeat = setInterval(() => {
+      res.write(`event: ping\ndata: ${JSON.stringify({ t: Date.now() })}\n\n`);
+    }, 25_000);
+
+    // Cleanup when client closes connection
+    req.on("close", () => {
+      clearInterval(heartbeat);
+      removeClient(userId, res);
+      res.end();
+    });
+  }
+
   // GET /api/notifications?userId=2&onlyUnread=true
   async getUserNotifications(req: Request, res: Response): Promise<void> {
     try {
