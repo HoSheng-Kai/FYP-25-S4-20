@@ -33,6 +33,7 @@ import TransactionHistory from "./components/products/TransactionHistory";
 import MyProductsPage from "./pages/consumer/MyProductsPage";
 import UserReviewsPage from "./pages/consumer/UserReviewsPage";
 import ProductDetailsPage from "./pages/consumer/ProductDetailsPage";
+import ConsumerTransferOwnershipPage from "./pages/consumer/ConsumerTransferOwnershipPage";
 
 // Manufacturer pages
 import ManufacturerProductsPage from "./pages/manufacturer/ManufacturerProductsPage";
@@ -81,6 +82,7 @@ export default function App() {
             <Route path="my-products" element={<ManufacturerProductsPage />} />
             <Route path="product/:productId" element={<SharedProductDetailsPage />} />
             <Route path="settings" element={<SettingsPage />} />
+            <Route path="transfer-ownership" element={<ConsumerTransferOwnershipPage />} />
           </Route>
         </Route>
 
@@ -120,6 +122,7 @@ export default function App() {
             <Route path="my-listings" element={<MyListingsPage />} />
             <Route path="create-listing" element={<CreateListingPage />} />
             <Route path="my-listings/:listingId/edit" element={<EditListingPage />} />
+            <Route path="transfer-ownership" element={<ConsumerTransferOwnershipPage />} />
             <Route path="reviews" element={<UserReviewsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>

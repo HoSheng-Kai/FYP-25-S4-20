@@ -38,6 +38,8 @@ export default function ConsumerDashboardPage() {
         </div>
       </div>
 
+      {/* ...ownership transfer link removed, now in sidebar... */}
+
       {/* Notifications */}
       <NotificationsPanel />
     </div>

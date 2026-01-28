@@ -200,6 +200,15 @@ export default function ConsumerLayout() {
 
             <li>
               <NavLink
+                to="transfer-ownership" // /consumer/transfer-ownership
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
+                Transfer Ownership
+              </NavLink>
+            </li>
+
+            <li>
+              <NavLink
                 to="reviews" // /consumer/reviews
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >

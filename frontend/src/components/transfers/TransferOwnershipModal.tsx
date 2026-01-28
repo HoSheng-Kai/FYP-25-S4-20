@@ -23,6 +23,7 @@ type UserOption = {
   username: string;
   public_key: string; // ✅ must exist from /users/list
   role?: string;
+  role_id?: string;
 };
 
 const USERS_LIST_URL = `${USERS_API_BASE_URL}/list`;
@@ -103,10 +104,15 @@ export default function TransferOwnershipModal({
     })();
   }, [open]);
 
+  // Only show and allow selection of users with role 'consumer' (case-insensitive), supporting both 'role' and 'role_id' fields
   const filteredUsers = useMemo(() => {
     const q = userQuery.toLowerCase();
     return users
       .filter((u) => u.user_id !== fromUserId)
+      .filter((u) => {
+        const role = (u.role || u.role_id || "").toLowerCase();
+        return role === "consumer";
+      })
       .filter((u) => u.username.toLowerCase().includes(q))
       .slice(0, 30);
   }, [users, userQuery, fromUserId]);
@@ -176,10 +182,8 @@ export default function TransferOwnershipModal({
           const productPdaStr = await fetchProductPda(productId);
           const productPda = new PublicKey(productPdaStr);
 
-          // derive transfer PDA from program seeds
           const [transferPda] = await deriveTransferPda(productPda, wallet.publicKey, toOwnerPubkey);
 
-          // STEP 1A: proposeTransfer on-chain (sender signs in Phantom)
           const proposeTx = await program.methods
             .proposeTransfer()
             .accounts({
