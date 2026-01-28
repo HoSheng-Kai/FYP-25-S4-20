@@ -958,6 +958,7 @@ class ProductController {
             userId: row.seller_id,
             username: row.seller_username,
             role: row.seller_role,
+            publicKey: row.seller_public_key,
           },
 
           blockchainStatus: row.blockchain_status,
@@ -1609,7 +1610,7 @@ class ProductController {
   async purchaseListing(req: Request, res: Response): Promise<void> {
     try {
       const listingId = Number(req.params.listingId);
-      const { buyerId } = req.body;
+      const { buyerId, buyerPublicKey } = req.body;
 
       if (!listingId || Number.isNaN(listingId)) {
         res.status(400).json({
@@ -1623,6 +1624,13 @@ class ProductController {
         res.status(400).json({
           success: false,
           error: "Missing or invalid buyerId"
+        });
+        return;
+      }
+      if (!buyerPublicKey || typeof buyerPublicKey !== "string") {
+        res.status(400).json({
+          success: false,
+          error: "Missing or invalid buyerPublicKey"
         });
         return;
       }
@@ -1705,6 +1713,15 @@ class ProductController {
           res.status(404).json({
             success: false,
             error: "Buyer or seller not found"
+          });
+          return;
+        }
+        // Enforce that the buyer's userId matches the provided wallet public key
+        if (buyer.public_key !== buyerPublicKey) {
+          await client.query('ROLLBACK');
+          res.status(403).json({
+            success: false,
+            error: "Wallet mismatch: Your connected wallet does not match your account. Please connect the correct wallet."
           });
           return;
         }

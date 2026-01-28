@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import ListingCard from "../../components/marketplace/ListingCard";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 const API = "http://localhost:3000/api/products";
 
@@ -25,6 +26,7 @@ export type MarketplaceListing = {
     userId: number;
     username: string;
     role: string;
+    publicKey: string | null;
   };
 
   blockchainStatus: "on blockchain" | "pending";
@@ -49,7 +51,6 @@ const MarketplacePage: React.FC = () => {
     const load = async () => {
       setLoading(true);
       setErr(null);
-
       try {
         const res = await axios.get<{
           success: boolean;
@@ -77,7 +78,6 @@ const MarketplacePage: React.FC = () => {
         setLoading(false);
       }
     };
-
     void load();
   }, [userId]);
 
@@ -145,7 +145,10 @@ const MarketplacePage: React.FC = () => {
   }, [items, searchQuery, minPrice, maxPrice, sortBy]);
 
   return (
-    <div style={{ padding: 24, maxWidth: "100%", overflow: "hidden" }}>
+    <div style={{ padding: 24, maxWidth: "100%", overflow: "hidden", position: "relative" }}>
+      <div style={{ position: "fixed", top: 18, right: 32, zIndex: 2000 }}>
+        <WalletMultiButton />
+      </div>
       <h1 style={{ margin: 0, fontSize: 24 }}>Consumer Marketplace</h1>
       <p style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
         Browse blockchain-registered products listed for sale.

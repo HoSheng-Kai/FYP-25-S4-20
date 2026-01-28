@@ -2,6 +2,9 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { MarketplaceListing } from "../../pages/marketplace/MarketplacePage";
 import axios from "axios";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { Connection, PublicKey, LAMPORTS_PER_SOL, Transaction, SystemProgram } from "@solana/web3.js";
+import PurchaseModal from "./PurchaseModal";
 
 type Props = {
   listing: MarketplaceListing;
@@ -13,6 +16,11 @@ const API = "http://localhost:3000/api/products";
 const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
   const navigate = useNavigate();
   const [purchasing, setPurchasing] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [solAmount, setSolAmount] = useState(0);
+  const [modalError, setModalError] = useState<string|null>(null);
+  const [modalSuccess, setModalSuccess] = useState<string|null>(null);
+  const wallet = useWallet();
 
   const priceText =
     listing.price && listing.currency ? `${listing.price} ${listing.currency}` : "—";
@@ -20,38 +28,94 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
   const statusBadge =
     listing.productStatus === "verified" ? "Verified" : listing.productStatus;
 
-  const handlePurchase = async () => {
-    const userId = localStorage.getItem("userId");
-    if (!userId) {
-      alert("Please log in to purchase");
+  // Helper: Convert SGD to SOL (placeholder, replace with real API if needed)
+  const convertSgdToSol = async (sgd: number): Promise<number> => {
+    try {
+      // Use a real price API in production
+      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=sgd");
+      const data = await res.json();
+      const solPrice = data.solana?.sgd || 0;
+      if (!solPrice) return 0;
+      return sgd / solPrice;
+    } catch {
+      return 0;
+    }
+  };
+
+  const handleBuyNowClick = async () => {
+    setModalError(null);
+    setModalSuccess(null);
+    if (!wallet.connected || !wallet.publicKey) {
+      setModalError("Please connect your Phantom wallet to purchase.");
+      setModalOpen(true);
       return;
     }
-
-    const confirm = window.confirm(
-      `Purchase "${listing.productName || 'this product'}" for ${priceText}?`
-    );
-    
-    if (!confirm) return;
-
+    if (!listing.seller.publicKey) {
+      setModalError("Seller has not connected their wallet. Cannot proceed.");
+      setModalOpen(true);
+      return;
+    }
+    const priceNum = parseFloat(listing.price || "0");
+    if (!priceNum) {
+      setModalError("Invalid price");
+      setModalOpen(true);
+      return;
+    }
     setPurchasing(true);
+    const sol = await convertSgdToSol(priceNum);
+    setSolAmount(sol);
+    setPurchasing(false);
+    setModalOpen(true);
+  };
+
+  const handleModalConfirm = async () => {
+    setPurchasing(true);
+    setModalError(null);
+    setModalSuccess(null);
     try {
+      if (!wallet.connected || !wallet.publicKey) throw new Error("Wallet not connected");
+      if (!listing.seller.publicKey) throw new Error("Seller wallet missing");
+      // 1. Send SOL from buyer to seller
+      const connection = new Connection("https://api.devnet.solana.com");
+      const toPubkey = new PublicKey(listing.seller.publicKey);
+      const fromPubkey = wallet.publicKey;
+      const lamports = Math.round(solAmount * LAMPORTS_PER_SOL);
+      const tx = new Transaction().add(
+        SystemProgram.transfer({
+          fromPubkey,
+          toPubkey,
+          lamports,
+        })
+      );
+      // Send transaction using wallet adapter
+      // @ts-ignore
+      const signature = await wallet.sendTransaction(tx, connection);
+      // Optionally: Wait for confirmation
+      await connection.confirmTransaction(signature, "confirmed");
+
+      // 2. Call backend to transfer ownership
+      const userId = localStorage.getItem("userId");
+      if (!userId) throw new Error("User not logged in");
       const res = await axios.post(
         `${API}/listings/${listing.listingId}/purchase`,
-        { buyerId: Number(userId) }
-      );
-
-      if (res.data.success) {
-        alert(`Purchase successful! You now own ${listing.productName || 'this product'}`);
-        if (onPurchaseSuccess) {
-          onPurchaseSuccess();
+        {
+          buyerId: Number(userId),
+          solTx: signature,
+          buyerPublicKey: wallet.publicKey.toBase58(),
         }
+      );
+      if (res.data.success) {
+        setModalSuccess(`Purchase successful! You now own ${listing.productName || 'this product'}`);
+        setTimeout(() => {
+          setModalOpen(false);
+          setModalSuccess(null);
+          if (onPurchaseSuccess) onPurchaseSuccess();
+        }, 1800);
+      } else {
+        throw new Error(res.data.error || "Ownership transfer failed");
       }
     } catch (e: any) {
-      const errorMsg =
-        e?.response?.data?.error ||
-        e?.response?.data?.details ||
-        "Failed to complete purchase";
-      alert(errorMsg);
+      setModalError(e?.response?.data?.error || e?.message || "Failed to complete payment");
     } finally {
       setPurchasing(false);
     }
@@ -216,7 +280,7 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
               opacity: purchasing ? 0.6 : 1,
               transition: "all 0.2s",
             }}
-            onClick={handlePurchase}
+            onClick={handleBuyNowClick}
             disabled={purchasing}
             onMouseEnter={(e) => {
               if (!purchasing) {
@@ -233,6 +297,18 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
           >
             {purchasing ? "Processing..." : "Buy Now"}
           </button>
+              <PurchaseModal
+                open={modalOpen}
+                onClose={() => { setModalOpen(false); setModalError(null); setModalSuccess(null); }}
+                productName={listing.productName || "Unknown Product"}
+                price={priceText}
+                sellerName={listing.seller.username}
+                onConfirm={handleModalConfirm}
+                loading={purchasing}
+                solAmount={solAmount}
+                error={modalError}
+                success={modalSuccess}
+              />
         </div>
       </div>
     </div>

@@ -17,6 +17,7 @@ export type MarketplaceListingRow = {
   seller_id: number;
   seller_username: string;
   seller_role: string;
+  seller_public_key: string | null;
 
   blockchain_status: "pending" | "on blockchain";
 };
@@ -50,6 +51,7 @@ export class MarketplaceListing {
         u.user_id AS seller_id,
         u.username AS seller_username,
         u.role_id AS seller_role,
+        u.public_key AS seller_public_key,
 
         CASE
           WHEN p.tx_hash IS NULL OR p.tx_hash = '' THEN 'pending'

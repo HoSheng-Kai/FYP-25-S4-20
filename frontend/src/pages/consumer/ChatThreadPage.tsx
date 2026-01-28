@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 const API = "http://localhost:3000/api/chats";
 
@@ -26,6 +28,7 @@ type ThreadDetails = {
 };
 
 export default function ChatThreadPage() {
+  const wallet = useWallet();
   const { threadId } = useParams<{ threadId: string }>();
   const navigate = useNavigate();
   const userId = useMemo(() => Number(localStorage.getItem("userId")), []);
@@ -84,22 +87,22 @@ export default function ChatThreadPage() {
   };
 
   const handlePurchase = async () => {
+    if (!wallet.connected || !wallet.publicKey) {
+      alert("Please connect your Phantom wallet to purchase.");
+      return;
+    }
     if (!thread) return;
-    
     const priceText = thread.listing_price && thread.listing_currency ? `${thread.listing_price} ${thread.listing_currency}` : "—";
     const confirm = window.confirm(
       `Purchase "${thread.product_model || 'this product'}" for ${priceText}?`
     );
-    
     if (!confirm) return;
-
     setPurchasing(true);
     try {
       const res = await axios.post(
         `http://localhost:3000/api/products/listings/${thread.listing_id}/purchase`,
         { buyerId: userId }
       );
-
       if (res.data.success) {
         alert(`Purchase successful! You now own ${thread.product_model || 'this product'}`);
         setShowReviewForm(true);
@@ -181,6 +184,9 @@ export default function ChatThreadPage() {
 
   return (
     <div style={{ height: "calc(100vh - 60px)", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ position: "absolute", top: 18, right: 24, zIndex: 100 }}>
+        <WalletMultiButton />
+      </div>
       {/* Header with Back and Report buttons */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <button
