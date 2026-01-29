@@ -26,29 +26,6 @@ services:
     depends_on:
       - postgres
 
-  solana:
-    image: solanalabs/solana:v1.18.26
-    container_name: backend_solana
-    restart: always
-    command: >
-      sh -c "solana-test-validator 
-      --reset 
-      --quiet 
-      --ledger /ledger 
-      --rpc-port 8899 
-      --faucet-port 9900"
-    ports:
-      - "8899:8899"  # RPC
-      - "8900:8900"  # WebSocket
-      - "9900:9900"  # Faucet for SOL cryptocurrency
-    volumes:
-      - solana-ledger:/ledger
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8899/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
   vault:
     image: hashicorp/vault:latest
     container_name: backend_hashicorp_vault
@@ -66,5 +43,4 @@ services:
       sh -c "vault server -config=/vault/config/vault.hcl & sh /vault-init.sh"
 
 volumes:
-  solana-ledger:
   vault-data:

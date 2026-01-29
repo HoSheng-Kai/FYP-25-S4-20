@@ -5,7 +5,7 @@ const router = express.Router();
 
 // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
 // Register product on blockchain
-router.post('/register-product', DistributorController.registerProduct.bind(DistributorController));
+// router.post('/register-product', DistributorController.registerProduct.bind(DistributorController));
 
 // Transfer ownership - 3-step wallet-based flow (no private keys required)
 // Step 1: Seller proposes transfer (after signing with wallet)
