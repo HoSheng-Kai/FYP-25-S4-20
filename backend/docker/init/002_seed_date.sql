@@ -1,4 +1,14 @@
-SET search_path TO fyp_25_s4_20;
+-- SET search_path TO fyp_25_s4_20;
+SET search_path TO fyp_25_s4_20, public;
+
+-- UPDATE product
+-- SET qr_code = NULL;
+
+-- SELECT 
+--     product_id, 
+--     serial_no, 
+--     qr_code IS NOT NULL AS has_qr
+-- FROM product;
 
 -- ===========================
 -- Insert Users (base58 private keys, base58 public keys)
@@ -14,94 +24,60 @@ SET search_path TO fyp_25_s4_20;
 -- 8: john_consumer
 -- 9: sarah_consumer
 -- 10: mike_consumer
+-- BEGIN;
+
+-- ===========================
+-- Insert Users
+-- ===========================
 INSERT INTO users (
-        username,
-        password_hash,
-        email,
-        role_id,
-        private_key,
-        public_key
-    )
-VALUES (
-        'admin_user',
-        'admin123',
-        'admin@example.com',
-        'admin',
-        '5Jn1PsY9FYjYtpjfLaivRW5dSdkCsDxDnmkCn8MXkGFmnPA3NqFSoEww45mm4ukeFwvGFwG9akagGF2cLCofGsnp',
-        'pR9HgGJrxkFTVebFhYAoq4URkLti4tph9f7Sxvgrpzc'
-    ),
-    (
-        'nike_manufacturer',
-        'nike123',
-        'nike@manufacturer.com',
-        'manufacturer',
-        '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
-        '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so'
-    ),
-    (
-        'adidas_manufacturer',
-        'adidas123',
-        'adidas@manufacturer.com',
-        'manufacturer',
-        '2aW6cVrGAGsTv9UXFMpcDRhb9iiPcfxgR1jHoBcYKKTFoFcZYjazQSsQtQEfHhar3MukdKz7jUaWCNVKQaYbgKbp',
-        'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc'
-    ),
-    (
-        'global_distributor',
-        'global123',
-        'global@distributor.com',
-        'distributor',
-        '66X4Fdd7XwpbBrYSRYda3dpQsmaWhcbV9qTu9aD12fcdKa7zkHs5nrzHebWspuzBgDMGL75Rwu4QBqieULwAtvvb',
-        'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh'
-    ),
-    (
-        'asia_distributor',
-        'asia123',
-        'asia@distributor.com',
-        'distributor',
-        '4oSPuV9peRKqVQJ9zd8s2p8Mj3TPznGtBEjTZwSHM4gLuwojDGbTb3v7FiPpisfXWf6Bdv4AQhLSVMpKP4EwL3zz',
-        'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg'
-    ),
-    (
-        'sports_retailer',
-        'sports123',
-        'sports@retailer.com',
-        'retailer',
-        '5VKwRzTi4ou39Rf9xASUFHfvXhdXZgdiQyXod84BFrmGsEe86qK7bpc5TcwajKaxsLXMdu6HcxzGzpzW7SZfPnDx',
-        '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ'
-    ),
-    (
-        'fashion_retailer',
-        'fashion123',
-        'fashion@retailer.com',
-        'retailer',
-        '2KFueTrHAsahgPPRApK6Ci8grXY1Nae6ZBUcmD3X9LWke31yjLUkdyHKvs4BUBPvmjn78ehy29gC1yJyhrD2DeoP',
-        '3NdBsPtC3cXjo16jsTuJxbBXhRFWFiWT9kz9wWXHokYd'
-    ),
-    (
-        'john_consumer',
-        'john123',
-        'john@consumer.com',
-        'consumer',
-        '4ucS3Vh1ZYEJxsfzjpJ8uxY6w7dxjptGVCrJpuQv4azCX8xrYjqNHB8gBweFzmCKY4388DamUqnH63KshsHKdFcr',
-        'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6'
-    ),
-    (
-        'sarah_consumer',
-        'sarah123',
-        'sarah@consumer.com',
-        'consumer',
-        'g9VEqeoDDGCkSVfq9q89zBu6smRGUzxzh9b8HTEvmehQacsokv76DSFWhk33WvoR4yqookTTGE1rSzxPop5mJv2',
-        'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U'
-    ),
-    (
-        'mike_consumer',
-        'mike123',
-        'mike@consumer.com',
-        'consumer',
-        '4NcvkwnkyFBN79bJ643dBSJQ3oqTrpQ98hHqbn1RGoKoFVmdCcqdf1pKnTTApYdf5QmzohQ9phAwaf4RztzfBq25',
-        '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid'
-    );
+  username,
+  password_hash,
+  email,
+  role_id,
+  public_key,
+  verified,
+  banned
+)
+VALUES
+  ('admin_user','admin123','admin@example.com','admin',
+   'pR9HgGJrxkFTVebFhYAoq4URkLti4tph9f7Sxvgrpzc', TRUE, FALSE),
+  
+-- unverify test case
+  ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
+   '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', FALSE, FALSE),
+
+  ('phantom_wallet_1','phantom_password','phantom@mail1.com','manufacturer',
+    '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE),
+
+--   ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
+--    '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
+--    '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so', FALSE, FALSE),
+   
+  ('adidas_manufacturer','adidas123','adidas@manufacturer.com','manufacturer',
+   'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc', TRUE, FALSE),
+
+  ('global_distributor','global123','global@distributor.com','distributor',
+   'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh', TRUE, FALSE),
+
+  ('asia_distributor','asia123','asia@distributor.com','distributor',
+   'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg', TRUE, FALSE),
+
+  ('sports_retailer','sports123','sports@retailer.com','retailer',
+   '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ', TRUE, FALSE),
+
+-- banned test case
+  ('fashion_retailer','fashion123','fashion@retailer.com','retailer',
+   '3NdBsPtC3cXjo16jsTuJxbBXhRFWFiWT9kz9wWXHokYd', TRUE, TRUE),
+
+  ('john_consumer','john123','john@consumer.com','consumer',
+   'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6', TRUE, FALSE),
+
+  ('sarah_consumer','sarah123','sarah@consumer.com','consumer',
+   'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U', TRUE, FALSE),
+
+  ('mike_consumer','mike123','mike@consumer.com','consumer',
+   '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid', TRUE, FALSE);
+
 
 -- ===========================
 -- Insert Products
@@ -111,114 +87,168 @@ INSERT INTO product (
         registered_by,
         serial_no,
         qr_code,
-        STATUS,
         model,
         batch_no,
         category,
         manufacture_date,
         description,
-        registered_on
+        registered_on,
+        tx_hash,
+        product_pda
     )
 VALUES (
         2,
         'NIKE-AIR-001',
-        E'\\x89504e470d0a1a0a',
-        'verified',
+        NULL,
         'Nike Air Max 270',
         'BATCH-2024-001',
         'Footwear',
         '2024-01-10',
         'Premium running shoes with Air cushioning technology',
-        '2024-01-15 10:30:00'
+        '2024-01-15 10:30:00',
+        NULL,
+        NULL
     ),
     (
         2,
         'NIKE-ZOOM-002',
-        E'\\x89504e470d0a1a0b',
-        'verified',
+        NULL,
         'Nike Zoom Pegasus',
         'BATCH-2024-002',
         'Footwear',
         '2024-01-15',
         'Lightweight running shoes for daily training',
-        '2024-01-20 14:20:00'
+        '2024-01-20 14:20:00',
+        NULL,
+        NULL
     ),
     (
         2,
         'NIKE-REACT-003',
-        E'\\x89504e470d0a1a0c',
-        'verified',
+        NULL,
         'Nike React Infinity',
         'BATCH-2024-003',
         'Footwear',
         '2024-02-01',
         'High-performance running shoes with React foam',
-        '2024-02-05 09:15:00'
+        '2024-02-05 09:15:00',
+        NULL,
+        NULL
     ),
     (
         3,
         'ADIDAS-ULTRA-001',
-        E'\\x89504e470d0a1a0d',
-        'verified',
+        NULL,
         'Adidas Ultraboost',
         'BATCH-2024-004',
         'Footwear',
         '2024-01-20',
         'Energy-returning running shoes with Boost technology',
-        '2024-01-25 11:00:00'
+        '2024-01-25 11:00:00',
+        NULL,
+        NULL
     ),
     (
         3,
         'ADIDAS-NMD-002',
-        E'\\x89504e470d0a1a0e',
-        'registered',
+        NULL,
         'Adidas NMD R1',
         'BATCH-2024-005',
         'Footwear',
         '2024-02-05',
         'Lifestyle sneakers with modern design',
-        '2024-02-10 16:45:00'
+        '2024-02-10 16:45:00',
+        NULL,
+        NULL
     ),
     (
         3,
         'ADIDAS-SUPER-003',
-        E'\\x89504e470d0a1a0f',
-        'verified',
+        NULL,       
         'Adidas Superstar',
         'BATCH-2024-006',
         'Footwear',
         '2024-02-10',
         'Classic shell-toe sneakers',
-        '2024-02-15 13:30:00'
+        '2024-02-15 13:30:00',
+        NULL,
+        NULL
     ),
     (
         2,
         'NIKE-DUNK-004',
-        E'\\x89504e470d0a1a10',
-        'verified',
+        NULL,
         'Nike Dunk Low',
         'BATCH-2024-007',
         'Footwear',
         '2024-02-25',
         'Iconic basketball-inspired sneakers',
-        '2024-03-01 10:00:00'
+        '2024-03-01 10:00:00',
+        NULL,
+        NULL
     ),
     (
         3,
         'ADIDAS-STAN-004',
-        E'\\x89504e470d0a1a11',
-        'suspicious',
+        NULL,
         'Adidas Stan Smith',
         'BATCH-2024-008',
         'Footwear',
         '2024-03-01',
         'Timeless tennis-inspired sneakers',
-        '2024-03-05 15:20:00'
+        '2024-03-05 15:20:00',
+        NULL,
+        NULL
+    ),
+    -- Product 9: For testing end-tracking feature
+    (
+        2,
+        'NIKE-ENDTRACK-001',
+        NULL,
+        'Nike End Track Test',
+        'BATCH-2024-009',
+        'Footwear',
+        '2024-03-10',
+        'Test product for end-tracking feature - owned by global_distributor',
+        '2024-03-10 10:00:00',
+        NULL,
+        NULL
     );
 
 -- ===========================
 -- Insert Product Listings
 -- ===========================
+
+-- INSERT INTO fyp_25_s4_20.product (
+--   registered_by,
+--   serial_no,
+--   qr_code,
+--   status,
+--   model,
+--   batch_no,
+--   category,
+--   manufacture_date,
+--   description,
+--   registered_on,
+--   tx_hash,
+--   product_pda
+-- )
+-- VALUES ($1, $2, NULL, 'registered', $3, $4, $5, $6, $7, NOW(), NULL, NULL)
+-- ON CONFLICT (serial_no) DO UPDATE
+-- SET
+--   -- only allow reuse if SAME manufacturer and still pending (not confirmed on-chain)
+--   model = EXCLUDED.model,
+--   batch_no = EXCLUDED.batch_no,
+--   category = EXCLUDED.category,
+--   manufacture_date = EXCLUDED.manufacture_date,
+--   description = EXCLUDED.description
+-- WHERE
+--   fyp_25_s4_20.product.registered_by = EXCLUDED.registered_by
+--   AND fyp_25_s4_20.product.tx_hash IS NULL
+-- RETURNING
+--   product_id, serial_no, model, batch_no, category,
+--   manufacture_date, description, status, registered_on, tx_hash, product_pda;
+
 INSERT INTO product_listing (
         product_id,
         seller_id,
@@ -613,53 +643,27 @@ VALUES (
 -- ===========================
 -- Insert Notifications
 -- ===========================
-INSERT INTO notification (user_id, title, message, is_read, created_on)
-VALUES (
-        8,
-        'Product Verified',
-        'Your product NIKE-AIR-001 has been verified as authentic.',
-        FALSE,
-        '2024-03-10 10:00:00'
-    ),
-    (
-        8,
-        'Ownership Updated',
-        'Ownership of product NIKE-AIR-001 was transferred to you.',
-        TRUE,
-        '2024-03-08 09:00:00'
-    ),
-    (
-        9,
-        'Product Shipped',
-        'Your Nike Zoom Pegasus has been shipped and is on the way.',
-        TRUE,
-        '2024-01-21 10:00:00'
-    ),
-    (
-        10,
-        'New Product Available',
-        'Nike Dunk Low is now available for purchase at sports_retailer.',
-        FALSE,
-        '2024-03-02 09:30:00'
-    ),
-    (
-        6,
-        'Suspicious Activity',
-        'Product ADIDAS-STAN-004 has been flagged as suspicious. Please review.',
-        FALSE,
-        '2024-03-05 15:30:00'
-    ),
-    (
-        2,
-        'Product Registration',
-        'Your product NIKE-AIR-001 has been successfully registered on the blockchain.',
-        TRUE,
-        '2024-01-15 10:35:00'
-    ),
-    (
-        3,
-        'Product Registration',
-        'Your product ADIDAS-ULTRA-001 has been successfully registered on the blockchain.',
-        TRUE,
-        '2024-01-25 11:05:00'
-    );
+INSERT INTO fyp_25_s4_20.notification
+  (user_id, title, message, is_read, created_on, product_id, tx_hash)
+VALUES
+  (2, 'Product Registration',
+   'Your product NIKE-AIR-001 has been successfully registered on the blockchain. tx=seed_tx_ni_ke_001',
+   FALSE, '2024-01-15 10:35:00', 1, 'seed_tx_ni_ke_001'),
+
+  (8, 'Ownership Updated',
+   'Ownership of product NIKE-AIR-001 was transferred to you. tx=seed_tx_p1_ret_to_cons',
+   TRUE, '2024-03-08 09:00:00', 1, 'seed_tx_p1_ret_to_cons'),
+
+  (8, 'Product Verified',
+   'Your product NIKE-AIR-001 has been verified as authentic.',
+   FALSE, '2024-03-10 10:00:00', 1, NULL),
+
+  (6, 'Suspicious Activity',
+   'Product ADIDAS-STAN-004 has been flagged as suspicious. Please review.',
+   FALSE, '2024-03-05 15:30:00', 8, NULL)
+
+ON CONFLICT ON CONSTRAINT notification_user_product_tx_uniq
+DO NOTHING;
+
+
+-- COMMIT;

@@ -1,0 +1,990 @@
+// src/components/notifications/NotificationsPanel.tsx
+import React, { useEffect, useMemo, useState, useRef } from "react";
+import axios from "axios";
+import { API_ROOT, NOTIFICATIONS_API_BASE_URL } from "../../config/api";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { PublicKey } from "@solana/web3.js";
+import { getProvider, getProgram } from "../../lib/anchorClient";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+
+const TRANSFER_ACCEPT_URL = `${API_ROOT}/distributors/accept-transfer`;
+const TRANSFER_EXECUTE_URL = `${API_ROOT}/distributors/execute-transfer`;
+const TRANSFER_CANCEL_URL = `${API_ROOT}/distributors/cancel-transfer`;
+const NOTIF_CREATE_URL = `${NOTIFICATIONS_API_BASE_URL}/create`;
+
+const http = axios.create({ withCredentials: true });
+
+type ApiNotification = {
+  notificationId: number;
+  userId: number;
+  title: string;
+  message: string;
+  isRead: boolean;
+  createdOn: string;
+  productId: number | null;
+  txHash: string | null;
+};
+
+type TransferPayload =
+  | {
+      kind: "TRANSFER_REQUEST";
+      productId: number;
+      fromUserId: number;
+      toUserId: number;
+      productPda: string;
+      transferPda: string;
+      proposeTx: string;
+      fromOwnerPubkey: string;
+      toOwnerPubkey: string;
+    }
+  | {
+      kind: "TRANSFER_ACCEPTED";
+      productId: number;
+      fromUserId: number;
+      toUserId: number;
+      productPda: string;
+      transferPda: string;
+      acceptTx: string;
+      fromOwnerPubkey: string;
+      toOwnerPubkey: string;
+    }
+  | {
+      kind: "TRANSFER_DENIED";
+      productId: number;
+      fromUserId: number;
+      toUserId: number;
+      productPda: string;
+      transferPda: string;
+      proposeTx: string;
+      fromOwnerPubkey: string;
+      toOwnerPubkey: string;
+      deniedBy: string;
+    };
+
+function formatWhen(iso: string) {
+  const d = new Date(iso);
+  return d.toLocaleString();
+}
+
+function shortKey(s: string, left = 6, right = 6) {
+  if (!s) return "";
+  if (s.length <= left + right + 3) return s;
+  return `${s.slice(0, left)}...${s.slice(-right)}`;
+}
+
+function getUserIdFromStorage(): number | null {
+  const direct = localStorage.getItem("userId");
+  if (direct && !Number.isNaN(Number(direct))) return Number(direct);
+
+  const userStr = localStorage.getItem("user");
+  if (userStr) {
+    try {
+      const u = JSON.parse(userStr);
+      const id = u?.user_id ?? u?.userId ?? u?.id;
+      if (id && !Number.isNaN(Number(id))) return Number(id);
+    } catch {
+      // ignore
+    }
+  }
+  return null;
+}
+
+
+ // Parser for transfer payloads in notification messages
+
+function parseTransferPayload(msg: string): TransferPayload | null {
+  if (!msg) return null;
+
+  // 1) Try real JSON first
+  try {
+    const obj = JSON.parse(msg);
+    if (obj?.kind === "TRANSFER_REQUEST") return obj as TransferPayload;
+    if (obj?.kind === "TRANSFER_ACCEPTED") return obj as TransferPayload;
+    if (obj?.kind === "TRANSFER_DENIED") return obj as TransferPayload;
+  } catch {
+    // fallthrough
+  }
+
+  // 2) Try parse pseudo-json: {k:v,k2:v2}
+  const raw = msg.trim();
+  if (!raw.startsWith("{") || !raw.endsWith("}")) return null;
+
+  const inner = raw.slice(1, -1).trim();
+  if (!inner) return null;
+
+  const map: Record<string, string> = {};
+  const parts = inner.split(",");
+
+  for (const p of parts) {
+    const idx = p.indexOf(":");
+    if (idx === -1) continue;
+    const key = p.slice(0, idx).trim();
+    let val = p.slice(idx + 1).trim();
+
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+
+    map[key] = val;
+  }
+
+  const kind = map.kind;
+  if (
+    kind !== "TRANSFER_REQUEST" &&
+    kind !== "TRANSFER_ACCEPTED" &&
+    kind !== "TRANSFER_DENIED"
+  ) {
+    return null;
+  }
+
+  const base = {
+    kind: kind as any,
+    productId: Number(map.productId ?? map.product_id),
+    fromUserId: Number(map.fromUserId ?? map.from_user_id),
+    toUserId: Number(map.toUserId ?? map.to_user_id),
+    productPda: map.productPda ?? map.product_pda,
+    transferPda: map.transferPda ?? map.transfer_pda,
+    fromOwnerPubkey:
+      map.fromOwnerPubkey ??
+      map.from_owner_pubkey ??
+      map.fromPublicKey ??
+      map.from_public_key,
+    toOwnerPubkey:
+      map.toOwnerPubkey ??
+      map.to_owner_pubkey ??
+      map.toPublicKey ??
+      map.to_public_key,
+  };
+
+  if (
+    !base.productId ||
+    !base.fromUserId ||
+    !base.toUserId ||
+    !base.productPda ||
+    !base.transferPda ||
+    !base.fromOwnerPubkey ||
+    !base.toOwnerPubkey
+  ) {
+    return null;
+  }
+
+  if (kind === "TRANSFER_REQUEST") {
+    const proposeTx = map.proposeTx ?? map.propose_tx ?? "";
+    return { ...(base as any), proposeTx } as TransferPayload;
+  }
+
+  if (kind === "TRANSFER_ACCEPTED") {
+    const acceptTx = map.acceptTx ?? map.accept_tx ?? "";
+    return { ...(base as any), acceptTx } as TransferPayload;
+  }
+
+  // TRANSFER_DENIED
+  const deniedBy = map.deniedBy ?? map.denied_by ?? "";
+  const proposeTx = map.proposeTx ?? map.propose_tx ?? "";
+  return { ...(base as any), proposeTx, deniedBy } as TransferPayload;
+}
+
+function hasTransferActions(n: ApiNotification): boolean {
+  if (n.isRead) return false;
+
+  const payload = parseTransferPayload(n.message);
+
+  const isRequest =
+    n.title === "Transfer Request" || payload?.kind === "TRANSFER_REQUEST";
+
+  const isAccepted =
+    n.title === "Transfer Accepted" || payload?.kind === "TRANSFER_ACCEPTED";
+
+  const isDenied =
+    n.title === "Transfer Denied" || payload?.kind === "TRANSFER_DENIED";
+
+  if (isRequest) return true; // Accept/Deny
+  if (isAccepted) return true; // Execute
+  if (isDenied) return true; // Sender Cancel
+
+  return false;
+}
+
+export default function NotificationsPanel(props: {
+  title?: string;
+  defaultOnlyUnread?: boolean;
+  showHeader?: boolean;
+  isAdmin?: boolean;
+}) {
+  const {
+    title = "Notifications",
+    defaultOnlyUnread = true,
+    showHeader = true,
+    isAdmin = false,
+  } = props;
+
+  const wallet = useWallet();
+  const userId = useMemo(() => getUserIdFromStorage(), []);
+
+  const [onlyUnread, setOnlyUnread] = useState(defaultOnlyUnread);
+  const [loading, setLoading] = useState(false);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [items, setItems] = useState<ApiNotification[]>([]);
+  // auto refresh controls
+  const pollMs = 3000; // 3s
+  const pollTimerRef = useRef<number | null>(null);
+  const inFlightRef = useRef(false);
+  const lastFingerprintRef = useRef<string>("");
+  // SSE
+  const sseRef = useRef<EventSource | null>(null);
+  const [sseConnected, setSseConnected] = useState(false);
+
+  function fingerprint(list: ApiNotification[]) {
+    return list
+      .map((n) => `${n.notificationId}:${n.isRead ? 1 : 0}:${n.createdOn}`)
+      .join("|");
+  }
+
+  const unreadCount = useMemo(
+    () => items.filter((n) => !n.isRead).length,
+    [items]
+  );
+
+  async function fetchNotifications(nextOnlyUnread = onlyUnread) {
+    if (!userId) {
+      setError(
+        "No userId found"
+      );
+      return;
+    }
+
+    // prevent overlapping polling calls
+    if (inFlightRef.current) return;
+    inFlightRef.current = true;
+
+    // Show loading spinner on the very first load
+    const showSpinner = items.length === 0;
+    if (showSpinner) setLoading(true);
+
+    setError(null);
+
+    try {
+      const res = await http.get(NOTIFICATIONS_API_BASE_URL, {
+        params: { userId, onlyUnread: nextOnlyUnread },
+      });
+
+      const next: ApiNotification[] = res.data?.data ?? [];
+      const fp = fingerprint(next);
+
+      // Update state only if changed (reduces rerenders)
+      if (fp !== lastFingerprintRef.current) {
+        lastFingerprintRef.current = fp;
+        setItems(next);
+      }
+    } catch (e: any) {
+      setError(
+        e?.response?.data?.error ?? e?.message ?? "Failed to load notifications"
+      );
+    } finally {
+      if (showSpinner) setLoading(false);
+      inFlightRef.current = false;
+    }
+  }
+
+
+  // Initial load + when filter changes
+  useEffect(() => {
+    fetchNotifications(onlyUnread);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onlyUnread]);
+
+  // Auto refresh (fallback if SSE is not connected)
+  useEffect(() => {
+    // clear any existing timer
+    if (pollTimerRef.current) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
+
+    // refresh only if there's an userid
+    if (!userId) return;
+
+    // If SSE is connected, don't poll
+    if (sseConnected) return;
+
+    const tick = () => {
+      // Don’t auto-refresh when tab is hidden
+      if (document.hidden) return;
+
+      // If user is doing an action, don't refresh
+      if (busyId !== null) return;
+
+      fetchNotifications(onlyUnread);
+    };
+
+    // Start interval
+    pollTimerRef.current = window.setInterval(tick, pollMs);
+
+    // immediate “silent” tick shortly after mount
+    tick();
+
+    return () => {
+      if (pollTimerRef.current) {
+        window.clearInterval(pollTimerRef.current);
+        pollTimerRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, onlyUnread, busyId, sseConnected]);
+
+  // SSE
+  useEffect(() => {
+    if (!userId) return;
+
+    // Close previous connection
+    if (sseRef.current) {
+      sseRef.current.close();
+      sseRef.current = null;
+    }
+
+    setSseConnected(false);
+
+    const url = `${NOTIFICATIONS_API_BASE_URL}/stream?userId=${userId}`;
+
+    let es: EventSource;
+    try {
+      es = new EventSource(url, { withCredentials: true });
+    } catch {
+      es = new EventSource(url);
+    }
+
+    sseRef.current = es;
+
+    const onConnected = () => {
+      setSseConnected(true);
+    };
+
+    const onNotification = (_e: MessageEvent) => {
+      fetchNotifications(onlyUnread);
+    };
+
+    es.addEventListener("connected", onConnected as any);
+    es.addEventListener("notification", onNotification as any);
+
+    return () => {
+      es.removeEventListener("connected", onConnected as any);
+      es.removeEventListener("notification", onNotification as any);
+      es.close();
+      if (sseRef.current === es) sseRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, onlyUnread]);
+
+  async function markOneRead(notificationId: number, opts?: { force?: boolean }) {
+    if (!userId) return;
+
+    const n = items.find((x) => x.notificationId === notificationId);
+
+    if (!opts?.force && n && hasTransferActions(n)) {
+      setError(
+        "This notification requires a transfer action (Accept/Deny/Execute/Cancel) and cannot be marked as read yet."
+      );
+      return;
+    }
+
+    setBusyId(notificationId);
+    setError(null);
+
+    setItems((prev) =>
+      prev.map((x) =>
+        x.notificationId === notificationId ? { ...x, isRead: true } : x
+      )
+    );
+
+    try {
+      await http.put(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}/read`, null, {
+        params: { userId },
+      });
+
+      if (onlyUnread) {
+        setItems((prev) => prev.filter((x) => x.notificationId !== notificationId));
+      }
+    } catch (e: any) {
+      setItems((prev) =>
+        prev.map((x) =>
+          x.notificationId === notificationId ? { ...x, isRead: false } : x
+        )
+      );
+      setError(e?.response?.data?.error ?? e?.message ?? "Failed to mark as read");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function markAllRead() {
+    if (!userId) return;
+
+    setLoading(true);
+    setError(null);
+    setItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
+
+    try {
+      await http.put(`${NOTIFICATIONS_API_BASE_URL}/read`, null, { params: { userId } });
+      if (onlyUnread) setItems([]);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? e?.message ?? "Failed to mark all as read");
+      await fetchNotifications(onlyUnread);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteAllRead() {
+    if (!userId) return;
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      await http.delete(`${NOTIFICATIONS_API_BASE_URL}/read`, { params: { userId } });
+      setItems((prev) => prev.filter((n) => !n.isRead));
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? e?.message ?? "Failed to delete read notifications");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function deleteOneRead(notificationId: number) {
+    if (!userId) return;
+
+    setBusyId(notificationId);
+    setError(null);
+
+    const snapshot = items;
+    setItems((prev) => prev.filter((n) => n.notificationId !== notificationId));
+
+    try {
+      await http.delete(`${NOTIFICATIONS_API_BASE_URL}/${notificationId}`, { params: { userId } });
+    } catch (e: any) {
+      setItems(snapshot);
+      setError(e?.response?.data?.error ?? e?.message ?? "Failed to delete notification");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function ensureWalletConnected(actionName: string): boolean {
+    if (!wallet.connected || !wallet.publicKey) {
+      setError(`Connect your Phantom wallet to ${actionName}.`);
+      return false;
+    }
+    return true;
+  }
+
+  async function acceptTransfer(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+    if (!payload || payload.kind !== "TRANSFER_REQUEST") return;
+
+    if (!ensureWalletConnected("accept this transfer")) return;
+
+    if (wallet.publicKey!.toBase58() !== payload.toOwnerPubkey) {
+      setError(`Wrong wallet connected. Expected recipient: ${payload.toOwnerPubkey}`);
+      return;
+    }
+
+    setBusyId(n.notificationId);
+    setError(null);
+
+    try {
+      const provider = getProvider(wallet);
+      const program = getProgram(provider);
+
+      const transferPda = new PublicKey(payload.transferPda);
+
+      const acceptTx = await program.methods
+        .acceptTransfer()
+        .accounts({
+          toOwner: wallet.publicKey!,
+          transferRequest: transferPda,
+        })
+        .rpc();
+
+      await http.post(TRANSFER_ACCEPT_URL, {
+        product_id: payload.productId,
+        to_user_id: payload.toUserId,
+        to_public_key: payload.toOwnerPubkey,
+        tx_hash: acceptTx,
+        transfer_pda: payload.transferPda,
+      });
+
+      const acceptedPayload = JSON.stringify({
+        kind: "TRANSFER_ACCEPTED",
+        productId: payload.productId,
+        fromUserId: payload.fromUserId,
+        toUserId: payload.toUserId,
+        productPda: payload.productPda,
+        transferPda: payload.transferPda,
+        acceptTx,
+        fromOwnerPubkey: payload.fromOwnerPubkey,
+        toOwnerPubkey: payload.toOwnerPubkey,
+      });
+
+      await http.post(NOTIF_CREATE_URL, {
+        userId: payload.fromUserId,
+        title: "Transfer Accepted",
+        message: acceptedPayload,
+        productId: payload.productId,
+        txHash: acceptTx,
+      });
+
+      await markOneRead(n.notificationId, { force: true });
+      await fetchNotifications(onlyUnread);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? e?.response?.data?.details ?? e?.message ?? "Accept failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function executeTransfer(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+    if (!payload || payload.kind !== "TRANSFER_ACCEPTED") return;
+
+    if (!ensureWalletConnected("execute this transfer")) return;
+
+    if (wallet.publicKey!.toBase58() !== payload.fromOwnerPubkey) {
+      setError(`Wrong wallet connected. Expected sender: ${payload.fromOwnerPubkey}`);
+      return;
+    }
+
+    setBusyId(n.notificationId);
+    setError(null);
+
+    try {
+      const provider = getProvider(wallet);
+      const program = getProgram(provider);
+
+      const productPda = new PublicKey(payload.productPda);
+      const transferPda = new PublicKey(payload.transferPda);
+
+      const executeTx = await program.methods
+        .executeTransfer()
+        .accounts({
+          fromOwner: wallet.publicKey!,
+          product: productPda,
+          transferRequest: transferPda,
+        })
+        .rpc();
+
+      await http.post(TRANSFER_EXECUTE_URL, {
+        product_id: payload.productId,
+        from_user_id: payload.fromUserId,
+        from_public_key: payload.fromOwnerPubkey,
+        to_user_id: payload.toUserId,
+        to_public_key: payload.toOwnerPubkey,
+        tx_hash: executeTx,
+        block_slot: 0,
+        transfer_pda: payload.transferPda,
+        product_pda: payload.productPda,
+      });
+
+      await markOneRead(n.notificationId, { force: true });
+      await fetchNotifications(onlyUnread);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? e?.response?.data?.details ?? e?.message ?? "Execute failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Recipient denies -> off-chain notify sender
+  async function denyTransfer(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+    if (!payload || payload.kind !== "TRANSFER_REQUEST") return;
+
+    if (!ensureWalletConnected("deny this transfer")) return;
+
+    if (wallet.publicKey!.toBase58() !== payload.toOwnerPubkey) {
+      setError(`Wrong wallet connected. Expected recipient: ${payload.toOwnerPubkey}`);
+      return;
+    }
+
+    setBusyId(n.notificationId);
+    setError(null);
+
+    try {
+      const deniedPayload = JSON.stringify({
+        kind: "TRANSFER_DENIED",
+        productId: payload.productId,
+        fromUserId: payload.fromUserId,
+        toUserId: payload.toUserId,
+        productPda: payload.productPda,
+        transferPda: payload.transferPda,
+        proposeTx: payload.proposeTx,
+        fromOwnerPubkey: payload.fromOwnerPubkey,
+        toOwnerPubkey: payload.toOwnerPubkey,
+        deniedBy: wallet.publicKey!.toBase58(),
+      });
+
+      await http.post(NOTIF_CREATE_URL, {
+        userId: payload.fromUserId,
+        title: "Transfer Denied",
+        message: deniedPayload,
+        productId: payload.productId,
+        txHash: payload.proposeTx,
+      });
+
+      await markOneRead(n.notificationId, { force: true });
+      await fetchNotifications(onlyUnread);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? e?.response?.data?.details ?? e?.message ?? "Deny failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  // Sender cancels -> REAL on-chain cancel, then record in backend
+  async function cancelTransferAsSender(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+    if (!payload) return;
+
+    if (payload.kind !== "TRANSFER_DENIED" && payload.kind !== "TRANSFER_REQUEST") return;
+
+    if (!ensureWalletConnected("cancel this transfer")) return;
+
+    if (wallet.publicKey!.toBase58() !== payload.fromOwnerPubkey) {
+      setError(`Wrong wallet connected. Expected sender: ${payload.fromOwnerPubkey}`);
+      return;
+    }
+
+    setBusyId(n.notificationId);
+    setError(null);
+
+    try {
+      const provider = getProvider(wallet);
+      const program = getProgram(provider);
+
+      const transferPda = new PublicKey(payload.transferPda);
+
+      const cancelTx = await program.methods
+        .cancelTransfer()
+        .accounts({
+          fromOwner: wallet.publicKey!,
+          transferRequest: transferPda,
+        })
+        .rpc();
+
+      await http.post(TRANSFER_CANCEL_URL, {
+        product_id: payload.productId,
+        to_user_id: payload.toUserId,
+        to_public_key: payload.toOwnerPubkey,
+        tx_hash: cancelTx,
+        transfer_pda: payload.transferPda,
+      });
+
+      await markOneRead(n.notificationId, { force: true });
+      await fetchNotifications(onlyUnread);
+    } catch (e: any) {
+      setError(e?.response?.data?.error ?? e?.response?.data?.details ?? e?.message ?? "Cancel failed");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  function renderMessage(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+
+    if (payload?.kind === "TRANSFER_REQUEST") {
+      return (
+        <div style={{ marginTop: 6, color: "#4b5563", lineHeight: 1.5 }}>
+          <div>
+            Product <strong>#{payload.productId}</strong> — Transfer request
+          </div>
+          <div style={{ fontSize: 12, marginTop: 6 }}>
+            <span style={monoWrap}>toOwner: {shortKey(payload.toOwnerPubkey)}</span>
+            {"  "}•{"  "}
+            <span style={monoWrap}>transferPda: {shortKey(payload.transferPda)}</span>
+          </div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>
+            <span style={monoWrap}>proposeTx: {shortKey(payload.proposeTx)}</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (payload?.kind === "TRANSFER_ACCEPTED") {
+      return (
+        <div style={{ marginTop: 6, color: "#4b5563", lineHeight: 1.5 }}>
+          <div>
+            Product <strong>#{payload.productId}</strong> — Recipient accepted
+          </div>
+          <div style={{ fontSize: 12, marginTop: 6 }}>
+            <span style={monoWrap}>fromOwner: {shortKey(payload.fromOwnerPubkey)}</span>
+            {"  "}•{"  "}
+            <span style={monoWrap}>transferPda: {shortKey(payload.transferPda)}</span>
+          </div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>
+            <span style={monoWrap}>acceptTx: {shortKey(payload.acceptTx)}</span>
+          </div>
+        </div>
+      );
+    }
+
+    if (payload?.kind === "TRANSFER_DENIED") {
+      return (
+        <div style={{ marginTop: 6, color: "#4b5563", lineHeight: 1.5 }}>
+          <div>
+            Product <strong>#{payload.productId}</strong> — Recipient denied
+          </div>
+          <div style={{ fontSize: 12, marginTop: 6 }}>
+            <span style={monoWrap}>deniedBy: {shortKey(payload.deniedBy)}</span>
+            {"  "}•{"  "}
+            <span style={monoWrap}>transferPda: {shortKey(payload.transferPda)}</span>
+          </div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>
+            <span style={monoWrap}>proposeTx: {shortKey(payload.proposeTx)}</span>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ color: "#4b5563", marginTop: 6, lineHeight: 1.5, wordBreak: "break-word" }}>
+        {n.message}
+      </div>
+    );
+  }
+
+  function renderTransferActions(n: ApiNotification) {
+    const payload = parseTransferPayload(n.message);
+
+    // Recipient: Accept / Deny
+    if (!n.isRead && (n.title === "Transfer Request" || payload?.kind === "TRANSFER_REQUEST")) {
+      if (!payload || payload.kind !== "TRANSFER_REQUEST") return null;
+
+      return (
+        <>
+          <button onClick={() => acceptTransfer(n)} disabled={busyId === n.notificationId} style={btnPrimary}>
+            Accept
+          </button>
+          <button onClick={() => denyTransfer(n)} disabled={busyId === n.notificationId} style={btnLight}>
+            Deny
+          </button>
+        </>
+      );
+    }
+
+    // Sender: Execute after accepted
+    if (!n.isRead && (n.title === "Transfer Accepted" || payload?.kind === "TRANSFER_ACCEPTED")) {
+      if (!payload || payload.kind !== "TRANSFER_ACCEPTED") return null;
+
+      return (
+        <button onClick={() => executeTransfer(n)} disabled={busyId === n.notificationId} style={btnPrimary}>
+          Confirm Transfer
+        </button>
+      );
+    }
+
+    // Sender: Cancel after denied
+    if (!n.isRead && (n.title === "Transfer Denied" || payload?.kind === "TRANSFER_DENIED")) {
+      return (
+        <button onClick={() => cancelTransferAsSender(n)} disabled={busyId === n.notificationId} style={btnLight}>
+          Cancel Transfer
+        </button>
+      );
+    }
+
+    return null;
+  }
+
+  return (
+    <div style={panel}>
+      {showHeader && (
+        <div style={headerRow}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <h2 style={{ margin: 0 }}>{title}</h2>
+            <span style={pill}>Unread: {unreadCount}</span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            {!isAdmin && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <WalletMultiButton />
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setOnlyUnread(true)} style={onlyUnread ? btnDark : btnLight}>
+                Unread
+              </button>
+              <button onClick={() => setOnlyUnread(false)} style={!onlyUnread ? btnDark : btnLight}>
+                All
+              </button>
+            </div>
+
+            <button onClick={markAllRead} disabled={loading || items.length === 0} style={btnLight}>
+              Mark all read
+            </button>
+
+            <button onClick={deleteAllRead} disabled={loading} style={btnLight} title="Deletes all read notifications">
+              Delete read
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!isAdmin && (
+        <div style={{ marginTop: 10, color: "#6b7280", fontSize: 12 }}>
+          Wallet:{" "}
+          <span style={{ fontFamily: "monospace" }}>
+            {wallet.publicKey ? wallet.publicKey.toBase58() : "Not connected"}
+          </span>
+        </div>
+      )}
+
+      {error && <div style={errBox}>{error}</div>}
+
+      <div style={{ marginTop: 14 }}>
+        {loading ? (
+          <div style={{ color: "#6b7280" }}>Loading notifications...</div>
+        ) : items.length === 0 ? (
+          <div style={{ color: "#6b7280" }}>{onlyUnread ? "No unread notifications" : "No notifications."}</div>
+        ) : (
+          <div style={{ display: "grid", gap: 10 }}>
+            {items.map((n) => (
+              <div key={n.notificationId} style={{ ...card, background: n.isRead ? "#fff" : "#f9fafb" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ fontWeight: 700, color: "#111827" }}>{n.title}</div>
+                      {!n.isRead && <span style={newPill}>NEW</span>}
+                    </div>
+
+                    {renderMessage(n)}
+
+                    <div style={{ color: "#6b7280", fontSize: 12, marginTop: 10, wordBreak: "break-word" }}>
+                      {formatWhen(n.createdOn)}
+                      {n.productId ? <span> • Product #{n.productId}</span> : null}
+                      {n.txHash ? <span> • Tx: {shortKey(n.txHash, 6, 6)}</span> : null}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                    {renderTransferActions(n)}
+
+                    {!isAdmin && n.txHash?.startsWith("thread:") && (
+                      <button
+                        onClick={() => {
+                          const tid = Number(n.txHash?.split(":")[1]);
+                          if (!Number.isNaN(tid)) window.location.href = `/consumer/chats/${tid}`;
+                        }}
+                        style={btnLight}
+                      >
+                        Open chat
+                      </button>
+                    )}
+
+                    {!n.isRead && !hasTransferActions(n) && (
+                      <button
+                        onClick={() => markOneRead(n.notificationId)}
+                        disabled={busyId === n.notificationId}
+                        style={btnLight}
+                      >
+                        Mark read
+                      </button>
+                    )}
+
+                    {n.isRead && (
+                      <button
+                        onClick={() => deleteOneRead(n.notificationId)}
+                        disabled={busyId === n.notificationId}
+                        style={btnLight}
+                        title="Only works if the notification is already read"
+                      >
+                        Delete
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- styles ---------------- */
+const panel: React.CSSProperties = {
+  background: "white",
+  border: "1px solid #e5e7eb",
+  borderRadius: 16,
+  padding: 24,
+  marginBottom: 18,
+};
+
+const headerRow: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  flexWrap: "wrap",
+};
+
+const pill: React.CSSProperties = {
+  fontSize: 12,
+  padding: "4px 10px",
+  borderRadius: 999,
+  background: "#f3f4f6",
+  border: "1px solid #e5e7eb",
+  color: "#111827",
+};
+
+const newPill: React.CSSProperties = {
+  fontSize: 12,
+  padding: "2px 8px",
+  borderRadius: 999,
+  background: "#111827",
+  color: "white",
+};
+
+const card: React.CSSProperties = {
+  border: "1px solid #e5e7eb",
+  borderRadius: 14,
+  padding: 14,
+};
+
+const errBox: React.CSSProperties = {
+  marginTop: 12,
+  padding: 12,
+  borderRadius: 12,
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  color: "#991b1b",
+};
+
+const monoWrap: React.CSSProperties = {
+  fontFamily: "monospace",
+  wordBreak: "break-all",
+};
+
+const btnLight: React.CSSProperties = {
+  padding: "8px 10px",
+  borderRadius: 10,
+  border: "1px solid #e5e7eb",
+  background: "white",
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const btnDark: React.CSSProperties = {
+  ...btnLight,
+  background: "#111827",
+  color: "white",
+  border: "1px solid #111827",
+};
+
+const btnPrimary: React.CSSProperties = {
+  ...btnDark,
+};

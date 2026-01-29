@@ -11,7 +11,6 @@ export interface users {
   email: string;
   role_id: Enums.user_role;
 
-  private_key: string | null;
   public_key: string | null;
 
   created_on: Date;
@@ -55,6 +54,7 @@ export interface product_listing {
   currency: Enums.currency;
 
   status: Enums.availability;
+  notes?: string | null;    // Optional notes from seller
 
   created_on?: Date;
 }

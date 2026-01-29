@@ -1,0 +1,4 @@
+register_product fail is fine, its just to get existing product on blockchain easily
+
+Need to constantly alternate ownership transfer from_owner_id and to_owner_id.
+- even if request fail for some reason devnet still updates it

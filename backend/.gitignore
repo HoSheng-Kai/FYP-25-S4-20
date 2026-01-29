@@ -4,3 +4,7 @@ docker/postgres-data/*
 node_modules/
 
 test-ledger/
+
+.claude/
+
+api screenshots/

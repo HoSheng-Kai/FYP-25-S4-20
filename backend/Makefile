@@ -7,6 +7,9 @@ ROOT := $(shell cd)
 run:
 	docker-compose up --build -d
 # 	docker logs -f $(CONTAINER_NAME)
+	docker-compose exec postgres pg_isready -h localhost -U admin -d fyp_db --timeout=30
+	npm install --save-dev ts-node
+# 	npm run regen:qrcodes
 	npm run dev
 	
 

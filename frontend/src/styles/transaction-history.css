@@ -1,0 +1,387 @@
+/* ===== Transaction History Layout ===== */
+
+.tx-wrapper {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Generic card */
+
+.tx-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 18px 20px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  font-size: 0.9rem;
+}
+
+.tx-muted {
+  color: #6b7280;
+  font-size: 0.85rem;
+}
+
+.tx-error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+}
+
+/* Product header card */
+
+.tx-header-card {
+  background: #e7f0ff;
+  border-radius: 18px;
+  padding: 18px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  border: 1px solid rgba(37, 99, 235, 0.16);
+}
+
+.tx-product-title {
+  margin: 0 0 4px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.tx-product-subtitle {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #4b5563;
+}
+
+.tx-product-meta {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.tx-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+}
+
+/* Status pill */
+
+.tx-status-pill {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+  align-self: flex-start;
+}
+
+.tx-status-verified {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.tx-status-registered {
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.tx-status-suspicious {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+/* Sections */
+
+.tx-section {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 18px 20px 20px;
+  border: 1px solid #e9edf5;
+  box-shadow: 0 10px 30px rgba(16, 24, 40, 0.06);
+}
+
+.tx-section-title {
+  margin: 0 0 14px;
+  font-size: 0.98rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+/* ===== Timeline ===== */
+
+.tx-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 18px;
+  position: relative;
+}
+
+/* Vertical line */
+.tx-timeline::before {
+  content: "";
+  position: absolute;
+  left: 12px;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  background: #e5e7eb;
+}
+
+.tx-step {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding-bottom: 16px;
+}
+
+.tx-step:last-child {
+  padding-bottom: 0;
+}
+
+/* Dot / number */
+
+.tx-step-icon {
+  position: relative;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+  flex-shrink: 0;
+}
+
+.tx-step-icon-blue {
+  background: #2563eb;
+}
+
+.tx-step-icon-purple {
+  background: #7c3aed;
+}
+
+.tx-step-icon-green {
+  background: #16a34a;
+}
+
+.tx-step-icon-gray {
+  background: #6b7280;
+}
+
+/* Step content */
+
+.tx-step-content {
+  flex: 1;
+  background: #f9fafb;
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+}
+
+.tx-step-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.tx-step-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.tx-step-step {
+  font-size: 0.75rem;
+  color: #6b7280;
+}
+
+.tx-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.tx-step-row {
+  display: flex;
+  font-size: 0.8rem;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tx-label {
+  color: #6b7280;
+  min-width: 90px;
+}
+
+.tx-value {
+  color: #111827;
+  text-align: right;
+}
+
+/* ===== Table view ===== */
+
+.tx-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.tx-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8rem;
+}
+
+.tx-table thead {
+  background: #f9fafb;
+}
+
+.tx-table th,
+.tx-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #e5e7eb;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.tx-table th {
+  font-weight: 600;
+  font-size: 0.78rem;
+  color: #6b7280;
+}
+
+.tx-table tbody tr:hover {
+  background: #f3f4f6;
+}
+
+/* ===== Responsive tweaks ===== */
+
+@media (max-width: 768px) {
+  .tx-header-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tx-step-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .tx-value {
+    text-align: left;
+  }
+}
+
+.tx-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.tx-toggle-group {
+  display: flex;
+  gap: 8px;
+}
+
+.tx-toggle {
+  border: 1px solid #e5e7eb;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.tx-toggle-active {
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  color: #fff;
+}
+
+/* =========================
+   Embedded mode (inside pd-card)
+   Removes card-on-card look
+========================= */
+.tx-embedded {
+  width: 100%;
+  margin-top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Remove the blue header card background when embedded (optional)
+   If you still want it, delete this block. */
+.tx-embedded .tx-header-card {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 0;
+}
+
+/* Make sections "flat" because pd-card already provides the card UI */
+.tx-embedded .tx-section {
+  background: transparent;
+  border-radius: 0;
+  padding: 12px 14px;
+  box-shadow: none;
+}
+
+/* Tighten timeline content so it resembles your screenshot */
+.tx-embedded .tx-step-content {
+  background: #fff;
+  border: 1px solid #eef2f7;
+  padding: 8px 10px;
+  border-radius: 10px;
+}
+
+/* Make the timeline line a bit lighter */
+.tx-embedded .tx-timeline::before {
+  background: #eef2f7;
+}
+
+/* Keep the table header style consistent with ProductDetails tables */
+.tx-embedded .tx-table thead {
+  background: #f9fafb;
+}
+
+.tx-embedded .tx-table th {
+  font-weight: 800;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.tx-embedded .tx-table td {
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.tx-embedded .tx-section-title {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.tx-embedded .tx-step-title {
+  font-size: 13px;
+}
+
+.tx-embedded .tx-step-step {
+  font-size: 11px;
+}
