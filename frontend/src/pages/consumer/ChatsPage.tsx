@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 
-const API = "http://localhost:3000/api/chats";
+const API = "http://34.177.85.28:3000/api/chats";
 
 type Thread = {
   thread_id: number;

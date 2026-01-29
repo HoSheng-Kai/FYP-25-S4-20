@@ -6,7 +6,7 @@ import axios from "axios";
 import MyListingCard from "../../components/marketplace/MyListingCard";
 import EditListingModal from "../../components/marketplace/EditListingModal";
 
-const API = "http://localhost:3000/api/products";
+const API = "http://34.177.85.28:3000/api/products";
 
 export type ListingStatus = "available" | "reserved" | "sold";
 

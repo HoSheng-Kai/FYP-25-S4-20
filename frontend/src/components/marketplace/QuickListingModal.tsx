@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import type { OwnedProduct } from "../../pages/consumer/MyProductsPage";
 
-const API = "http://localhost:3000/api/products";
+const API = "http://34.177.85.28:3000/api/products";
 
 interface QuickListingModalProps {
   product: OwnedProduct;

@@ -5,7 +5,7 @@ import axios from "axios";
 import ReviewCard from "../../components/reviews/ReviewCard";
 import CreateReviewModal from "../../components/reviews/CreateReviewModal";
 
-const API = "http://localhost:3000/api/reviews";
+const API = "http://34.177.85.28:3000/api/reviews";
 
 export type Review = {
   review_id: number;
@@ -159,7 +159,7 @@ export default function UserReviewsPage() {
           }}
           onMouseEnter={(e) => {
             if (activeTab !== "about-me") {
-              (e.currentTarget as HTMLButtonElement).color = "#007bff";
+              (e.currentTarget as HTMLButtonElement).style.color = "#007bff";
             }
           }}
         >

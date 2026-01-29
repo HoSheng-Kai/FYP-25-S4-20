@@ -4,7 +4,7 @@ import axios from "axios";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-const API = "http://localhost:3000/api/chats";
+const API = "http://34.177.85.28:3000/api/chats";
 
 type Message = {
   message_id: number;
@@ -100,7 +100,7 @@ export default function ChatThreadPage() {
     setPurchasing(true);
     try {
       const res = await axios.post(
-        `http://localhost:3000/api/products/listings/${thread.listing_id}/purchase`,
+        `http://34.177.85.28:3000/api/products/listings/${thread.listing_id}/purchase`,
         { buyerId: userId }
       );
       if (res.data.success) {
@@ -140,7 +140,7 @@ export default function ChatThreadPage() {
     setSubmittingReview(true);
     try {
       const res = await axios.post(
-        `http://localhost:3000/api/reviews`,
+        `http://34.177.85.28:3000/api/reviews`,
         {
           owner_id: thread.seller_id,
           author_id: userId,
@@ -167,7 +167,7 @@ export default function ChatThreadPage() {
     if (!threadId || !reportReason) return;
     setReportSubmitting(true);
     try {
-      const res = await axios.post(`http://localhost:3000/api/chats/${threadId}/report`, {
+      const res = await axios.post(`http://34.177.85.28:3000/api/chats/${threadId}/report`, {
         userId,
         reason: reportReason,
       });
