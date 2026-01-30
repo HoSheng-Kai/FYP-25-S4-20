@@ -1,7 +1,7 @@
 // src/pages/manufacturer/ManufacturerProductsPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { PRODUCTS_API_BASE_URL } from "../../config/api";
+import { API_ROOT, PRODUCTS_API_BASE_URL } from "../../config/api";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
@@ -113,7 +113,7 @@ export default function ManufacturerProductsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [transferOpen, setTransferOpen] = useState(false);
 
-  const GET_BY_USER_URL = "http://34.177.85.28:3000/api/distributors/products-by-user";
+  const GET_BY_USER_URL = `${API_ROOT}/distributors/products-by-user`;
 
   // ======================
   // ACTIONS MENU (⋯)

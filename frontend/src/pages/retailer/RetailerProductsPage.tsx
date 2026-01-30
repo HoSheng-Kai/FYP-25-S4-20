@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
+import { API_ROOT } from "../../config/api";
 
 /** =========================
  * Backend response for "products-by-user"
@@ -81,7 +82,7 @@ export default function RetailerProductsPage() {
   // ✅ transfer modal
   const [transferOpen, setTransferOpen] = useState(false);
 
-  const GET_BY_USER_URL = "http://34.177.85.28:3000/api/distributors/products-by-user";
+  const GET_BY_USER_URL = `${API_ROOT}/distributors/products-by-user`;
 
   // ======================
   // ACTIONS MENU (⋯)
