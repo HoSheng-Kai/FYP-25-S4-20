@@ -26,8 +26,8 @@ stop:
 clean:
 	docker system prune -f
 	docker volume prune -f
-	-rmdir /s /q docker\postgres-data
-# 	-rm -rf docker/postgres-data
+#	-rmdir /s /q docker\postgres-data
+ 	-rm -rf docker/postgres-data
 
 check:
 	docker exec -it backend_postgres psql -U admin -d fyp_db -c "\dt fyp_25_s4_20.*"
