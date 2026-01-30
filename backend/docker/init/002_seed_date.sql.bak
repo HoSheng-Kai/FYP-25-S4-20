@@ -39,72 +39,72 @@ INSERT INTO users (
   banned
 )
 VALUES
-  ('admin_user','vault:v1:x1Nj0+gKIBBVWLBlAmTeoC6D0k2+nO0FwS7/W6Z6GBagi0P0','vault:v1:iRP6pXBKVUr/NGkaLYWWP3dZDjjw2EhxNiaiUeD2uGFv11XSf3eLoaCqAVBZzK4Z1w==','admin',
+  ('admin_user','admin123','leejuankiat@gmail.com','admin',
    'pR9HgGJrxkFTVebFhYAoq4URkLti4tph9f7Sxvgrpzc', TRUE, FALSE),
 
 -- unverify test case
-  ('nike_manufacturer','vault:v1:TIgpR0mBmqs1oimsvWt3tU/fhTOqiwbdEf1yQb23Zkl3qP8=','vault:v1:Uq6Q/6KiyaoQPD2j640sqMkxn34nf3LYjUm6sKotlM+pxhXuV0rfJ3O9M+8tL4KJdA==','manufacturer',
+  ('nike_manufacturer','nike123','leejuankiat@gmail.com','manufacturer',
    '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', FALSE, FALSE),
 
-  ('phantom_wallet_1','vault:v1:b/vksgJDZzUSaYdXRhll0mz6ibKgHQIZTZudmoU8dNTH99nUzyv/bM8H8Vc=','vault:v1:2ci0HxQoSI5/okUbC0ZYkClJXDeTJiC283MXgJ4nbqwtiqCEPNOtXtkNx7zeg5GOzw==','manufacturer',
+  ('phantom_wallet_1','phantom_password','leejuankiat@gmail.com','manufacturer',
     '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE),
 
---   ('nike_manufacturer','vault:v1:3jjPuS7x7E9sqWpsl19PknOAgdyulaljhyOeqvvImLf1e/U=','vault:v1:sbz51RV4wggTULysMMeN/GGr9UN452bNHZIx8KZFl/EFMYvrhb/rNd6z3pHLfiZVRg==','manufacturer',
+--   ('nike_manufacturer','nike123','nike@manufacturer.com','manufacturer',
 --    '3A3nx4qQQCy4GwKgexB9weV3X9ZSZ48N9kVEquAEzNyb1iMfjHYc3s2ERYhdfTHvdenvAfpZd7eB5kpHpcdc3F3B',
 --    '4A2jFXqqfJj5VqhjXGCgdNZmNgP5KjrJXHkGdLVao6so', FALSE, FALSE),
 
-  ('adidas_manufacturer','vault:v1:wbmMPgHjoGOV6vCiTWjAjCU8q/V4mWKC8FbbWYfa6sAdex/86g==','vault:v1:nY9gNsBIE7rxzXUXm6Rrq8JeGOKoB1+a1J2V+8jHXedYwAWeeAUKP+cHM00eEtKqQw==','manufacturer',
+  ('adidas_manufacturer','adidas123','leejuankiat@gmail.com','manufacturer',
    'DrjZ88F3Ahm93CY2TFkkyUe8Ko7YJnvmv2Tq6zPuWvTc', TRUE, FALSE),
 
-  ('global_distributor','vault:v1:T5+Ow5uElo6GZmxoA/heWxMLqRGLJgZhE/9XU8dTxhrLZkS7Cg==','vault:v1:SYrKV+zAedFvjkn1bgleiHbEDWgNAnv2dJqGHIdTQTC1wDNlEBfytKY2NSTQdeZK5g==','distributor',
+  ('global_distributor','global123','leejuankiat@gmail.com','distributor',
    'DuT5cjvzF2wm98bniue6grQnAuk2Sw4TkKks3bV2Ddmh', TRUE, FALSE),
 
-  ('asia_distributor','vault:v1:V1aTvr/4O9JoEC6KMiuRL2YEx0RV6SajUlAV4ph2dSPmAHQ=','vault:v1:vouKIklYqnmcDqvQkPNAnwY4x8lxcJE02I+69Kb3MCyhLZiPLxXfgXSjhrLLhBwohw==','distributor',
+  ('asia_distributor','asia123','leejuankiat@gmail.com','distributor',
    'HnktLTSaY1PLT6q7KTTCSWsVJGtfFMLk6ejj1X4tnxdg', TRUE, FALSE),
 
-  ('sports_retailer','vault:v1:n0EGdVC58KlCfSa3CWW5GxFE5AddrzuRY/g7K5vIdi9x7zzm6A==','vault:v1:6V9GsDf6ZMyTqhkZOtbjZJdd7/1vVjZ6VgciU/8s80RwKrFJDhdLZbzUgHTFuAJQrQ==','retailer',
+  ('sports_retailer','sports123','leejuankiat@gmail.com','retailer',
    '8pzmM4ZsaTvesxFetuZPUYsKFb7LFkcztue2pNis5aCJ', TRUE, FALSE),
 
 -- banned test case
-  ('fashion_retailer','vault:v1:5gvWlw0Xnlzu5PEpn5NN2KL9EfcEN0YYldwIjpXLnMqxrHfq+1Q=','vault:v1:ch9JFgr1VR36mXrWoXtsEK4HNW/GH47q2CftqNFroMCpGgCr8aO6OcN8beaqz7fyew==','retailer',
+  ('fashion_retailer','fashion123','leejuankiat@gmail.com','retailer',
    '3NdBsPtC3cXjo16jsTuJxbBXhRFWFiWT9kz9wWXHokYd', TRUE, TRUE),
 
-  ('john_consumer','vault:v1:gPZ+iDQNhr006L6lgoSZmUKlYDgeSF9XcuSfwVzKF8tjCNY=','vault:v1:8IwAM3juQ8iLoXd3z1+NiqCZ7Qy6kMXEJA7ZjvGzG4cHPDNzuFyHljQcGyl8R5FmoQ==','consumer',
+  ('john_consumer','john123','leejuankiat@gmail.com','consumer',
    'BJmn7rMxJiasbGCEHJqYxDiYj16BTvzzQkKqGZ6HECU6', TRUE, FALSE),
 
-  ('sarah_consumer','vault:v1:98r35aOxAShRW1SCjrpIyX0ag2Kv5Qi9hLqym8OULmJ34L+h','vault:v1:6TDXr4B/yPF0iCO91dn0Qg2kVUwngMBCo1ToJ1mL21fcRCemR5nD+ubcS64fVwFn/g==','consumer',
+  ('sarah_consumer','sarah123','leejuankiat@gmail.com','consumer',
    'G5XcPa1rbhheULPjCvwTGEhkA12fUu8dP4mNG2H9yg9U', TRUE, FALSE),
 
-  ('mike_consumer','vault:v1:hzq57ZgBkblWCx9b3S4VaX2HaJ91vr2Xq1mCwHFQzdA7HbE=','vault:v1:UU+/lsPq6DcgpNE18/RJTunhiRfu2CmJ6G7U4vmarsKUKD/Iqyb2XBPpQnsxr2upqA==','consumer',
+  ('mike_consumer','mike123','leejuankiat@gmail.com','consumer',
    '8Jtmqnz6K2qgNLHhBCjxmrtPceBnRQa1uHNFFNa8Nbid', TRUE, FALSE),
 
 -- team admins
-  ('darrick_admin','vault:v1:D9Fl5oTjCn7Bo0B07QL2QWIDGvOCygfgBYvadeUq/rtMk5oO','vault:v1:tVtcGnJ4lGqAZJD51fdZQUHxCgX5/aEJbI1VjJRbrEozEDvRxD6EPxGBNyuEBPfLNBM=','admin',
+  ('darrick_admin','admin123','darrickkoh21@gmail.com','admin',
    NULL, TRUE, FALSE),
 
-  ('chaing_admin','vault:v1:luITjxwaWJmIWAZ4wqIQQhpM1/Vye5xIsjbVT/qAD00h0uz6','vault:v1:+TEepokRgl8aJQiM7nXe1uBnfGrPz312khfxJ8PBdwf0sa1p1k79AL/zsXa779LWgPo=','admin',
+  ('chaing_admin','admin123','chainghoikit@gmail.com','admin',
    NULL, TRUE, FALSE),
 
-  ('jiya_admin','vault:v1:RF2SyRTI9LaIAcvTHP88yFwsh9liXffMm65Oo7XkZewtTsVu','vault:v1:9D/wPb/rthqrh732cKmpUr1gM7LMUxCzb3SQa8QkK1PSEirm8KzrNEPmJkoCOANqmr0=','admin',
+  ('jiya_admin','admin123','jiyavudeenmh@gmail.com','admin',
    NULL, TRUE, FALSE),
 
-  ('juankiat_admin','vault:v1:QaJXL3wn41/SzcTHgA0+LeitiwWEFpsysj7EzcC8WPaXM1K4','vault:v1:0Cvi/Rv369qP0cCbg765uMXL0BJLayDRJk40b95l1KlFT384iP6tTeZhmGcXh7vbng==','admin',
+  ('juankiat_admin','admin123','leejuankiat@gmail.com','admin',
    NULL, TRUE, FALSE),
 
-  ('sk_admin','vault:v1:5Eq7OuBfTPKtHJ3qidvl53BPHReKUQImrMq+4xDfXXZYeDqb','vault:v1:8OVTFnfAWXyfacSSIvq/shz8dlHYtHE00p4O79p+Rc5nhqD/FOlIrx1fr2TYjCCljvL1','admin',
+  ('sk_admin','admin123','hallowthelast@gmail.com','admin',
    NULL, TRUE, FALSE),
 
 -- jiya test accounts (one per role)
-  ('jiya_manufacturer','vault:v1:GGiSkB5f9rzR7FwKtpjBJnXLQbNYaVjqOAam/fVYcXJcjrRR','vault:v1:3BH8/9jct667W548EU59Q7gfQJz00X721zuz4wL7l3lYDfvmfOeVj8j9dw+xkumZBII=','manufacturer',
+  ('jiya_manufacturer','admin123','jiyavudeenmh@gmail.com','manufacturer',
    '6wbxyuYSP3oYXVwu5A47HMpngWW5QYKwSBKVuaLvbh7W', TRUE, FALSE),
 
-  ('jiya_distributor','vault:v1:eeDiKU9u5v8kctgnFpPDVBkQWnAYI9lmZbrGx7IYm4iuGKT8','vault:v1:NOLLxnvY01KW6dCWP8KjsNgvP0S2mAB1HyMdEp5f9baWC11Dbrn733wfI4Nn3MfuBZA=','distributor',
+  ('jiya_distributor','admin123','jiyavudeenmh@gmail.com','distributor',
    'EnrG2U6BFamr9fC6KuV3tmJHy7nPXvHo8BcUXBrFQ7RN', TRUE, FALSE),
 
-  ('jiya_retailer','vault:v1:zGmQeD/UZs4IhjGiBGVsJeETcQrIGKQBYj5wVN5dofGIn6ig','vault:v1:tIrw6Q/O2/KVbgEtUA0OrJnihy973rRxiW29ugNKb5FtJwZBcGSrZd7a4CTWFXV8iTg=','retailer',
+  ('jiya_retailer','admin123','jiyavudeenmh@gmail.com','retailer',
    'AYW8eQ9xNwKZSnNZmupSnrLuYmBqSahPeoUj8viGJmkh', TRUE, FALSE),
 
-  ('jiya_consumer','vault:v1:qIH/IA7gUCuqTI0csVtjVFyjMt8ztRojZ0iDzWvlVckgA76K','vault:v1:NGOQyyiPtJwsHFHiMpXPXmnJDaWSX6ladMkj1mcF5WtdpXjCwMIby5AhmDlstMi0eNk=','consumer',
+  ('jiya_consumer','admin123','jiyavudeenmh@gmail.com','consumer',
    'GKYR1iVV9prf7XmuC149TdtLKpgzDPbFmjLbqyWE5ZTb', TRUE, FALSE);
 
 -- ===========================
