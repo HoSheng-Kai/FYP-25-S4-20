@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import axios from "axios";
 import type { OwnedProduct } from "../../pages/consumer/MyProductsPage";
 
-const API = "https://fyp-25-s4-20.duckdns.org:3000/api/products";
+const API = "https://fyp-25-s4-20.duckdns.org/api/products";
 
 interface QuickListingModalProps {
   product: OwnedProduct;

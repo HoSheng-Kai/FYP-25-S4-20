@@ -9,8 +9,8 @@ import React, { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const USERS_API_BASE_URL = "https://fyp-25-s4-20.duckdns.org:3000/api/users";
-const CHATS_API_BASE_URL = "https://fyp-25-s4-20.duckdns.org:3000/api/chats";
+const USERS_API_BASE_URL = "https://fyp-25-s4-20.duckdns.org/api/users";
+const CHATS_API_BASE_URL = "https://fyp-25-s4-20.duckdns.org/api/chats";
 
 const linkBaseStyle: React.CSSProperties = {
   color: "white",

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 
-const API = "https://fyp-25-s4-20.duckdns.org:3000/api/reviews";
+const API = "https://fyp-25-s4-20.duckdns.org/api/reviews";
 
 interface CreateReviewModalProps {
   targetUserId: number;

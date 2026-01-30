@@ -3,7 +3,7 @@ import axios from "axios";
 import ListingCard from "../../components/marketplace/ListingCard";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-const API = "https://fyp-25-s4-20.duckdns.org:3000/api/products";
+const API = "https://fyp-25-s4-20.duckdns.org/api/products";
 
 /**
  * This matches EXACTLY what your backend returns in ProductController.getMarketplaceListings()

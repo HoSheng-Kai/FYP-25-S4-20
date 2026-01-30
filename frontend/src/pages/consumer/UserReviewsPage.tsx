@@ -5,7 +5,7 @@ import axios from "axios";
 import ReviewCard from "../../components/reviews/ReviewCard";
 import CreateReviewModal from "../../components/reviews/CreateReviewModal";
 
-const API = "https://fyp-25-s4-20.duckdns.org:3000/api/reviews";
+const API = "https://fyp-25-s4-20.duckdns.org/api/reviews";
 
 export type Review = {
   review_id: number;

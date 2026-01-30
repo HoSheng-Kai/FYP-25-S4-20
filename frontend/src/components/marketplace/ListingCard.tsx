@@ -11,7 +11,7 @@ type Props = {
   onPurchaseSuccess?: () => void;
 };
 
-const API = "https://fyp-25-s4-20.duckdns.org:3000/api/products";
+const API = "https://fyp-25-s4-20.duckdns.org/api/products";
 
 const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
   const navigate = useNavigate();
@@ -240,7 +240,7 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
               const userId = localStorage.getItem("userId");
               if (!userId) { alert("Please log in to chat"); return; }
               try {
-                const res = await axios.post("https://fyp-25-s4-20.duckdns.org:3000/api/chats/create-thread", {
+                const res = await axios.post("https://fyp-25-s4-20.duckdns.org/api/chats/create-thread", {
                   listingId: listing.listingId,
                   userId: Number(userId),
                   otherUserId: listing.seller.userId,
