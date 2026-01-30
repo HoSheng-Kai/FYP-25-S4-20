@@ -1,0 +1,70 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: backend_postgres
+    restart: always
+    environment:
+      POSTGRES_DB: fyp_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin123
+      POSTGRES_HOST_AUTH_METHOD: scram-sha-256
+    ports:
+      - "9876:5432"
+    volumes:
+      - ./docker/postgres-data:/var/lib/postgresql/data
+      - ./docker/init:/docker-entrypoint-initdb.d
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: backend_pgadmin
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+  vault:
+    image: hashicorp/vault:latest
+    container_name: backend_hashicorp_vault
+    ports:
+      - "8200:8200"
+    cap_add:
+      - IPC_LOCK
+    environment:
+      - VAULT_ADDR=http://127.0.0.1:8200
+    volumes:
+      - ./docker/vault-data:/vault/file
+      - ./docker/init/vault/config.hcl:/vault/config/vault.hcl
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        vault server -config=/vault/config/vault.hcl &
+        export VAULT_ADDR='http://127.0.0.1:8200'
+        echo "=== Waiting for Vault to start ==="
+        until vault status 2>&1 | grep -q "Sealed"; do echo "Waiting..."; sleep 2; done
+        if [ ! -f /vault/file/init-keys.txt ]; then
+          echo "=== Initializing Vault ==="
+          vault operator init -key-shares=1 -key-threshold=1 > /vault/file/init-keys.txt
+        fi
+        UNSEAL_KEY=$$(grep 'Unseal Key 1:' /vault/file/init-keys.txt | awk '{print $$NF}')
+        ROOT_TOKEN=$$(grep 'Initial Root Token:' /vault/file/init-keys.txt | awk '{print $$NF}')
+        if vault status | grep -q "Sealed.*true"; then
+          echo "=== Unsealing Vault ==="
+          vault operator unseal "$$UNSEAL_KEY"
+        fi
+        export VAULT_TOKEN="$$ROOT_TOKEN"
+        if ! vault secrets list | grep -q "^transit/"; then
+          vault secrets enable transit
+        fi
+        if ! vault read transit/keys/my-app-key >/dev/null 2>&1; then
+          vault write -f transit/keys/my-app-key
+        fi
+        echo "=== Vault READY ==="
+        tail -f /dev/null
+
+volumes:
+  vault-data:
