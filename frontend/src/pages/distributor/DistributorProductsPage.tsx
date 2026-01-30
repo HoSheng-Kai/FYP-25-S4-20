@@ -5,6 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext"; // adjust if needed
 
 type BackendProduct = {
   product_id: number;
@@ -14,11 +15,9 @@ type BackendProduct = {
   product_pda: string | null;
   tx_hash: string | null;
   track: boolean | null;
-
-  stage?: string | null; // 'draft' | 'confirmed' | 'onchain'
-
+  stage?: string | null;
   owned_since?: string | null;
-  relationship?: string | null; // 'owner' | 'manufacturer' | null
+  relationship?: string | null;
 };
 
 type GetProductsByUserResponse = {
@@ -39,14 +38,12 @@ type ProductRow = {
   category?: string | null;
   productName: string | null;
   lifecycleStatus: "active" | "transferred";
-  blockchainStatus: string; // pending / confirmed
+  blockchainStatus: string;
   registeredOn: string;
-
   price: string | null;
   currency: string | null;
   listingStatus: string | null;
   listingCreatedOn: string | null;
-
   relationship?: "owner" | "manufacturer" | null;
   stage?: string | null;
 };
@@ -55,7 +52,10 @@ type FilterMode = "all" | "owned";
 
 export default function DistributorProductsPage() {
   const navigate = useNavigate();
-  const distributorId = Number(localStorage.getItem("userId"));
+  const { auth } = useAuth();
+
+  // ✅ cookie-auth source of truth
+  const distributorId = auth.user?.userId ?? 0;
 
   const wallet = useWallet();
   const walletConnected = !!wallet.connected && !!wallet.publicKey;
@@ -64,30 +64,19 @@ export default function DistributorProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ filter (only All / Owned)
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
-
-  // ✅ selection
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
-  // ✅ shared transfer modal
   const [transferOpen, setTransferOpen] = useState(false);
 
   const GET_BY_USER_URL = `${API_ROOT}/distributors/products-by-user`;
 
-  // ======================
-  // ACTIONS MENU (⋯)
-  // ======================
   const [openMenuForId, setOpenMenuForId] = useState<number | null>(null);
 
   useEffect(() => {
     const onDocMouseDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
       if (!t) return;
-
-      // click inside menu => don't close
       if (t.closest?.("[data-actions-menu-root='true']")) return;
-
       setOpenMenuForId(null);
     };
 
@@ -110,17 +99,12 @@ export default function DistributorProductsPage() {
     };
   }, []);
 
-  // ----------------------
-  // HELPERS
-  // ----------------------
   const isOnChainConfirmed = (p: ProductRow) => {
     const s = (p.blockchainStatus || "").toLowerCase();
     return s.includes("confirmed") || s.includes("on blockchain") || s.includes("on-chain") || s.includes("onchain");
   };
 
-  const isTransferEligible = (p: ProductRow) => {
-    return isOnChainConfirmed(p) && p.relationship === "owner";
-  };
+  const isTransferEligible = (p: ProductRow) => isOnChainConfirmed(p) && p.relationship === "owner";
 
   const safeDate = (iso: string) => {
     if (!iso) return "—";
@@ -128,35 +112,24 @@ export default function DistributorProductsPage() {
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
   };
 
-  // ✅ filtered list
   const products = useMemo(() => {
-    if (filterMode === "owned") {
-      return allProducts.filter((p) => p.relationship === "owner");
-    }
+    if (filterMode === "owned") return allProducts.filter((p) => p.relationship === "owner");
     return allProducts;
   }, [allProducts, filterMode]);
 
-  // ✅ clear hidden selections when filter changes
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
       const visibleIds = new Set(products.map((p) => p.productId));
       const next = new Set<number>();
-      for (const id of prev) {
-        if (visibleIds.has(id)) next.add(id);
-      }
+      for (const id of prev) if (visibleIds.has(id)) next.add(id);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterMode, products.length]);
 
-  // ----------------------
-  // Selection helpers (eligible-only)
-  // ----------------------
   const selectedProducts = useMemo(() => products.filter((p) => selectedIds.has(p.productId)), [products, selectedIds]);
-
   const selectedEligibleProducts = useMemo(() => selectedProducts.filter(isTransferEligible), [selectedProducts]);
-
   const anyEligibleSelected = selectedEligibleProducts.length > 0;
 
   const allSelected = useMemo(() => {
@@ -181,7 +154,6 @@ export default function DistributorProductsPage() {
     setSelectedIds((prev) => {
       const eligibleIds = products.filter(isTransferEligible).map((p) => p.productId);
       const allEligibleSelected = eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
-
       if (allEligibleSelected) return new Set();
       return new Set(eligibleIds);
     });
@@ -189,9 +161,6 @@ export default function DistributorProductsPage() {
 
   const clearSelected = () => setSelectedIds(new Set());
 
-  // ----------------------
-  // LOAD PRODUCTS
-  // ----------------------
   const loadProducts = async () => {
     try {
       if (!distributorId || Number.isNaN(distributorId)) {
@@ -199,9 +168,11 @@ export default function DistributorProductsPage() {
         return;
       }
 
-      const res = await axios.post<GetProductsByUserResponse>(GET_BY_USER_URL, {
-        user_id: distributorId,
-      });
+      const res = await axios.post<GetProductsByUserResponse>(
+        GET_BY_USER_URL,
+        { user_id: distributorId },
+        { withCredentials: true }
+      );
 
       if (!res.data.success || !res.data.data) {
         setError(res.data.error || "Failed to load products.");
@@ -214,7 +185,8 @@ export default function DistributorProductsPage() {
         const confirmed = !!(p.tx_hash && p.product_pda);
         const relationship = (p.relationship as any) ?? null;
 
-        const lifecycleStatus: ProductRow["lifecycleStatus"] = relationship === "owner" ? "active" : "transferred";
+        const lifecycleStatus: ProductRow["lifecycleStatus"] =
+          relationship === "owner" ? "active" : "transferred";
 
         return {
           productId: p.product_id,
@@ -242,10 +214,13 @@ export default function DistributorProductsPage() {
     }
   };
 
+  // ✅ wait until auth is resolved so distributorId is valid
   useEffect(() => {
-    loadProducts();
+    if (auth.loading) return;
+    if (!auth.user) return;
+    void loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [auth.loading, auth.user?.userId]);
 
   const openTransferModal = () => {
     if (!walletConnected) return;
@@ -253,21 +228,15 @@ export default function DistributorProductsPage() {
     setTransferOpen(true);
   };
 
+  if (auth.loading) return <p style={{ padding: 20 }}>Loading…</p>;
+  if (!auth.user) return <p style={{ padding: 20 }}>Not logged in.</p>;
+
   if (loading) return <p style={{ padding: 20 }}>Loading products...</p>;
 
   return (
     <div style={{ padding: "40px" }}>
       {/* Header + filter pills */}
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 16,
-          gap: 16,
-          flexWrap: "wrap",
-        }}
-      >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 16, flexWrap: "wrap" }}>
         <h1 style={{ margin: 0 }}>My Products</h1>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -280,10 +249,9 @@ export default function DistributorProductsPage() {
           />
         </div>
       </div>
-      
+
       <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>Select products to transfer ownership</h2>
 
-      {/* Transfer button (opens modal) */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10, alignItems: "center" }}>
         <WalletMultiButton />
 
@@ -314,57 +282,23 @@ export default function DistributorProductsPage() {
       </div>
 
       {!walletConnected && (
-        <div
-          style={{
-            marginBottom: 12,
-            fontSize: 12,
-            color: "#b45309",
-            background: "#fffbeb",
-            border: "1px solid #fde68a",
-            padding: "8px 10px",
-            borderRadius: 10,
-            display: "inline-block",
-          }}
-        >
+        <div style={{ marginBottom: 12, fontSize: 12, color: "#b45309", background: "#fffbeb", border: "1px solid #fde68a", padding: "8px 10px", borderRadius: 10, display: "inline-block" }}>
           Please connect your wallet before transferring ownership.
         </div>
       )}
 
       {error && (
-        <div
-          style={{
-            background: "#ffe0e0",
-            padding: "10px",
-            borderRadius: "8px",
-            marginBottom: "16px",
-            color: "#a11",
-          }}
-        >
+        <div style={{ background: "#ffe0e0", padding: "10px", borderRadius: "8px", marginBottom: "16px", color: "#a11" }}>
           {error}
         </div>
       )}
 
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          background: "white",
-          borderRadius: "10px",
-          overflow: "visible",
-        }}
-      >
+      <table style={{ width: "100%", borderCollapse: "collapse", background: "white", borderRadius: "10px", overflow: "visible" }}>
         <thead style={{ background: "#e9ecef" }}>
           <tr>
             <th style={{ ...th, width: 46 }}>
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleSelectAll}
-                aria-label="Select all transferable products"
-                title="Select all transferable products"
-              />
+              <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} aria-label="Select all transferable products" title="Select all transferable products" />
             </th>
-
             <th style={th}>Product ID</th>
             <th style={th}>Product Name</th>
             <th style={th}>Category</th>
@@ -376,7 +310,6 @@ export default function DistributorProductsPage() {
 
         <tbody>
           {products.map((p) => {
-            const locked = !isOnChainConfirmed(p);
             const transferEligible = isTransferEligible(p);
 
             const go = (fn: () => void) => {
@@ -393,13 +326,6 @@ export default function DistributorProductsPage() {
                     onChange={() => toggleSelected(p.productId)}
                     disabled={!transferEligible}
                     aria-label={`Select product ${p.productId}`}
-                    title={
-                      !locked
-                        ? "Cannot transfer: product not on-chain yet"
-                        : p.relationship !== "owner"
-                        ? "Cannot transfer: you are not the current owner"
-                        : "Transfer eligible"
-                    }
                   />
                 </td>
 
@@ -409,7 +335,6 @@ export default function DistributorProductsPage() {
                 <td style={td}>{safeDate(p.registeredOn)}</td>
 
                 <td style={td}>
-                  {/* Ownership */}
                   <span
                     style={{
                       marginLeft: 10,
@@ -419,34 +344,17 @@ export default function DistributorProductsPage() {
                       background: p.lifecycleStatus === "active" ? "#dcfce7" : "#fee2e2",
                       color: p.lifecycleStatus === "active" ? "#166534" : "#991b1b",
                     }}
-                    title={
-                      p.lifecycleStatus === "active"
-                        ? "You currently own this product"
-                        : "You have transferred this product"
-                    }
                   >
                     {p.lifecycleStatus === "active" ? "owned" : "transferred"}
                   </span>
 
-                  {/* Stage pill */}
                   {p.stage && (
-                    <span
-                      style={{
-                        marginLeft: 10,
-                        padding: "4px 10px",
-                        borderRadius: "999px",
-                        fontSize: 12,
-                        background: "#f3f4f6",
-                        color: "#111827",
-                      }}
-                      title="DB Stage"
-                    >
+                    <span style={{ marginLeft: 10, padding: "4px 10px", borderRadius: "999px", fontSize: 12, background: "#f3f4f6", color: "#111827" }}>
                       {p.stage}
                     </span>
                   )}
                 </td>
 
-                {/* Actions Menu*/}
                 <td style={td}>
                   <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
                     <button
@@ -461,12 +369,7 @@ export default function DistributorProductsPage() {
 
                     {openMenuForId === p.productId && (
                       <div style={menuCard} role="menu" aria-label="Row actions">
-                        <button
-                          type="button"
-                          style={menuItem}
-                          onClick={() => go(() => navigate(`/products/${p.productId}/details`))}
-                          role="menuitem"
-                        >
+                        <button type="button" style={menuItem} onClick={() => go(() => navigate(`/products/${p.productId}/details`))} role="menuitem">
                           View details
                         </button>
                       </div>
@@ -481,9 +384,6 @@ export default function DistributorProductsPage() {
 
       {products.length === 0 && <p style={{ marginTop: 20, opacity: 0.6 }}>No products found for this filter.</p>}
 
-      {/* =======================
-          TRANSFER OWNERSHIP MODAL
-      ======================== */}
       <TransferOwnershipModal
         open={transferOpen}
         onClose={() => setTransferOpen(false)}
@@ -503,7 +403,7 @@ export default function DistributorProductsPage() {
   );
 }
 
-/* ----------------- Filter pill component ----------------- */
+/* --- (keep your FilterPill + styles exactly as you already have) --- */
 
 function FilterPill({
   active,
@@ -553,8 +453,6 @@ function FilterPill({
     </button>
   );
 }
-
-/* ----------------- STYLES ----------------- */
 
 const th: React.CSSProperties = {
   padding: "14px",

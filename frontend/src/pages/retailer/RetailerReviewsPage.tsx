@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import ReviewCard from "../../components/reviews/ReviewCard";
 import type { Review } from "../consumer/UserReviewsPage";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
-const API = "http://34.177.85.28:3000/api/reviews";
+const API = `${API_ROOT}/reviews`;
 
 export default function RetailerReviewsPage() {
-  const ownerId = useMemo(() => {
-    const raw = localStorage.getItem("userId");
-    return raw ? Number(raw) : NaN;
-  }, []);
+  const { auth } = useAuth();
+
+  const ownerId = useMemo(() => auth.user?.userId ?? NaN, [auth.user?.userId]);
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(false);
@@ -17,18 +18,20 @@ export default function RetailerReviewsPage() {
 
   useEffect(() => {
     const load = async () => {
+      if (auth.loading) return;
       if (!Number.isFinite(ownerId)) return;
+
       setLoading(true);
       setError(null);
+
       try {
         const res = await axios.get<{ success: boolean; data?: Review[] }>(API, {
           params: { owner_id: ownerId },
+          withCredentials: true,
         });
-        if (res.data.success && res.data.data) {
-          setReviews(res.data.data);
-        } else {
-          setReviews([]);
-        }
+
+        if (res.data.success && res.data.data) setReviews(res.data.data);
+        else setReviews([]);
       } catch (e: any) {
         setError(e?.response?.data?.error || "Failed to load reviews");
         setReviews([]);
@@ -36,17 +39,20 @@ export default function RetailerReviewsPage() {
         setLoading(false);
       }
     };
+
     load();
-  }, [ownerId]);
+  }, [auth.loading, ownerId]);
 
   const averageRating =
     reviews.length > 0
       ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
       : "N/A";
 
+  if (auth.loading) return <div style={{ padding: 20 }}>Loading…</div>;
+  if (!auth.user) return null;
+
   return (
     <div>
-      {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ marginBottom: 8 }}>Reviews About You</h1>
         <p style={{ color: "#666", margin: 0 }}>
@@ -54,7 +60,6 @@ export default function RetailerReviewsPage() {
         </p>
       </div>
 
-      {/* Stats */}
       <div
         style={{
           background: "white",
@@ -81,12 +86,12 @@ export default function RetailerReviewsPage() {
         </div>
       </div>
 
-      {/* Loading / Error */}
       {loading && (
         <div style={{ textAlign: "center", padding: 40, color: "#999" }}>
           Loading reviews...
         </div>
       )}
+
       {error && (
         <div
           style={{
@@ -101,7 +106,6 @@ export default function RetailerReviewsPage() {
         </div>
       )}
 
-      {/* Empty state */}
       {!loading && !error && reviews.length === 0 && (
         <div
           style={{
@@ -119,7 +123,6 @@ export default function RetailerReviewsPage() {
         </div>
       )}
 
-      {/* List */}
       {!loading && reviews.length > 0 && (
         <div style={{ display: "grid", gap: 16 }}>
           {reviews.map((review) => (

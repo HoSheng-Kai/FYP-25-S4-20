@@ -5,16 +5,12 @@ import { USERS_API_BASE_URL } from "../../config/api";
 
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-
-function getUserIdFromStorage(): number | null {
-  const raw = localStorage.getItem("userId");
-  if (!raw) return null;
-  const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? n : null;
-}
+import { useAuth } from "../../auth/AuthContext";
 
 export default function SettingsPage() {
-  const userId = useMemo(() => getUserIdFromStorage(), []);
+  const { auth } = useAuth();
+
+  const userId = useMemo(() => auth.user?.userId ?? null, [auth.user?.userId]);
 
   // wallet hook
   const { publicKey, connected } = useWallet();
@@ -26,7 +22,6 @@ export default function SettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwSubmitting, setPwSubmitting] = useState(false);
 
-  // wallet updating state
   const [walletSubmitting, setWalletSubmitting] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -37,19 +32,29 @@ export default function SettingsPage() {
     setSuccess(null);
   };
 
+  if (auth.loading) return <div style={{ padding: 24 }}>Loading…</div>;
+  if (!auth.user) return null; // RequireAuth handles redirect
+
+  // ----------------------
+  // UPDATE EMAIL
+  // ----------------------
   const handleUpdateEmail = async (e: FormEvent) => {
     e.preventDefault();
     resetMessages();
 
-    if (!userId) return setError("Missing userId. Please log in again.");
+    if (!userId) return setError("Missing user. Please log in again.");
     if (!newEmail.trim()) return setError("Please enter a new email.");
 
     try {
       setEmailSubmitting(true);
-      const res = await axios.put(`${USERS_API_BASE_URL}/update-email`, {
-        userId,
-        newEmail: newEmail.trim(),
-      });
+      const res = await axios.put(
+        `${USERS_API_BASE_URL}/update-email`,
+        {
+          userId,
+          newEmail: newEmail.trim(),
+        },
+        { withCredentials: true }
+      );
 
       if (res.data?.success) {
         setSuccess("Email updated successfully.");
@@ -64,11 +69,14 @@ export default function SettingsPage() {
     }
   };
 
+  // ----------------------
+  // UPDATE PASSWORD
+  // ----------------------
   const handleUpdatePassword = async (e: FormEvent) => {
     e.preventDefault();
     resetMessages();
 
-    if (!userId) return setError("Missing userId. Please log in again.");
+    if (!userId) return setError("Missing user. Please log in again.");
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(newPassword)) {
@@ -83,10 +91,14 @@ export default function SettingsPage() {
 
     try {
       setPwSubmitting(true);
-      const res = await axios.put(`${USERS_API_BASE_URL}/update-password`, {
-        userId,
-        newPassword,
-      });
+      const res = await axios.put(
+        `${USERS_API_BASE_URL}/update-password`,
+        {
+          userId,
+          newPassword,
+        },
+        { withCredentials: true }
+      );
 
       if (res.data?.success) {
         setSuccess("Password updated successfully.");
@@ -102,20 +114,25 @@ export default function SettingsPage() {
     }
   };
 
-  // Update wallet/public key
+  // ----------------------
+  // UPDATE WALLET
+  // ----------------------
   const handleUpdateWallet = async () => {
     resetMessages();
 
-    if (!userId) return setError("Missing userId. Please log in again.");
+    if (!userId) return setError("Missing user. Please log in again.");
     if (!publicKey) return setError("Please connect your wallet first.");
 
     try {
       setWalletSubmitting(true);
-
-      const res = await axios.put(`${USERS_API_BASE_URL}/update-public-key`, {
-        userId,
-        newPublicKey: publicKey.toBase58(),
-      });
+      const res = await axios.put(
+        `${USERS_API_BASE_URL}/update-public-key`,
+        {
+          userId,
+          newPublicKey: publicKey.toBase58(),
+        },
+        { withCredentials: true }
+      );
 
       if (res.data?.success) {
         setSuccess("Wallet public key updated successfully.");
@@ -129,7 +146,7 @@ export default function SettingsPage() {
     }
   };
 
-  /* ===== Layout styles ===== */
+  /* ===== Styles ===== */
 
   const pageStyle: React.CSSProperties = {
     padding: "24px 24px 24px 12px",
@@ -253,6 +270,7 @@ export default function SettingsPage() {
           </button>
         </form>
       </div>
+
       {/* Update Wallet */}
       <div style={cardStyle}>
         <h2 style={{ marginTop: 0 }}>Update Wallet</h2>
@@ -267,7 +285,9 @@ export default function SettingsPage() {
             style={{
               ...buttonStyle,
               cursor:
-                !connected || !publicKey || walletSubmitting ? "not-allowed" : "pointer",
+                !connected || !publicKey || walletSubmitting
+                  ? "not-allowed"
+                  : "pointer",
               opacity:
                 !connected || !publicKey || walletSubmitting ? 0.7 : 1,
             }}
@@ -297,7 +317,6 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
-
     </div>
   );
 }
