@@ -1,32 +1,35 @@
 import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "./AuthContext";
 
 type Role = "admin" | "manufacturer" | "distributor" | "retailer" | "consumer";
 
-function getRole(): Role | null {
-  const role = localStorage.getItem("userRole");
-  if (
-    role === "admin" ||
-    role === "manufacturer" ||
-    role === "distributor" ||
-    role === "retailer" ||
-    role === "consumer"
-  ) {
-    return role;
-  }
-  return null;
-}
-
 function getHomeForRole(role: Role) {
-  return `/${role}`;
+  switch (role) {
+    case "admin":
+      return "/admin";
+    case "manufacturer":
+      return "/manufacturer";
+    case "distributor":
+      return "/distributor";
+    case "retailer":
+      return "/retailer";
+    case "consumer":
+      return "/consumer";
+    default:
+      return "/login";
+  }
 }
 
 export default function RequireRole({ allow }: { allow: Role[] }) {
-  const role = getRole();
+  const { auth } = useAuth();
 
-  // Not logged in / missing role -> force login
+  if (auth.loading) {
+    return <div style={{ padding: 40 }}>Loading…</div>;
+  }
+
+  const role = auth.user?.role ?? null;
+
   if (!role) return <Navigate to="/login" replace />;
-
-  // Logged in but wrong role -> bounce to their home
   if (!allow.includes(role)) return <Navigate to={getHomeForRole(role)} replace />;
 
   return <Outlet />;

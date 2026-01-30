@@ -1,7 +1,14 @@
 // Adjust the path if your database file is elsewhere
 import pool from '../schema/database';
-
+import type { Role } from "../types/roles";
 // import User from '../db/table'
+
+const isRole = (r: any): r is Role =>
+  r === "admin" ||
+  r === "manufacturer" ||
+  r === "distributor" ||
+  r === "retailer" ||
+  r === "consumer";
 
 class UserEntity {
     // ============================================================
@@ -19,7 +26,7 @@ class UserEntity {
     // ============================================================
     // ✅ UNCOMMENT BELOW WHEN DEPLOYING (no private key)
     // ============================================================
-    static async createAccount(username: string, password: string, email: string, role_id: string, publicKey: string)
+    static async createAccount(username: string, password: string, email: string, role_id: Role, publicKey: string)
     : Promise<void>{
         await pool.query(`
             INSERT INTO users (username, password_hash, email, role_id, public_key, verified)
@@ -29,20 +36,57 @@ class UserEntity {
 
     // Login
     // Check username, password
-    static async loginAccount(username: string)
-    : Promise<{password: string, email: string; userId: number; role: string, verified: boolean, banned: boolean}>{
-        const result = await pool.query(`
-            SELECT *
+    static async loginAccount(
+        username: string
+    ): Promise<{
+        password: string;
+        email: string;
+        username: string;
+        userId: number;
+        role: Role;
+        verified: boolean;
+        banned: boolean;
+    }> {
+        const result = await pool.query(
+            `
+            SELECT
+            user_id,
+            username,
+            email,
+            password_hash,
+            role_id,
+            verified,
+            banned
             FROM users
             WHERE username = $1
-            `, [username]);
+            `,
+            [username]
+        );
 
-        if (result.rows.length === 0){
+        if (result.rows.length === 0) {
             throw new Error("User does not exist.");
-        } 
+        }
 
-        return {password: result.rows[0].password_hash, email: result.rows[0].email, userId: result.rows[0].user_id, role: result.rows[0].role_id, verified: result.rows[0].verified, banned: result.rows[0].banned};
-    }
+        const row = result.rows[0];
+
+        const roleRaw = row.role_id;
+
+        if (!isRole(roleRaw)) {
+        throw new Error(`Invalid role_id: ${roleRaw}`);
+        }
+
+        const role: Role = roleRaw;
+
+        return {
+            password: row.password_hash,
+            email: row.email,
+            username: row.username,
+            userId: row.user_id,
+            role: roleRaw,
+            verified: row.verified,
+            banned: row.banned,
+        };
+        }
 
     // Logout
     // Just return true, assuming nothing needs to be done

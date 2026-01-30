@@ -7,6 +7,8 @@ import { Keypair } from '@solana/web3.js';
 import bs58 from 'bs58';
 
 import { encrypt, decrypt } from '../utils/encryption';
+import { setAuthCookie, clearAuthCookie } from "../auth/auth";
+import { createPendingOtp, consumePendingOtp } from "../auth/otpStore";
 
 class UserController {
   // ============================================================
@@ -139,16 +141,22 @@ class UserController {
       // // TODO: Decryption
       // let email = await decrypt(user.email);
       
-      let otp: number = generate_OTP();
-      await sendOTP(user.email, otp);
+      // Generate OTP
+      const otpNumber: number = generate_OTP();
+      await sendOTP(user.email, otpNumber);
 
-      res.json({
-        success: true,
-        otp: otp,
-        role: user.role,
-        userId: user.userId,
-        verified: user.verified
-      });
+      // Store OTP server-side (as string for hashing)
+      const tempAuthId = createPendingOtp(
+        {
+          userId: user.userId,
+          role: user.role,
+          username: user.username,
+        },
+        String(otpNumber)
+      );
+
+      res.json({ success: true, tempAuthId });
+      return;
       
     }catch(error: any){
       res.status(500).json({
@@ -158,22 +166,43 @@ class UserController {
       })
     } 
   }
+  async verifyOtp(req: Request, res: Response) {
+    try {
+      const { tempAuthId, otp } = req.body as { tempAuthId?: string; otp?: string };
 
-  async logoutAccount(req: Request, res: Response){
-    try{
-      let response: Boolean = await User.logoutAccount();
+      if (!tempAuthId || !otp) {
+        res.status(400).json({ success: false, error: "Missing tempAuthId or otp" });
+        return;
+      }
 
-      res.json({
-        success: response
-      });
-    }catch(error: any){
-      res.status(500).json({
-        success: false,
-        error: 'Failed to logout account',
-        details: error.message
-      })
+      const userPayload = consumePendingOtp(tempAuthId, String(otp));
+      if (!userPayload) {
+        res.status(401).json({ success: false, error: "Invalid or expired OTP" });
+        return;
+      }
+
+      // OTP passed → now set HttpOnly cookie session
+      setAuthCookie(res, userPayload);
+
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ success: false, error: "OTP verification failed", details: err.message });
     }
   }
+
+  async logoutAccount(req: Request, res: Response) {
+    try {
+      clearAuthCookie(res);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        error: "Failed to logout account",
+        details: error.message,
+      });
+    }
+  }
+
   async listUsers(req: Request, res: Response) {
     try {
       const users = await User.listUsers();
@@ -313,6 +342,17 @@ class UserController {
       });
     }
   }
+  async me(req: Request, res: Response) {
+    if (!req.auth) {
+      res.status(401).json({ success: false, error: "Not authenticated" });
+      return;
+    }
+    res.json({
+      success: true,
+      user: req.auth,
+    });
+  }
+
 }
 
 export default new UserController();

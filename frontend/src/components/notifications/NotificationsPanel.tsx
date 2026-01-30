@@ -6,6 +6,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { PublicKey } from "@solana/web3.js";
 import { getProvider, getProgram } from "../../lib/anchorClient";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { useAuth } from "../../auth/AuthContext";
 
 const TRANSFER_ACCEPT_URL = `${API_ROOT}/distributors/accept-transfer`;
 const TRANSFER_EXECUTE_URL = `${API_ROOT}/distributors/execute-transfer`;
@@ -221,9 +222,10 @@ export default function NotificationsPanel(props: {
     isAdmin = false,
   } = props;
 
-  const wallet = useWallet();
-  const userId = useMemo(() => getUserIdFromStorage(), []);
+  const { auth } = useAuth();
+  const userId = auth.user?.userId ?? null;
 
+  const wallet = useWallet();
   const [onlyUnread, setOnlyUnread] = useState(defaultOnlyUnread);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -250,6 +252,7 @@ export default function NotificationsPanel(props: {
   );
 
   async function fetchNotifications(nextOnlyUnread = onlyUnread) {
+    if (auth.loading) return;
     if (!userId) {
       setError(
         "No userId found"
