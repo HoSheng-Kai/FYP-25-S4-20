@@ -113,7 +113,7 @@ export default function ManufacturerProductsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [transferOpen, setTransferOpen] = useState(false);
 
-  const GET_BY_USER_URL = "http://localhost:3000/api/distributors/products-by-user";
+  const GET_BY_USER_URL = "http://34.177.85.28:3000/api/distributors/products-by-user";
 
   // ======================
   // ACTIONS MENU (⋯)

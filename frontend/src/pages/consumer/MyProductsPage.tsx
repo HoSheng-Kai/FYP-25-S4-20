@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import MyProductCard from "../../components/products/MyProductCard";
 
-const API = "http://localhost:3000/api/products";
+const API = "http://34.177.85.28:3000/api/products";
 
 export type OwnedProduct = {
   productId: number;

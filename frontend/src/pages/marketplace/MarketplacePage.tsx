@@ -3,7 +3,7 @@ import axios from "axios";
 import ListingCard from "../../components/marketplace/ListingCard";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
-const API = "http://localhost:3000/api/products";
+const API = "http://34.177.85.28:3000/api/products";
 
 /**
  * This matches EXACTLY what your backend returns in ProductController.getMarketplaceListings()

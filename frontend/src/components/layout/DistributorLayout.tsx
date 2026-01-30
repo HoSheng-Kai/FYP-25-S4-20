@@ -2,7 +2,7 @@ import React from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
 
-const USERS_API_BASE_URL = "http://localhost:3000/api/user";
+const USERS_API_BASE_URL = "http://34.177.85.28:3000/api/user";
 
 const linkBaseStyle: React.CSSProperties = {
   color: "white",

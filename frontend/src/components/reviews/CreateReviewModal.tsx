@@ -3,7 +3,7 @@
 import { useState } from "react";
 import axios from "axios";
 
-const API = "http://localhost:3000/api/reviews";
+const API = "http://34.177.85.28:3000/api/reviews";
 
 interface CreateReviewModalProps {
   targetUserId: number;

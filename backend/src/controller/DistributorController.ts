@@ -41,276 +41,276 @@ class DistributorController {
     // ============================================================
     // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
     // ============================================================
-    async registerProduct(req: Request, res: Response) {
-        const { manufacturer_id, serial_no, product_name, batch_no, category, manufacture_date, description, product_id, tx_hash, product_pda } = req.body;
+    // async registerProduct(req: Request, res: Response) {
+    //     const { manufacturer_id, serial_no, product_name, batch_no, category, manufacture_date, description, product_id, tx_hash, product_pda } = req.body;
 
-        // If product_id is provided, register existing product; otherwise require manufacturer_id and serial_no
-        if (!product_id && (!manufacturer_id || !serial_no)) {
-            return res.status(400).json({
-                success: false,
-                error: "Missing required fields: provide either product_id (for existing product) or manufacturer_id + serial_no (for new product)"
-            });
-        }
+    //     // If product_id is provided, register existing product; otherwise require manufacturer_id and serial_no
+    //     if (!product_id && (!manufacturer_id || !serial_no)) {
+    //         return res.status(400).json({
+    //             success: false,
+    //             error: "Missing required fields: provide either product_id (for existing product) or manufacturer_id + serial_no (for new product)"
+    //         });
+    //     }
 
-        try {
-            let manufacturer: any;
-            let actualSerialNo: string;
-            let actualProductName: string | null = product_name || null;
-            let actualBatchNo: string | null = batch_no || null;
-            let actualCategory: string | null = category || null;
-            let actualManufactureDate: string | null = manufacture_date || null;
-            let actualDescription: string | null = description || null;
-            let existingProductId: number | null = null;
-            let actualManufacturerId: number;
+    //     try {
+    //         let manufacturer: any;
+    //         let actualSerialNo: string;
+    //         let actualProductName: string | null = product_name || null;
+    //         let actualBatchNo: string | null = batch_no || null;
+    //         let actualCategory: string | null = category || null;
+    //         let actualManufactureDate: string | null = manufacture_date || null;
+    //         let actualDescription: string | null = description || null;
+    //         let existingProductId: number | null = null;
+    //         let actualManufacturerId: number;
 
-            if (product_id) {
-                // Registering an existing product from database
-                const existingProduct = await DistributorEntity.getProductById(product_id);
-                if (!existingProduct) {
-                    return res.status(404).json({
-                        success: false,
-                        error: `Product not found: ${product_id}`
-                    });
-                }
+    //         if (product_id) {
+    //             // Registering an existing product from database
+    //             const existingProduct = await DistributorEntity.getProductById(product_id);
+    //             if (!existingProduct) {
+    //                 return res.status(404).json({
+    //                     success: false,
+    //                     error: `Product not found: ${product_id}`
+    //                 });
+    //             }
 
-                // Check if already registered on-chain (has both pda and tx_hash)
-                if (existingProduct.product_pda && existingProduct.tx_hash) {
-                    return res.status(409).json({
-                        success: false,
-                        error: "Product already registered on-chain",
-                        product_pda: existingProduct.product_pda
-                    });
-                }
+    //             // Check if already registered on-chain (has both pda and tx_hash)
+    //             if (existingProduct.product_pda && existingProduct.tx_hash) {
+    //                 return res.status(409).json({
+    //                     success: false,
+    //                     error: "Product already registered on-chain",
+    //                     product_pda: existingProduct.product_pda
+    //                 });
+    //             }
 
-                existingProductId = product_id;
-                actualSerialNo = existingProduct.serial_no;
-                actualManufacturerId = existingProduct.registered_by;
+    //             existingProductId = product_id;
+    //             actualSerialNo = existingProduct.serial_no;
+    //             actualManufacturerId = existingProduct.registered_by;
 
-                // Get manufacturer from the product's registered_by field
-                manufacturer = await DistributorEntity.getUserById(existingProduct.registered_by);
-                if (!manufacturer) {
-                    return res.status(404).json({
-                        success: false,
-                        error: `Manufacturer not found for product: ${product_id}`
-                    });
-                }
-            } else {
-                // Registering a new product
-                actualSerialNo = serial_no;
-                actualManufacturerId = manufacturer_id;
+    //             // Get manufacturer from the product's registered_by field
+    //             manufacturer = await DistributorEntity.getUserById(existingProduct.registered_by);
+    //             if (!manufacturer) {
+    //                 return res.status(404).json({
+    //                     success: false,
+    //                     error: `Manufacturer not found for product: ${product_id}`
+    //                 });
+    //             }
+    //         } else {
+    //             // Registering a new product
+    //             actualSerialNo = serial_no;
+    //             actualManufacturerId = manufacturer_id;
 
-                manufacturer = await DistributorEntity.getUserById(manufacturer_id);
-                if (!manufacturer) {
-                    return res.status(404).json({
-                        success: false,
-                        error: `Manufacturer not found: ${manufacturer_id}`
-                    });
-                }
-            }
+    //             manufacturer = await DistributorEntity.getUserById(manufacturer_id);
+    //             if (!manufacturer) {
+    //                 return res.status(404).json({
+    //                     success: false,
+    //                     error: `Manufacturer not found: ${manufacturer_id}`
+    //                 });
+    //             }
+    //         }
 
-            // If tx_hash and product_pda provided, just confirm/update the database (like ProductController.confirmProductOnChain)
-            if (tx_hash && product_pda) {
-                let finalProductId: number;
+    //         // If tx_hash and product_pda provided, just confirm/update the database (like ProductController.confirmProductOnChain)
+    //         if (tx_hash && product_pda) {
+    //             let finalProductId: number;
 
-                if (existingProductId) {
-                    await DistributorEntity.updateProductPda(existingProductId, product_pda, tx_hash);
-                    finalProductId = existingProductId;
-                } else {
-                    finalProductId = await DistributorEntity.upsertProduct({
-                        manufacturer_id: actualManufacturerId,
-                        serial_no: actualSerialNo,
-                        product_name: actualProductName,
-                        batch_no: actualBatchNo,
-                        category: actualCategory,
-                        manufacture_date: actualManufactureDate,
-                        description: actualDescription,
-                        product_pda: product_pda,
-                        tx_hash: tx_hash
-                    });
-                }
+    //             if (existingProductId) {
+    //                 await DistributorEntity.updateProductPda(existingProductId, product_pda, tx_hash);
+    //                 finalProductId = existingProductId;
+    //             } else {
+    //                 finalProductId = await DistributorEntity.upsertProduct({
+    //                     manufacturer_id: actualManufacturerId,
+    //                     serial_no: actualSerialNo,
+    //                     product_name: actualProductName,
+    //                     batch_no: actualBatchNo,
+    //                     category: actualCategory,
+    //                     manufacture_date: actualManufactureDate,
+    //                     description: actualDescription,
+    //                     product_pda: product_pda,
+    //                     tx_hash: tx_hash
+    //                 });
+    //             }
 
-                return res.json({
-                    success: true,
-                    data: {
-                        product_id: finalProductId,
-                        manufacturer: manufacturer.username,
-                        serial_no: actualSerialNo,
-                        product_pda: product_pda,
-                        tx_hash: tx_hash,
-                        confirmed: true
-                    }
-                });
-            }
+    //             return res.json({
+    //                 success: true,
+    //                 data: {
+    //                     product_id: finalProductId,
+    //                     manufacturer: manufacturer.username,
+    //                     serial_no: actualSerialNo,
+    //                     product_pda: product_pda,
+    //                     tx_hash: tx_hash,
+    //                     confirmed: true
+    //                 }
+    //             });
+    //         }
 
-            // No tx_hash provided - do full blockchain registration
-            // 2. Create keypair from DB private key
-            const manufacturerKeypair = Keypair.fromSecretKey(bs58.decode(manufacturer.private_key));
+    //         // No tx_hash provided - do full blockchain registration
+    //         // 2. Create keypair from DB private key
+    //         const manufacturerKeypair = Keypair.fromSecretKey(bs58.decode(manufacturer.private_key));
 
-            // 3. Derive product PDA
-            const [productPdaDerived, bump, serialHash] = deriveProductPda(manufacturerKeypair.publicKey, actualSerialNo);
+    //         // 3. Derive product PDA
+    //         const [productPdaDerived, bump, serialHash] = deriveProductPda(manufacturerKeypair.publicKey, actualSerialNo);
 
-            // 4. Check if product already exists on-chain
-            const existingAccount = await connection.getAccountInfo(productPdaDerived);
-            if (existingAccount) {
-                // If registering existing product, update the database with the PDA
-                if (existingProductId) {
-                    await DistributorEntity.updateProductPda(existingProductId, productPdaDerived.toBase58(), null);
-                    return res.status(409).json({
-                        success: false,
-                        error: "Product already registered on-chain (database updated with PDA)",
-                        product_id: existingProductId,
-                        product_pda: productPdaDerived.toBase58()
-                    });
-                }
-                return res.status(409).json({
-                    success: false,
-                    error: "Product already registered on-chain",
-                    product_pda: productPdaDerived.toBase58()
-                });
-            }
+    //         // 4. Check if product already exists on-chain
+    //         const existingAccount = await connection.getAccountInfo(productPdaDerived);
+    //         if (existingAccount) {
+    //             // If registering existing product, update the database with the PDA
+    //             if (existingProductId) {
+    //                 await DistributorEntity.updateProductPda(existingProductId, productPdaDerived.toBase58(), null);
+    //                 return res.status(409).json({
+    //                     success: false,
+    //                     error: "Product already registered on-chain (database updated with PDA)",
+    //                     product_id: existingProductId,
+    //                     product_pda: productPdaDerived.toBase58()
+    //                 });
+    //             }
+    //             return res.status(409).json({
+    //                 success: false,
+    //                 error: "Product already registered on-chain",
+    //                 product_pda: productPdaDerived.toBase58()
+    //             });
+    //         }
 
-            // 5. Airdrop SOL if needed
-            const minBalance = 0.05 * 1e9;
+    //         // 5. Airdrop SOL if needed
+    //         const minBalance = 0.05 * 1e9;
 
-            let balance = await connection.getBalance(manufacturerKeypair.publicKey);
-            if (balance < minBalance) {
-                try {
-                    await airdropSol(manufacturer.private_key, 0.1 * 1e9);
-                    balance = await connection.getBalance(manufacturerKeypair.publicKey);
-                } catch (e: any) {}
-            }
-            if (balance < minBalance) {
-                return res.status(400).json({
-                    success: false,
-                    error: "Insufficient SOL balance for manufacturer",
-                    details: `Balance: ${balance / 1e9} SOL. Fund wallet: ${manufacturerKeypair.publicKey.toBase58()}`
-                });
-            }
+    //         let balance = await connection.getBalance(manufacturerKeypair.publicKey);
+    //         if (balance < minBalance) {
+    //             try {
+    //                 await airdropSol(manufacturer.private_key, 0.1 * 1e9);
+    //                 balance = await connection.getBalance(manufacturerKeypair.publicKey);
+    //             } catch (e: any) {}
+    //         }
+    //         if (balance < minBalance) {
+    //             return res.status(400).json({
+    //                 success: false,
+    //                 error: "Insufficient SOL balance for manufacturer",
+    //                 details: `Balance: ${balance / 1e9} SOL. Fund wallet: ${manufacturerKeypair.publicKey.toBase58()}`
+    //             });
+    //         }
 
-            // 6. Create metadata
-            const metadata = {
-                serialNo: actualSerialNo,
-                productName: actualProductName,
-                category: actualCategory,
-                batchNo: actualBatchNo,
-                manufactureDate: actualManufactureDate,
-                description: actualDescription
-            };
+    //         // 6. Create metadata
+    //         const metadata = {
+    //             serialNo: actualSerialNo,
+    //             productName: actualProductName,
+    //             category: actualCategory,
+    //             batchNo: actualBatchNo,
+    //             manufactureDate: actualManufactureDate,
+    //             description: actualDescription
+    //         };
 
-            const metadataJson = JSON.stringify(metadata);
-            const metadataHash = new Uint8Array(crypto.createHash("sha256").update(metadataJson).digest());
-            const metadataHashHex = Buffer.from(metadataHash).toString("hex");
+    //         const metadataJson = JSON.stringify(metadata);
+    //         const metadataHash = new Uint8Array(crypto.createHash("sha256").update(metadataJson).digest());
+    //         const metadataHashHex = Buffer.from(metadataHash).toString("hex");
 
-            const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
-            const metadataUri = `${baseUrl}/metadata/${metadataHashHex}.json`;
+    //         const baseUrl = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
+    //         const metadataUri = `${baseUrl}/metadata/${metadataHashHex}.json`;
 
-            // 7. Create Anchor provider and program
-            const wallet = {
-                publicKey: manufacturerKeypair.publicKey,
-                signTransaction: async (tx: any) => { tx.sign(manufacturerKeypair); return tx; },
-                signAllTransactions: async (txs: any) => { txs.forEach((tx: any) => tx.sign(manufacturerKeypair)); return txs; },
-            };
-            const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
-            const program = new Program(idlJson as unknown as Idl, provider);
+    //         // 7. Create Anchor provider and program
+    //         const wallet = {
+    //             publicKey: manufacturerKeypair.publicKey,
+    //             signTransaction: async (tx: any) => { tx.sign(manufacturerKeypair); return tx; },
+    //             signAllTransactions: async (txs: any) => { txs.forEach((tx: any) => tx.sign(manufacturerKeypair)); return txs; },
+    //         };
+    //         const provider = new AnchorProvider(connection, wallet as any, { commitment: "confirmed" });
+    //         const program = new Program(idlJson as unknown as Idl, provider);
 
-            // 8. Call register_product on smart contract
-            const txResult = await program.methods
-                .registerProduct(
-                    Array.from(serialHash),
-                    Array.from(metadataHash),
-                    metadataUri
-                )
-                .accounts({
-                    product: productPdaDerived,
-                    manufacturer: manufacturerKeypair.publicKey,
-                })
-                .signers([manufacturerKeypair])
-                .rpc();
+    //         // 8. Call register_product on smart contract
+    //         const txResult = await program.methods
+    //             .registerProduct(
+    //                 Array.from(serialHash),
+    //                 Array.from(metadataHash),
+    //                 metadataUri
+    //             )
+    //             .accounts({
+    //                 product: productPdaDerived,
+    //                 manufacturer: manufacturerKeypair.publicKey,
+    //             })
+    //             .signers([manufacturerKeypair])
+    //             .rpc();
 
-            // 9. Insert/update product in database
-            let finalProductId: number;
+    //         // 9. Insert/update product in database
+    //         let finalProductId: number;
 
-            if (existingProductId) {
-                // Update existing product with blockchain data
-                await DistributorEntity.updateProductPda(existingProductId, productPdaDerived.toBase58(), txResult);
-                finalProductId = existingProductId;
-            } else {
-                // Insert new product
-                finalProductId = await DistributorEntity.upsertProduct({
-                    manufacturer_id: actualManufacturerId,
-                    serial_no: actualSerialNo,
-                    product_name: actualProductName,
-                    batch_no: actualBatchNo,
-                    category: actualCategory,
-                    manufacture_date: actualManufactureDate,
-                    description: actualDescription,
-                    product_pda: productPdaDerived.toBase58(),
-                    tx_hash: txResult
-                });
-            }
+    //         if (existingProductId) {
+    //             // Update existing product with blockchain data
+    //             await DistributorEntity.updateProductPda(existingProductId, productPdaDerived.toBase58(), txResult);
+    //             finalProductId = existingProductId;
+    //         } else {
+    //             // Insert new product
+    //             finalProductId = await DistributorEntity.upsertProduct({
+    //                 manufacturer_id: actualManufacturerId,
+    //                 serial_no: actualSerialNo,
+    //                 product_name: actualProductName,
+    //                 batch_no: actualBatchNo,
+    //                 category: actualCategory,
+    //                 manufacture_date: actualManufactureDate,
+    //                 description: actualDescription,
+    //                 product_pda: productPdaDerived.toBase58(),
+    //                 tx_hash: txResult
+    //             });
+    //         }
 
-            // 10. Create initial blockchain_node and ownership records (for ownership transfer to work)
-            const currentDate = new Date();
+    //         // 10. Create initial blockchain_node and ownership records (for ownership transfer to work)
+    //         const currentDate = new Date();
 
-            // Get the block slot from the confirmed transaction
-            const txInfo = await connection.getTransaction(txResult, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
-            const blockSlot = txInfo?.slot ?? 0;
+    //         // Get the block slot from the confirmed transaction
+    //         const txInfo = await connection.getTransaction(txResult, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
+    //         const blockSlot = txInfo?.slot ?? 0;
 
-            // Create blockchain_node for the registration transaction
-            const blockchainNodeData: blockchain_node = {
-                tx_hash: txResult,
-                prev_tx_hash: null!, // First transaction, no previous
-                from_user_id: actualManufacturerId,
-                from_public_key: manufacturer.public_key,
-                to_user_id: actualManufacturerId, // Manufacturer is initial owner
-                to_public_key: manufacturer.public_key,
-                product_id: finalProductId,
-                block_slot: blockSlot,
-                created_on: currentDate
-            };
+    //         // Create blockchain_node for the registration transaction
+    //         const blockchainNodeData: blockchain_node = {
+    //             tx_hash: txResult,
+    //             prev_tx_hash: null!, // First transaction, no previous
+    //             from_user_id: actualManufacturerId,
+    //             from_public_key: manufacturer.public_key,
+    //             to_user_id: actualManufacturerId, // Manufacturer is initial owner
+    //             to_public_key: manufacturer.public_key,
+    //             product_id: finalProductId,
+    //             block_slot: blockSlot,
+    //             created_on: currentDate
+    //         };
 
-            await DistributorEntity.createBlockchainNode(blockchainNodeData);
+    //         await DistributorEntity.createBlockchainNode(blockchainNodeData);
 
-            // Create initial ownership record (manufacturer owns the product initially)
-            const initialOwnership: ownership = {
-                owner_id: actualManufacturerId,
-                owner_public_key: manufacturer.public_key,
-                product_id: finalProductId,
-                start_on: currentDate,
-                end_on: null,
-                tx_hash: txResult
-            };
+    //         // Create initial ownership record (manufacturer owns the product initially)
+    //         const initialOwnership: ownership = {
+    //             owner_id: actualManufacturerId,
+    //             owner_public_key: manufacturer.public_key,
+    //             product_id: finalProductId,
+    //             start_on: currentDate,
+    //             end_on: null,
+    //             tx_hash: txResult
+    //         };
 
-            await DistributorEntity.createOwnership(initialOwnership);
+    //         await DistributorEntity.createOwnership(initialOwnership);
 
-            res.json({
-                success: true,
-                data: {
-                    product_id: finalProductId,
-                    manufacturer: manufacturer.username,
-                    serial_no: actualSerialNo,
-                    product_pda: productPdaDerived.toBase58(),
-                    tx_hash: txResult,
-                    metadata_uri: metadataUri,
-                    metadata_hash: metadataHashHex,
-                    initial_owner: {
-                        user_id: actualManufacturerId,
-                        username: manufacturer.username,
-                        public_key: manufacturer.public_key
-                    }
-                }
-            });
+    //         res.json({
+    //             success: true,
+    //             data: {
+    //                 product_id: finalProductId,
+    //                 manufacturer: manufacturer.username,
+    //                 serial_no: actualSerialNo,
+    //                 product_pda: productPdaDerived.toBase58(),
+    //                 tx_hash: txResult,
+    //                 metadata_uri: metadataUri,
+    //                 metadata_hash: metadataHashHex,
+    //                 initial_owner: {
+    //                     user_id: actualManufacturerId,
+    //                     username: manufacturer.username,
+    //                     public_key: manufacturer.public_key
+    //                 }
+    //             }
+    //         });
 
-        } catch (error: any) {
-            console.error("Register product failed:", error);
-            res.status(500).json({
-                success: false,
-                error: "Failed to register product on-chain",
-                details: error.message,
-                logs: error.logs || null
-            });
-        }
-    }
+    //     } catch (error: any) {
+    //         console.error("Register product failed:", error);
+    //         res.status(500).json({
+    //             success: false,
+    //             error: "Failed to register product on-chain",
+    //             details: error.message,
+    //             logs: error.logs || null
+    //         });
+    //     }
+    // }
 
     // ================================
     // Wallet-Based Transfer Flow (3 steps)
