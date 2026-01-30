@@ -12,6 +12,7 @@ run:
 
 # Production mode (background with pm2)
 run-prod:
+	-pm2 delete fyp-backend 2>/dev/null || true
 	docker-compose up --build -d
 	docker-compose exec postgres pg_isready -h localhost -U admin -d fyp_db --timeout=30
 	npm install
@@ -27,7 +28,7 @@ clean:
 	docker system prune -f
 	docker volume prune -f
 # 	-rmdir /s /q docker\postgres-data
-	-rm -rf docker/postgres-data
+	-sudo rm -rf docker/postgres-data
 
 check:
 	docker exec -it backend_postgres psql -U admin -d fyp_db -c "\dt fyp_25_s4_20.*"
