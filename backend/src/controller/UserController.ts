@@ -9,81 +9,25 @@ import bs58 from 'bs58';
 import { encrypt, decrypt } from '../utils/encryption';
 
 class UserController {
-  // ============================================================
-  // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
-  // ============================================================
-  // async createAccount(req: Request, res: Response){
-  //   try{
-  //     let key_pair = Keypair.generate();
-  //     let public_key = key_pair.publicKey.toBase58();
-  //     let private_key = bs58.encode(key_pair.secretKey);
-
-  //     // // TODO: Encryption
-  //     // let encrypted_email = await encrypt(req.body.email);
-  //     // let encrypted_password = await encrypt(req.body.password);
-  //     // let encrypted_private_key = await encrypt(private_key);
-
-  //     // await User.createAccount(
-  //     //   req.body.username,
-  //     //   encrypted_password,
-  //     //   encrypted_email,
-  //     //   req.body.role_id,
-  //     //   encrypted_private_key,
-  //     //   public_key
-  //     // );
-
-  //     // Prefer any explicitly provided public_key, else use generated one
-  //     const resolvedPublicKey = req.body.public_key ?? public_key;
-
-  //     await User.createAccount(
-  //       req.body.username,
-  //       req.body.password,
-  //       req.body.email,
-  //       req.body.role_id,
-  //       private_key,
-  //       resolvedPublicKey
-  //     );
-
-  //     res.json({
-  //       success: true
-  //     });
-
-  //   } catch(error: any){
-  //     res.status(500).json({
-  //       success: false,
-  //       error: 'Failed to create account',
-  //       details: error.message
-  //     })
-  //   }
-  // }
 
   async createAccount(req: Request, res: Response){
     try{
-  
-      // // TODO: Encryption
-      // let encrypted_email = await encrypt(req.body.email);
-      // let encrypted_password = await encrypt(req.body.password);
-  
-      // await User.createAccount(
-      //   req.body.username,
-      //   encrypted_password,
-      //   encrypted_email,
-      //   req.body.role_id,
-      //   publicKey
-      // );
-  
+      // Encrypt email and password
+      let encrypted_email = await encrypt(req.body.email);
+      let encrypted_password = await encrypt(req.body.password);
+
       await User.createAccount(
         req.body.username,
-        req.body.password,
-        req.body.email,
+        encrypted_password,
+        encrypted_email,
         req.body.role_id,
         req.body.public_key
       );
-  
+
       res.json({
         success: true
       });
-  
+
     } catch(error: any){
       res.status(500).json({
         success: false,
@@ -99,19 +43,12 @@ class UserController {
         req.body.username
       );
 
-      // // TODO: Decryption
-      // if(req.body.password != await decrypt(user.password)){
-      //   res.json({
-      //   success: false,
-      //   error: 'User entered wrong password'
-      //   });
-      //   return;
-      // }
-
-      if(req.body.password != user.password){
+      // Decrypt password and compare
+      let decrypted_password = await decrypt(user.password);
+      if(req.body.password != decrypted_password){
         res.json({
-        success: false,
-        error: 'User entered wrong password'
+          success: false,
+          error: 'User entered wrong password'
         });
         return;
       }
@@ -119,9 +56,9 @@ class UserController {
       // If not verified
       if(!user.verified){
         res.json({
-        success: false,
-        error: 'User is not verified',
-        verified: user.verified
+          success: false,
+          error: 'User is not verified',
+          verified: user.verified
         });
         return;
       }
@@ -129,18 +66,17 @@ class UserController {
       // If banned
       if(user.banned){
         res.json({
-        success: false,
-        error: 'Your account is banned. Please email admin@blocktrace.com for any queries',
-        banned: user.banned
+          success: false,
+          error: 'Your account is banned. Please email admin@blocktrace.com for any queries',
+          banned: user.banned
         });
         return;
       }
 
-      // // TODO: Decryption
-      // let email = await decrypt(user.email);
-      
+      // Decrypt email and send OTP
+      let decrypted_email = await decrypt(user.email);
       let otp: number = generate_OTP();
-      await sendOTP(user.email, otp);
+      await sendOTP(decrypted_email, otp);
 
       res.json({
         success: true,
@@ -149,14 +85,14 @@ class UserController {
         userId: user.userId,
         verified: user.verified
       });
-      
+
     }catch(error: any){
       res.status(500).json({
         success: false,
         error: 'Failed to login account',
         details: error.message
       })
-    } 
+    }
   }
 
   async logoutAccount(req: Request, res: Response){
@@ -195,7 +131,9 @@ class UserController {
     try {
       const { userId, newPassword } = req.body;
 
-      await User.updatePassword(userId, newPassword);
+      // Encrypt new password before saving
+      const encrypted_password = await encrypt(newPassword);
+      await User.updatePassword(userId, encrypted_password);
 
       res.json({
         success: true,
@@ -213,7 +151,9 @@ class UserController {
     try {
       const { userId, newEmail } = req.body;
 
-      await User.updateEmail(userId, newEmail);
+      // Encrypt new email before saving
+      const encrypted_email = await encrypt(newEmail);
+      await User.updateEmail(userId, encrypted_email);
 
       res.json({
         success: true,
@@ -251,9 +191,10 @@ class UserController {
         return;
       }
 
-      // Generate OTP and send to email
+      // Decrypt email and send OTP
+      let decrypted_email = await decrypt(user.email);
       let otp: number = generate_OTP();
-      await sendOTP(user.email, otp);
+      await sendOTP(decrypted_email, otp);
 
       res.json({
         success: true,

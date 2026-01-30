@@ -11,17 +11,6 @@ class DistributorEntity {
         return result.rows[0] || null;
     }
 
-    // ============================================================
-    // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
-    // ============================================================
-    static async getUserByIdWithPrivateKey(userId: number) {
-        const result = await pool.query(
-            `SELECT user_id, username, public_key, private_key FROM fyp_25_s4_20.users WHERE user_id = $1`,
-            [userId]
-        );
-        return result.rows[0] || null;
-    }
-
     static async getProductById(productId: number) {
         const result = await pool.query(
             `SELECT product_id, serial_no, product_pda, registered_by, tx_hash, track FROM fyp_25_s4_20.product WHERE product_id = $1`,
