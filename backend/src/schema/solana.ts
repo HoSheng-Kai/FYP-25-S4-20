@@ -22,45 +22,45 @@ connection.getVersion()
     console.error('Solana connection error:', err);
   });
 
-// ============================================================
-// ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
-// ============================================================
-async function airdropSol(wallet_private_key: string, amount: number) {
-    const senderKeypair = Keypair.fromSecretKey(bs58.decode(wallet_private_key));
+// // ============================================================
+// // ⚠️ DEPRECATED - USES PRIVATE KEYS - DELETE AFTER TESTING ⚠️
+// // ============================================================
+// async function airdropSol(wallet_private_key: string, amount: number) {
+//     const senderKeypair = Keypair.fromSecretKey(bs58.decode(wallet_private_key));
     
-    console.log('Requesting airdrop for:', senderKeypair.publicKey.toBase58());
-    console.log('Amount (lamports):', amount);
+//     console.log('Requesting airdrop for:', senderKeypair.publicKey.toBase58());
+//     console.log('Amount (lamports):', amount);
     
-    try {
-        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+//     try {
+//         const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
         
-        // Request airdrop
-        const signature = await connection.requestAirdrop(
-            senderKeypair.publicKey,
-            amount
-        );
+//         // Request airdrop
+//         const signature = await connection.requestAirdrop(
+//             senderKeypair.publicKey,
+//             amount
+//         );
                 
-        const strategy = {
-            signature,
-            blockhash,
-            lastValidBlockHeight
-        };
+//         const strategy = {
+//             signature,
+//             blockhash,
+//             lastValidBlockHeight
+//         };
         
-        const confirmation = await Promise.race([
-            connection.confirmTransaction(strategy, 'confirmed'),
-            new Promise((_, reject) => 
-                setTimeout(() => reject(new Error('Airdrop timeout after 30s')), 30000)
-            )
-        ]);
+//         const confirmation = await Promise.race([
+//             connection.confirmTransaction(strategy, 'confirmed'),
+//             new Promise((_, reject) => 
+//                 setTimeout(() => reject(new Error('Airdrop timeout after 30s')), 30000)
+//             )
+//         ]);
         
-        const balance = await connection.getBalance(senderKeypair.publicKey);
+//         const balance = await connection.getBalance(senderKeypair.publicKey);
         
-        return balance;
-    } catch (error) {
-        console.error('Airdrop error:', error);
-        throw error;
-    }
-}
+//         return balance;
+//     } catch (error) {
+//         console.error('Airdrop error:', error);
+//         throw error;
+//     }
+// }
 
 
 export {connection, airdropSol, MEMO_PROGRAM_ID}

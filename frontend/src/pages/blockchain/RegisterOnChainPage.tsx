@@ -1,5 +1,5 @@
 // src/pages/blockchain/RegisterOnChainPage.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { SystemProgram } from "@solana/web3.js";
@@ -304,8 +304,15 @@ export default function RegisterOnChainPage() {
   const canDeleteDraft = !isLocked && hasDraftSaved;
   const canConfirmDraft = !isLocked && hasDraftSaved;
 
+  const sendInFlightRef = useRef(false);
+  const [isSendingChain, setIsSendingChain] = useState(false);
+
   const canSendToBlockchain =
-    hasConfirmed && !isFinalized && allFieldsFilled && !!wallet.publicKey;
+    hasConfirmed &&
+    !isFinalized &&
+    allFieldsFilled &&
+    !!wallet.publicKey &&
+    !isSendingChain;
 
   useEffect(() => {
     setUiError("");
@@ -384,7 +391,7 @@ export default function RegisterOnChainPage() {
     }
   }
 
-  // ✅ Safety net: if confirmed/finalized but qr missing, fetch it
+  // Safety net: if confirmed/finalized but qr missing, fetch it
   useEffect(() => {
     if (!productId) return;
     if (!(draftStage === "confirmed" || isFinalized)) return;
@@ -487,6 +494,10 @@ export default function RegisterOnChainPage() {
   }
 
   async function sendToBlockchain() {
+    if (sendInFlightRef.current) return; // hard guard
+    sendInFlightRef.current = true;
+    setIsSendingChain(true);
+
     try {
       setUiError("");
 
@@ -543,11 +554,25 @@ export default function RegisterOnChainPage() {
       setIsFinalized(true);
 
       if (!qrUrl) await fetchQr(productId);
-    } catch (e: any) {
+    } 
+    catch (e: any) {
+      const msg = String(e?.message ?? "");
+
+      if (msg.includes("AlreadyProcessed")) {
+        setUiError("That transaction was already processed. Refreshing status…");
+        if (productId) await loadProduct(productId);
+        return;
+      }
+
       console.error("sendToBlockchain error:", e);
-      setUiError(e?.message || "Send to blockchain failed.");
-      alert(e?.message || "Send to blockchain failed.");
+      setUiError(msg || "Send to blockchain failed.");
+      alert(msg || "Send to blockchain failed.");
     }
+
+    finally {
+    setIsSendingChain(false);
+    sendInFlightRef.current = false;
+  }
   }
 
   return (
