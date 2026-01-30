@@ -5,7 +5,7 @@ import axios from "axios";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 
-const API = "http://34.177.85.28:3000/api/products";
+const API = "https://fyp-25-s4-20.duckdns.org:3000/api/products";
 
 type OwnedProduct = {
   productId: number;

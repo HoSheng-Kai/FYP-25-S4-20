@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import TransactionHistory from '../../components/products/TransactionHistory';
 
-const API_BASE = 'http://34.177.85.28:3000/api';
+const API_BASE = 'https://fyp-25-s4-20.duckdns.org:3000/api';
 
 interface Product {
   product_id: number;

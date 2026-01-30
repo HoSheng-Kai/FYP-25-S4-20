@@ -3,7 +3,7 @@ import axios from "axios";
 import ReviewCard from "../../components/reviews/ReviewCard";
 import type { Review } from "../consumer/UserReviewsPage";
 
-const API = "http://34.177.85.28:3000/api/reviews";
+const API = "https://fyp-25-s4-20.duckdns.org:3000/api/reviews";
 
 export default function RetailerReviewsPage() {
   const ownerId = useMemo(() => {

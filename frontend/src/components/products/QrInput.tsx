@@ -99,7 +99,7 @@ const RESOLVE_SERIAL_URL = `${PRODUCTS_API_BASE_URL}/resolve-serial`;
 
 /**
  * QR payload is now URL like:
- *   http://34.177.85.28:5173/products/12/details
+ *   https://fyp-25-s4-20.duckdns.org:5173/products/12/details
  * Extract productId from it.
  */
 const extractProductIdFromUrl = (inputRaw: string): number | null => {
