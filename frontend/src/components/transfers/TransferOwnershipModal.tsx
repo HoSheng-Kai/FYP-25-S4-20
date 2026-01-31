@@ -1,4 +1,3 @@
-// src/components/transfers/TransferOwnershipModal.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useWallet } from "@solana/wallet-adapter-react";

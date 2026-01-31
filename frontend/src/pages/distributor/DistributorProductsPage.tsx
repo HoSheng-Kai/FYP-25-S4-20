@@ -5,7 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 import { API_ROOT } from "../../config/api";
-import { useAuth } from "../../auth/AuthContext"; // adjust if needed
+import { useAuth } from "../../auth/AuthContext";
 
 type BackendProduct = {
   product_id: number;
@@ -54,7 +54,7 @@ export default function DistributorProductsPage() {
   const navigate = useNavigate();
   const { auth } = useAuth();
 
-  // ✅ cookie-auth source of truth
+  // cookie-auth source of truth
   const distributorId = auth.user?.userId ?? 0;
 
   const wallet = useWallet();

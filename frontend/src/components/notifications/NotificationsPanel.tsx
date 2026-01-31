@@ -1,4 +1,3 @@
-// src/components/notifications/NotificationsPanel.tsx
 import React, { useEffect, useMemo, useState, useRef } from "react";
 import axios from "axios";
 import { API_ROOT, NOTIFICATIONS_API_BASE_URL } from "../../config/api";

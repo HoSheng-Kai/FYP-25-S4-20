@@ -6,8 +6,6 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-const API = `${API_ROOT}/api/products`;
-
 type OwnedProduct = {
   productId: number;
   serialNo: string;
@@ -41,7 +39,7 @@ export default function ConsumerTransferOwnershipPage() {
         return;
       }
       try {
-        const res = await axios.get<{ success: boolean; data?: OwnedProduct[]; error?: string }>(`${API}/owned`, { params: { userId } });
+        const res = await axios.get<{ success: boolean; data?: OwnedProduct[]; error?: string }>(`${API_ROOT}/products/owned`, { params: { userId } });
         if (res.data.success && res.data.data) {
           setProducts(res.data.data);
         } else {

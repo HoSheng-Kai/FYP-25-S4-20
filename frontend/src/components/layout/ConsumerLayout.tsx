@@ -5,8 +5,6 @@ import axios from "axios";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-const CHATS_API_BASE_URL = `${API_ROOT}/chats`;
-
 const linkBaseStyle: React.CSSProperties = {
   color: "white",
   textDecoration: "none",
@@ -36,7 +34,7 @@ export default function ConsumerLayout() {
 
     const load = async () => {
       try {
-        const res = await axios.get(`${CHATS_API_BASE_URL}/threads`, {
+        const res = await axios.get(`${API_ROOT}/chats/threads`, {
           params: { userId },
           withCredentials: true,
         });

@@ -4,8 +4,6 @@ import MyProductCard from "../../components/products/MyProductCard";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-const API = `${API_ROOT}/api/products`;
-
 export type OwnedProduct = {
   productId: number;
   serialNo: string;
@@ -43,7 +41,7 @@ export default function MyProductsPage() {
           success: boolean;
           data?: OwnedProduct[];
           error?: string;
-        }>(`${API}/owned`, { params: { userId }, withCredentials: true });
+        }>(`${API_ROOT}/products/owned`, { params: { userId }, withCredentials: true });
 
         if (res.data.success && res.data.data) {
           setProducts(res.data.data);

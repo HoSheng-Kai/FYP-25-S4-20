@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { USERS_API_BASE_URL, ADMIN_API_BASE_URL } from "../../config/api";
+import { ADMIN_API_BASE_URL } from "../../config/api";
 import NotificationsPanel from "../../components/notifications/NotificationsPanel";
 import { useAuth } from "../../auth/AuthContext";
 

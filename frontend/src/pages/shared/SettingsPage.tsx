@@ -2,28 +2,20 @@ import React, { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import axios from "axios";
 import { USERS_API_BASE_URL } from "../../config/api";
-
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useAuth } from "../../auth/AuthContext";
 
 export default function SettingsPage() {
   const { auth } = useAuth();
-
   const userId = useMemo(() => auth.user?.userId ?? null, [auth.user?.userId]);
-
-  // wallet hook
   const { publicKey, connected } = useWallet();
-
   const [newEmail, setNewEmail] = useState("");
   const [emailSubmitting, setEmailSubmitting] = useState(false);
-
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [pwSubmitting, setPwSubmitting] = useState(false);
-
   const [walletSubmitting, setWalletSubmitting] = useState(false);
-
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -33,11 +25,9 @@ export default function SettingsPage() {
   };
 
   if (auth.loading) return <div style={{ padding: 24 }}>Loading…</div>;
-  if (!auth.user) return null; // RequireAuth handles redirect
+  if (!auth.user) return null;
 
-  // ----------------------
-  // UPDATE EMAIL
-  // ----------------------
+  // Update Email
   const handleUpdateEmail = async (e: FormEvent) => {
     e.preventDefault();
     resetMessages();
@@ -68,10 +58,7 @@ export default function SettingsPage() {
       setEmailSubmitting(false);
     }
   };
-
-  // ----------------------
-  // UPDATE PASSWORD
-  // ----------------------
+  // Update Password
   const handleUpdatePassword = async (e: FormEvent) => {
     e.preventDefault();
     resetMessages();
@@ -114,9 +101,7 @@ export default function SettingsPage() {
     }
   };
 
-  // ----------------------
-  // UPDATE WALLET
-  // ----------------------
+  // Update Wallet
   const handleUpdateWallet = async () => {
     resetMessages();
 

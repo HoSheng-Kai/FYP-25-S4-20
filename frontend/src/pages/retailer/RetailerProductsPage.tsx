@@ -7,9 +7,6 @@ import TransferOwnershipModal from "../../components/transfers/TransferOwnership
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-/** =========================
- * Backend response for "products-by-user"
- * ========================= */
 type BackendProduct = {
   product_id: number;
   serial_no: string;
@@ -37,9 +34,6 @@ type GetProductsByUserResponse = {
   details?: string;
 };
 
-/** =========================
- * Your UI types
- * ========================= */
 type ProductRow = {
   productId: number;
   serialNumber: string;

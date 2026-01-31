@@ -4,8 +4,6 @@ import type { OwnedProduct } from "../../pages/consumer/MyProductsPage";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-const API = `${API_ROOT}/api/products`;
-
 interface QuickListingModalProps {
   product: OwnedProduct;
   onClose: () => void;
@@ -51,7 +49,7 @@ export default function QuickListingModal({ product, onClose, onSuccess }: Quick
         error?: string;
         details?: string;
       }>(
-        `${API}/listings`,
+        `${API_ROOT}/products/listings`,
         {
           userId,
           productId: product.productId,

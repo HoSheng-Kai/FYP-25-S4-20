@@ -6,8 +6,6 @@ import EditListingModal from "../../components/marketplace/EditListingModal";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-const API = `${API_ROOT}/api/products`;
-
 export type ListingStatus = "available" | "reserved" | "sold";
 
 export type MyListing = {
@@ -60,7 +58,7 @@ export default function MyListingsPage() {
           success: boolean;
           data?: MyListing[];
           error?: string;
-        }>(`${API}/my-listings`, {
+        }>(`${API_ROOT}/products/my-listings`, {
           params: { userId },
           withCredentials: true,
         });
@@ -101,7 +99,7 @@ export default function MyListingsPage() {
     try {
       setBusy(listingId, true);
 
-      await axios.delete(`${API}/listings/${listingId}`, {
+      await axios.delete(`${API_ROOT}/products/listings/${listingId}`, {
         params: { userId },
         withCredentials: true,
       });
@@ -134,7 +132,7 @@ export default function MyListingsPage() {
       setBusy(listingId, true);
 
       await axios.patch(
-        `${API}/listings/${listingId}/availability`,
+        `${API_ROOT}/products/listings/${listingId}/availability`,
         { userId, status: nextStatus },
         { withCredentials: true }
       );
@@ -160,7 +158,7 @@ export default function MyListingsPage() {
     if (!userId) throw new Error("Session expired. Please login again.");
 
     const res = await axios.put(
-      `${API}/listings/${listingId}`,
+      `${API_ROOT}/products/listings/${listingId}`,
       {
         userId,
         price: price === "" ? null : parseFloat(price),

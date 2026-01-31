@@ -1,5 +1,5 @@
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import AuthLayout from "../../components/layout/AuthLayout";
@@ -24,25 +24,6 @@ type ForgotPasswordResponse = {
   details?: string;
 };
 
-const isRole = (value: string | null): value is Role => {
-  return (
-    value === "admin" ||
-    value === "manufacturer" ||
-    value === "distributor" ||
-    value === "retailer" ||
-    value === "consumer"
-  );
-};
-
-/**
- * IMPORTANT:
- * We redirect to the ROLE ROOT path now:
- *  consumer -> /consumer
- *  manufacturer -> /manufacturer
- *  distributor -> /distributor
- *  retailer -> /retailer
- * This ensures the correct Layout + Sidebar is used.
- */
 const roleToRootPath = (r: Role) => {
   switch (r) {
     case "admin":
@@ -96,7 +77,7 @@ export default function LoginPage() {
       );
 
       if (!res.data.success) {
-        setError(res.data.error || "Failed to login");
+        setError(res.data.error || "Invalid username");
         return;
       }
 

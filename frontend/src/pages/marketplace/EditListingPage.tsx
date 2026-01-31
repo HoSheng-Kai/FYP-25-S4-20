@@ -4,8 +4,6 @@ import { useNavigate, useParams } from "react-router-dom";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-const API = `${API_ROOT}/api/products`;
-
 type ListingStatus = "available" | "reserved" | "sold";
 
 type EditListingPrefill = {
@@ -57,7 +55,7 @@ export default function EditListingPage() {
           data?: EditListingPrefill;
           error?: string;
           details?: string;
-        }>(`${API}/listings/${listingId}/edit`, {
+        }>(`${API_ROOT}/products/listings/${listingId}/edit`, {
           params: { userId },
           withCredentials: true,
         });
@@ -112,7 +110,7 @@ export default function EditListingPage() {
         error?: string;
         details?: string;
       }>(
-        `${API}/listings/${listingId}`,
+        `${API_ROOT}/products/listings/${listingId}`,
         {
           userId,
           price: price === "" ? null : Number(price),

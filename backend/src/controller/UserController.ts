@@ -50,7 +50,7 @@ class UserController {
       if(req.body.password != decrypted_password){
         res.json({
           success: false,
-          error: 'User entered wrong password'
+          error: 'Invalid password'
         });
         return;
       }
@@ -97,7 +97,7 @@ class UserController {
     }catch(error: any){
       res.status(500).json({
         success: false,
-        error: 'Failed to login account',
+        error: 'Invalid username',
         details: error.message
       })
     }

@@ -174,7 +174,7 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
 
             try {
               const res = await axios.post(
-                `${API_ROOT}/api/chats/create-thread`,
+                `${API_ROOT}/chats/create-thread`,
                 {
                   listingId: listing.listingId,
                   userId: buyerId,

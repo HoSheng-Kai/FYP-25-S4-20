@@ -5,8 +5,6 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-const API = `${API_ROOT}/api/products`;
-
 export type MarketplaceListing = {
   listingId: number;
   productId: number;
@@ -55,7 +53,7 @@ const MarketplacePage: React.FC = () => {
         success: boolean;
         data?: MarketplaceListing[];
         error?: string;
-      }>(`${API}/marketplace/listings`, { withCredentials: true });
+      }>(`${API_ROOT}/products/marketplace/listings`, { withCredentials: true });
 
       if (!res.data.success || !res.data.data) {
         setErr(res.data.error || "Failed to load marketplace listings.");

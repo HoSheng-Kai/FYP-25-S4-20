@@ -1,8 +1,6 @@
-// src/components/verify/QrInput.tsx
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import jsQR from "jsqr";
-
 import { PRODUCTS_API_BASE_URL } from "../../config/api";
 import TransactionHistory from "./TransactionHistory";
 

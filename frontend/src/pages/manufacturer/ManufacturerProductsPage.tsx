@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
-import { useAuth } from "../../auth/AuthContext"; // adjust path
+import { useAuth } from "../../auth/AuthContext";
 
 /** =========================
  * Backend response for "products-by-user"

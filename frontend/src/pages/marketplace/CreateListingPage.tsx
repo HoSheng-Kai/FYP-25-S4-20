@@ -4,8 +4,6 @@ import { useNavigate } from "react-router-dom";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-const API = `${API_ROOT}/api/products`;
-
 type OwnedProduct = {
   productId: number;
   serialNo: string;
@@ -57,7 +55,7 @@ export default function CreateListingPage() {
           success: boolean;
           data?: OwnedProduct[];
           error?: string;
-        }>(`${API}/owned`, {
+        }>(`${API_ROOT}/products/owned`, {
           params: { userId },
           withCredentials: true,
         });
@@ -115,7 +113,7 @@ export default function CreateListingPage() {
         error?: string;
         details?: string;
       }>(
-        `${API}/listings`,
+        `${API_ROOT}/products/listings`,
         {
           userId,
           productId: selectedProductId,
