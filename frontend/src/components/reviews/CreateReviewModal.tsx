@@ -1,14 +1,11 @@
-// frontend/src/components/reviews/CreateReviewModal.tsx
-
 import { useState } from "react";
 import axios from "axios";
-
-const API = "http://34.177.85.28:3000/api/reviews";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 interface CreateReviewModalProps {
   targetUserId: number;
   targetUsername: string;
-  currentUserId: number;
   onClose: () => void;
   onSuccess: () => void;
 }
@@ -16,10 +13,13 @@ interface CreateReviewModalProps {
 export default function CreateReviewModal({
   targetUserId,
   targetUsername,
-  currentUserId,
   onClose,
   onSuccess,
 }: CreateReviewModalProps) {
+  const { auth } = useAuth();
+  const authLoading = auth.loading;
+  const currentUserId = auth.user?.userId;
+
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -29,15 +29,29 @@ export default function CreateReviewModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (authLoading) {
+      setError("Checking session… please try again.");
+      return;
+    }
+    if (!currentUserId) {
+      setError("You are not logged in. Please login again.");
+      return;
+    }
+
     setSubmitting(true);
 
     try {
-      await axios.post(`${API}/create`, {
-        owner_id: targetUserId,
-        author_id: currentUserId,
-        rating,
-        comment: comment.trim() || null,
-      });
+      await axios.post(
+        `${API_ROOT}/reviews/create`,
+        {
+          owner_id: targetUserId,
+          author_id: currentUserId,
+          rating,
+          comment: comment.trim() || null,
+        },
+        { withCredentials: true }
+      );
 
       onSuccess();
     } catch (e: any) {
@@ -80,7 +94,6 @@ export default function CreateReviewModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div style={{ marginBottom: 24 }}>
           <h2 style={{ margin: 0, fontSize: 24, marginBottom: 8 }}>
             Write a Review
@@ -91,7 +104,6 @@ export default function CreateReviewModal({
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Rating */}
           <div style={{ marginBottom: 24 }}>
             <label
               style={{
@@ -103,13 +115,7 @@ export default function CreateReviewModal({
             >
               Rating *
             </label>
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                fontSize: 40,
-              }}
-            >
+            <div style={{ display: "flex", gap: 8, fontSize: 40 }}>
               {[1, 2, 3, 4, 5].map((star) => (
                 <button
                   key={star}
@@ -117,16 +123,18 @@ export default function CreateReviewModal({
                   onMouseEnter={() => setHoveredRating(star)}
                   onMouseLeave={() => setHoveredRating(0)}
                   onClick={() => setRating(star)}
+                  disabled={submitting}
                   style={{
                     background: "none",
                     border: "none",
-                    cursor: "pointer",
+                    cursor: submitting ? "not-allowed" : "pointer",
                     padding: 0,
                     color:
                       star <= (hoveredRating || rating)
                         ? "#ffc107"
                         : "#e0e0e0",
                     transition: "color 0.2s",
+                    opacity: submitting ? 0.7 : 1,
                   }}
                 >
                   ★
@@ -134,11 +142,11 @@ export default function CreateReviewModal({
               ))}
             </div>
             <p style={{ margin: "8px 0 0 0", color: "#666", fontSize: 13 }}>
-              {rating}/5 - {["Poor", "Fair", "Good", "Very Good", "Excellent"][rating - 1]}
+              {rating}/5 -{" "}
+              {["Poor", "Fair", "Good", "Very Good", "Excellent"][rating - 1]}
             </p>
           </div>
 
-          {/* Comment */}
           <div style={{ marginBottom: 24 }}>
             <label
               style={{
@@ -165,6 +173,7 @@ export default function CreateReviewModal({
                 resize: "vertical",
               }}
               maxLength={500}
+              disabled={submitting}
             />
             <p
               style={{
@@ -178,7 +187,6 @@ export default function CreateReviewModal({
             </p>
           </div>
 
-          {/* Error */}
           {error && (
             <div
               style={{
@@ -195,7 +203,6 @@ export default function CreateReviewModal({
             </div>
           )}
 
-          {/* Buttons */}
           <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
             <button
               type="button"

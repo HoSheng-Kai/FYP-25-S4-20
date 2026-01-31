@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { USERS_API_BASE_URL, ADMIN_API_BASE_URL } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 interface ProductListing {
   listing_id: number;
@@ -45,7 +46,8 @@ export default function AdminListingsPage() {
   
   // View modal
   const [viewingListing, setViewingListing] = useState<ProductListing | null>(null);
-
+  // logout
+  const { logout } = useAuth();
   useEffect(() => {
     loadListings();
   }, []);
@@ -57,7 +59,7 @@ export default function AdminListingsPage() {
   const loadListings = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${ADMIN_API_BASE_URL}/read-product-listings`);
+      const res = await axios.get(`${ADMIN_API_BASE_URL}/read-product-listings`, { withCredentials: true });
       if (res.data.success && res.data.listings) {
         setListings(res.data.listings);
       }
@@ -92,14 +94,10 @@ export default function AdminListingsPage() {
 
   const handleLogout = async () => {
     try {
-      await axios.post(`${USERS_API_BASE_URL}/logout-account`);
+      await logout();
     } catch (err) {
       console.error("Logout failed:", err);
     } finally {
-      localStorage.removeItem("isAuthenticated");
-      localStorage.removeItem("username");
-      localStorage.removeItem("userRole");
-      localStorage.removeItem("userId");
       navigate("/login");
     }
   };
@@ -131,6 +129,7 @@ export default function AdminListingsPage() {
     try {
       await axios.delete(`${ADMIN_API_BASE_URL}/delete-product-listings`, {
         data: { listing_id: listingId },
+        withCredentials: true,
       });
       alert("Successfully deleted listing");
       await loadListings();
@@ -157,6 +156,7 @@ export default function AdminListingsPage() {
       for (const listingId of Array.from(selectedListings)) {
         await axios.delete(`${ADMIN_API_BASE_URL}/delete-product-listings`, {
           data: { listing_id: listingId },
+          withCredentials: true,
         });
       }
       alert(`Successfully deleted ${selectedListings.size} listing(s)`);

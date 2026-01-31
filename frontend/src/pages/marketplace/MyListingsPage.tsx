@@ -1,12 +1,12 @@
-// frontend/src/pages/marketplace/MyListingsPage.tsx
-
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import MyListingCard from "../../components/marketplace/MyListingCard";
 import EditListingModal from "../../components/marketplace/EditListingModal";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
-const API = "http://34.177.85.28:3000/api/products";
+const API = `${API_ROOT}/api/products`;
 
 export type ListingStatus = "available" | "reserved" | "sold";
 
@@ -25,41 +25,33 @@ export type MyListing = {
 
 export default function MyListingsPage() {
   const navigate = useNavigate();
-  const userId = useMemo(() => {
-    const raw = localStorage.getItem("userId");
-    return raw ? Number(raw) : NaN;
-  }, []);
+  const { auth } = useAuth();
+
+  const authLoading = auth.loading;
+  const userId = auth.user?.userId;
 
   const [items, setItems] = useState<MyListing[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // Edit listing modal state
   const [editingListing, setEditingListing] = useState<MyListing | null>(null);
-
-  // Track per-listing action state
-  const [busyListingIds, setBusyListingIds] = useState<Record<number, boolean>>(
-    {}
-  );
+  const [busyListingIds, setBusyListingIds] = useState<Record<number, boolean>>({});
 
   const setBusy = (listingId: number, v: boolean) => {
     setBusyListingIds((prev) => ({ ...prev, [listingId]: v }));
   };
 
-  // ---------------------------
-  // Load "my listings"
-  // NOTE: You said backend is done; but you didn't show a GET endpoint for consumer listings.
-  // Your current code tries GET /api/products/my-listings (may 404).
-  // This file handles that gracefully + still lets you demo via mock.
-  // ---------------------------
   useEffect(() => {
     const load = async () => {
+      if (authLoading) return;
+
       setLoading(true);
       setErr(null);
 
-      if (!Number.isFinite(userId)) {
+      if (!userId) {
         setLoading(false);
-        setErr("No userId found. Please login again.");
+        setErr("You are not logged in. Please login again.");
+        setItems([]);
         return;
       }
 
@@ -68,7 +60,10 @@ export default function MyListingsPage() {
           success: boolean;
           data?: MyListing[];
           error?: string;
-        }>(`${API}/my-listings`, { params: { userId } });
+        }>(`${API}/my-listings`, {
+          params: { userId },
+          withCredentials: true,
+        });
 
         if (!res.data.success || !res.data.data) {
           setItems([]);
@@ -77,11 +72,14 @@ export default function MyListingsPage() {
 
         setItems(res.data.data);
       } catch (e: any) {
-        // If endpoint doesn't exist yet -> keep page usable
         if (e?.response?.status === 404) {
           setItems([]);
         } else {
-          setErr("Unable to load your listings (endpoint may not exist yet).");
+          setErr(
+            e?.response?.data?.error ||
+              e?.response?.data?.details ||
+              "Unable to load your listings (endpoint may not exist yet)."
+          );
         }
       } finally {
         setLoading(false);
@@ -89,29 +87,23 @@ export default function MyListingsPage() {
     };
 
     void load();
-  }, [userId]);
+  }, [authLoading, userId]);
 
-  // ---------------------------
-  // US-018: Delete listing
-  // ---------------------------
   const handleDeleteListing = async (listingId: number) => {
-    if (!Number.isFinite(userId)) {
-      alert("No userId found. Please login again.");
+    if (!userId) {
+      alert("Session expired. Please login again.");
       return;
     }
 
-    const ok = confirm(
-      "Delete this listing? Buyers will no longer see it in the marketplace."
-    );
+    const ok = confirm("Delete this listing? Buyers will no longer see it in the marketplace.");
     if (!ok) return;
 
     try {
       setBusy(listingId, true);
 
-      // Your backend route (you showed):
-      // DELETE /api/products/listings/:listingId?userId=6
       await axios.delete(`${API}/listings/${listingId}`, {
         params: { userId },
+        withCredentials: true,
       });
 
       setItems((prev) => prev.filter((x) => x.listing_id !== listingId));
@@ -127,38 +119,26 @@ export default function MyListingsPage() {
     }
   };
 
-  // ---------------------------
-  // US-019: Update availability
-  // ---------------------------
-  const handleUpdateAvailability = async (
-    listingId: number,
-    nextStatus: MyListing["status"]
-  ) => {
-    if (!Number.isFinite(userId)) {
-      alert("No userId found. Please login again.");
+  const handleUpdateAvailability = async (listingId: number, nextStatus: MyListing["status"]) => {
+    if (!userId) {
+      alert("Session expired. Please login again.");
       return;
     }
 
-    // ✅ Optimistic UI update (so it feels instant)
     const prevItems = items;
     setItems((prev) =>
-      prev.map((x) =>
-        x.listing_id === listingId ? { ...x, status: nextStatus } : x
-      )
+      prev.map((x) => (x.listing_id === listingId ? { ...x, status: nextStatus } : x))
     );
 
     try {
       setBusy(listingId, true);
 
-      // Your backend route (you showed):
-      // PATCH /api/products/listings/:listingId/availability
-      // Body: { userId, status }
-      await axios.patch(`${API}/listings/${listingId}/availability`, {
-        userId,
-        status: nextStatus,
-      });
+      await axios.patch(
+        `${API}/listings/${listingId}/availability`,
+        { userId, status: nextStatus },
+        { withCredentials: true }
+      );
     } catch (e: any) {
-      // rollback if backend fails
       setItems(prevItems);
 
       const msg =
@@ -171,50 +151,42 @@ export default function MyListingsPage() {
     }
   };
 
-  // ---------------------------
-  // Edit listing
-  // ---------------------------
   const handleEditListing = (listingId: number) => {
     const listing = items.find((x) => x.listing_id === listingId);
-    if (listing) {
-      setEditingListing(listing);
-    }
+    if (listing) setEditingListing(listing);
   };
 
-  const handleSaveEdit = async (
-    listingId: number,
-    price: string,
-    currency: string,
-    notes: string
-  ) => {
-    if (!Number.isFinite(userId)) {
-      throw new Error("No userId found. Please login again.");
-    }
+  const handleSaveEdit = async (listingId: number, price: string, currency: string, notes: string) => {
+    if (!userId) throw new Error("Session expired. Please login again.");
 
-    try {
-      // Call PUT /api/products/listings/:listingId
-      const res = await axios.put(`${API}/listings/${listingId}`, {
+    const res = await axios.put(
+      `${API}/listings/${listingId}`,
+      {
         userId,
-        price: parseFloat(price),
+        price: price === "" ? null : parseFloat(price),
         currency,
         notes,
-      });
+      },
+      { withCredentials: true }
+    );
 
-      if (res.data.success) {
-        // Update local state with new values
-        setItems((prev) =>
-          prev.map((x) =>
-            x.listing_id === listingId
-              ? { ...x, price, currency, notes }
-              : x
-          )
-        );
-        alert("Listing updated successfully. Changes are now visible in the marketplace.");
-      }
-    } catch (e: any) {
-      throw e;
+    if (res.data?.success) {
+      setItems((prev) =>
+        prev.map((x) => (x.listing_id === listingId ? { ...x, price, currency, notes } : x))
+      );
+      alert("Listing updated successfully. Changes are now visible in the marketplace.");
+    } else {
+      throw new Error(res.data?.error || res.data?.details || "Update failed.");
     }
   };
+
+  if (authLoading) {
+    return (
+      <div style={{ padding: 24 }}>
+        <p style={{ color: "#6b7280" }}>Checking session…</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 24 }}>
@@ -232,6 +204,7 @@ export default function MyListingsPage() {
             Manage listings that you created.
           </p>
         </div>
+
         <button
           onClick={() => navigate("/consumer/create-listing")}
           style={{
@@ -264,9 +237,8 @@ export default function MyListingsPage() {
         >
           <h3 style={{ marginTop: 0, marginBottom: 6 }}>No listings yet</h3>
           <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
-            You currently have no active listings to manage. Once you list a
-            product, it will appear here with controls to update availability or
-            delete the listing.
+            You currently have no active listings to manage. Once you list a product, it will appear
+            here with controls to update availability or delete the listing.
           </p>
         </div>
       )}
@@ -293,7 +265,6 @@ export default function MyListingsPage() {
         </div>
       )}
 
-      {/* Edit Listing Modal */}
       {editingListing && (
         <EditListingModal
           listing={editingListing}

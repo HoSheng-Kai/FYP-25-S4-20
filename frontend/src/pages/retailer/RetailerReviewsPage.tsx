@@ -1,16 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import axios from "axios";
 import ReviewCard from "../../components/reviews/ReviewCard";
 import type { Review } from "../consumer/UserReviewsPage";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
-const API = `${API_ROOT}/reviews`;
-
 export default function RetailerReviewsPage() {
   const { auth } = useAuth();
-
-  const ownerId = useMemo(() => auth.user?.userId ?? NaN, [auth.user?.userId]);
+  const ownerId = auth.user?.userId;
 
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(false);
@@ -19,13 +16,13 @@ export default function RetailerReviewsPage() {
   useEffect(() => {
     const load = async () => {
       if (auth.loading) return;
-      if (!Number.isFinite(ownerId)) return;
+      if (!ownerId) return;
 
       setLoading(true);
       setError(null);
 
       try {
-        const res = await axios.get<{ success: boolean; data?: Review[] }>(API, {
+        const res = await axios.get<{ success: boolean; data?: Review[] }>(`${API_ROOT}/reviews`, {
           params: { owner_id: ownerId },
           withCredentials: true,
         });
@@ -40,7 +37,7 @@ export default function RetailerReviewsPage() {
       }
     };
 
-    load();
+    void load();
   }, [auth.loading, ownerId]);
 
   const averageRating =
@@ -49,7 +46,7 @@ export default function RetailerReviewsPage() {
       : "N/A";
 
   if (auth.loading) return <div style={{ padding: 20 }}>Loading…</div>;
-  if (!auth.user) return null;
+  if (!auth.user) return <div style={{ padding: 20 }}>Please log in.</div>;
 
   return (
     <div>
@@ -86,36 +83,16 @@ export default function RetailerReviewsPage() {
         </div>
       </div>
 
-      {loading && (
-        <div style={{ textAlign: "center", padding: 40, color: "#999" }}>
-          Loading reviews...
-        </div>
-      )}
+      {loading && <div style={{ textAlign: "center", padding: 40, color: "#999" }}>Loading reviews...</div>}
 
       {error && (
-        <div
-          style={{
-            background: "#fee",
-            border: "1px solid #f88",
-            color: "#c00",
-            padding: 16,
-            borderRadius: 8,
-          }}
-        >
+        <div style={{ background: "#fee", border: "1px solid #f88", color: "#c00", padding: 16, borderRadius: 8 }}>
           {error}
         </div>
       )}
 
       {!loading && !error && reviews.length === 0 && (
-        <div
-          style={{
-            textAlign: "center",
-            padding: 60,
-            background: "#f9f9f9",
-            borderRadius: 8,
-            border: "1px dashed #ddd",
-          }}
-        >
+        <div style={{ textAlign: "center", padding: 60, background: "#f9f9f9", borderRadius: 8, border: "1px dashed #ddd" }}>
           <p style={{ fontSize: 16, color: "#666" }}>No reviews yet.</p>
           <p style={{ color: "#999", fontSize: 14 }}>
             Once consumers leave feedback, it will appear here.

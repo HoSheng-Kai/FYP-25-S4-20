@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { useAuth } from "../../auth/AuthContext";
 import { USERS_API_BASE_URL } from "../../config/api";
 
 interface RegistrationResponse {
@@ -36,7 +37,7 @@ export default function AdminRegistrationPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
+  const { logout } = useAuth();
   const roles: Role[] = [
     { role_id: "manufacturer", role_name: "Manufacturer" },
     { role_id: "distributor", role_name: "Distributor" },
@@ -45,14 +46,10 @@ export default function AdminRegistrationPage() {
 
   const handleLogout = async () => {
     try {
-      await axios.post(`${USERS_API_BASE_URL}/logout-account`);
+      await logout();
     } catch (err) {
       console.error("Logout failed:", err);
     } finally {
-      localStorage.removeItem("isAuthenticated");
-      localStorage.removeItem("username");
-      localStorage.removeItem("userRole");
-      localStorage.removeItem("userId");
       navigate("/login");
     }
   };
@@ -82,7 +79,8 @@ export default function AdminRegistrationPage() {
           email,
           password,
           role_id: roleId,
-        }
+        },
+        { withCredentials: true }
       );
 
       if (!res.data.success) {

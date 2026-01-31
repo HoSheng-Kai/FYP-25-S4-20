@@ -21,7 +21,7 @@ type Props = {
 type UserOption = {
   user_id: number;
   username: string;
-  public_key: string; // ✅ must exist from /users/list
+  public_key: string;
   role?: string;
 };
 
@@ -133,12 +133,12 @@ export default function TransferOwnershipModal({
   };
 
   async function fetchProductPda(productId: number): Promise<string> {
-    const res = await axios.get(`${PRODUCT_INFO_URL}/${productId}`);
+    const res = await axios.get(`${PRODUCT_INFO_URL}/${productId}`, { withCredentials: true });
     if (!res.data?.success) throw new Error(res.data?.error || "Failed to load product info");
     const pda = res.data?.data?.product_pda;
     if (!pda) throw new Error("Missing product_pda in backend response");
     return pda as string;
-  }
+  } 
 
   const handlePropose = async () => {
     try {

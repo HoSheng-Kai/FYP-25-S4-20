@@ -44,7 +44,6 @@ export default function RegisterPage() {
       return;
     }
 
-    // Optional but recommended: require wallet
     if (!connected || !walletPubkey) {
       setError("Please connect your Solana wallet to register.");
       return;
@@ -60,7 +59,7 @@ export default function RegisterPage() {
           email,
           password,
           role_id: "consumer",
-          public_key: walletPubkey, // ✅ send wallet pubkey
+          public_key: walletPubkey,
         }
       );
 
@@ -101,7 +100,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* ✅ Wallet connect */}
+        {/* Wallet connect */}
         <div style={{ marginBottom: 12 }}>
           <WalletMultiButton />
           {walletPubkey && (

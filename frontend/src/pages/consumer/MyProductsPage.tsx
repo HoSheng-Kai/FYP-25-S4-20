@@ -1,10 +1,10 @@
-// frontend/src/pages/consumer/MyProductsPage.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import MyProductCard from "../../components/products/MyProductCard";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
-const API = "http://34.177.85.28:3000/api/products";
+const API = `${API_ROOT}/api/products`;
 
 export type OwnedProduct = {
   productId: number;
@@ -19,11 +19,9 @@ export type OwnedProduct = {
 };
 
 export default function MyProductsPage() {
-  const userId = useMemo(() => {
-    const raw = localStorage.getItem("userId");
-    return raw ? Number(raw) : NaN;
-  }, []);
-
+  const { auth } = useAuth();
+  const userId = auth.user?.userId;
+  
   const [products, setProducts] = useState<OwnedProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,7 +43,7 @@ export default function MyProductsPage() {
           success: boolean;
           data?: OwnedProduct[];
           error?: string;
-        }>(`${API}/owned`, { params: { userId } });
+        }>(`${API}/owned`, { params: { userId }, withCredentials: true });
 
         if (res.data.success && res.data.data) {
           setProducts(res.data.data);

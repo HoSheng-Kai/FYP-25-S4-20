@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 import axios from "axios";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
-
-const API = "http://34.177.85.28:3000/api/products";
+const API = `${API_ROOT}/api/products`;
 
 type OwnedProduct = {
   productId: number;
@@ -27,11 +28,8 @@ export default function ConsumerTransferOwnershipPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notif, setNotif] = useState<string | null>(null);
-
-  const userId = (() => {
-    const raw = localStorage.getItem("userId");
-    return raw ? Number(raw) : NaN;
-  })();
+  const { auth } = useAuth();
+  const userId = auth.user?.userId ?? 0;
 
   useEffect(() => {
     const loadProducts = async () => {
