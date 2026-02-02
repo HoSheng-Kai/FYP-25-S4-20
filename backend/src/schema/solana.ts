@@ -63,4 +63,4 @@ connection.getVersion()
 // }
 
 
-export {connection, airdropSol, MEMO_PROGRAM_ID}
+export {connection, MEMO_PROGRAM_ID}

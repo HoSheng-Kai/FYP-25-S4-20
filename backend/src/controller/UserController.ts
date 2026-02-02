@@ -120,7 +120,12 @@ class UserController {
       // OTP passed → now set HttpOnly cookie session
       setAuthCookie(res, userPayload);
 
-      res.json({ success: true });
+      res.json({ success: true, 
+        debug: {
+    nodeEnv: process.env.NODE_ENV ?? null,
+    isProd: process.env.NODE_ENV === "production",
+    }, 
+  });
     } catch (err: any) {
       res.status(500).json({ success: false, error: "OTP verification failed", details: err.message });
     }
