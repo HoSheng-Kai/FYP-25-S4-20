@@ -26,7 +26,7 @@ function getJwtSecret() {
 export function setAuthCookie(res: Response, payload: AuthPayload) {
   const token = jwt.sign(payload, getJwtSecret(), { expiresIn: "7d" });
 
-  const isProd = process.env.NODE_ENV === "production";
+  const isProd = process.env.NODE_ENV !== "production";
 
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
