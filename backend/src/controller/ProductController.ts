@@ -8,6 +8,7 @@ import { ProductHistory, ProductHistoryResult } from '../entities/ProductHistory
 import { ProductUpdate } from '../entities/ProductUpdate';
 import { ManufacturerProductListing } from '../entities/Manufacturer/ManufacturerProductListing';
 import { MarketplaceListing } from '../entities/Users/MarketplaceListing';
+import { MarketplacePurchase } from "../entities/Users/MarketplacePurchase";
 import { ConsumerProductListing, ListingStatus } from '../entities/Users/ConsumerProductListing';
 import { QrCodeService } from '../service/QrCodeService';
 import { Notification } from '../entities/Notification';
@@ -1894,6 +1895,84 @@ class ProductController {
         details: err instanceof Error ? err.message : String(err)
       });
     }
+  }
+
+  // POST /api/marketplace/purchase/propose
+  async proposePurchase(req: Request, res: Response) {
+    try {
+      const { listingId, buyerId, offeredPrice, offeredCurrency } = req.body;
+
+      const data = await MarketplacePurchase.propose({
+        listingId: Number(listingId),
+        buyerId: Number(buyerId),
+        offeredPrice: offeredPrice != null ? Number(offeredPrice) : undefined,
+        offeredCurrency: offeredCurrency ?? undefined,
+      });
+
+      return res.json({ success: true, data });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+  }
+
+  // POST /api/marketplace/purchase/accept
+  async acceptPurchase(req: Request, res: Response) {
+    try {
+      const { requestId, sellerId } = req.body;
+      const data = await MarketplacePurchase.accept({
+        requestId: Number(requestId),
+        sellerId: Number(sellerId),
+      });
+      return res.json({ success: true, data });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+  }
+
+  // POST /api/marketplace/purchase/reject
+  async rejectPurchase(req: Request, res: Response) {
+    try {
+      const { requestId, sellerId, reason } = req.body;
+      const data = await MarketplacePurchase.reject({
+        requestId: Number(requestId),
+        sellerId: Number(sellerId),
+        reason,
+      });
+      return res.json({ success: true, data });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+  }
+
+  // POST /api/marketplace/purchase/pay
+  async payPurchase(req: Request, res: Response) {
+    try {
+      const { requestId, buyerId, paymentTxHash } = req.body;
+      const data = await MarketplacePurchase.pay({
+        requestId: Number(requestId),
+        buyerId: Number(buyerId),
+        paymentTxHash: String(paymentTxHash),
+      });
+      return res.json({ success: true, data });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+  }
+
+  // POST /api/marketplace/purchase/finalize
+  async finalizePurchase(req: Request, res: Response) {
+    try {
+      const { requestId, sellerId, transferTxHash } = req.body;
+      await MarketplacePurchase.finalize({
+        requestId: Number(requestId),
+        sellerId: Number(sellerId),
+        transferTxHash: String(transferTxHash),
+      });
+      return res.json({ success: true });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+    
   }
 }
 
