@@ -3,7 +3,13 @@ import { useNavigate } from "react-router-dom";
 import type { MarketplaceListing } from "../../pages/marketplace/MarketplacePage";
 import axios from "axios";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Connection, PublicKey, LAMPORTS_PER_SOL, Transaction, SystemProgram } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+  Transaction,
+  SystemProgram,
+} from "@solana/web3.js";
 import PurchaseModal from "./PurchaseModal";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
@@ -30,7 +36,7 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
   const priceText =
     listing.price && listing.currency ? `${listing.price} ${listing.currency}` : "—";
 
-  // Helper: Convert SGD to SOL (placeholder)
+  // Helper: Convert SGD to SOL
   const convertSgdToSol = async (sgd: number): Promise<number> => {
     try {
       const res = await fetch(
@@ -115,9 +121,9 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
       const signature = await wallet.sendTransaction(tx, connection);
       await connection.confirmTransaction(signature, "confirmed");
 
-      // 2) Call backend to transfer ownership (cookie auth + buyerId from auth)
+      // 2) Call backend to transfer ownership (cookie auth)
       const res = await axios.post(
-        `${API_ROOT}/listings/${listing.listingId}/purchase`,
+        `${API_ROOT}/products/listings/${listing.listingId}/purchase`,
         {
           buyerId,
           solTx: signature,
@@ -127,13 +133,11 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
       );
 
       if (res.data.success) {
-        setModalSuccess(
-          `Purchase successful! You now own ${listing.productName || "this product"}`
-        );
+        setModalSuccess(`Purchase successful! You now own ${listing.productName || "this product"}`);
         setTimeout(() => {
           setModalOpen(false);
           setModalSuccess(null);
-          if (onPurchaseSuccess) onPurchaseSuccess();
+          onPurchaseSuccess?.();
         }, 1800);
       } else {
         throw new Error(res.data.error || "Ownership transfer failed");
@@ -146,76 +150,221 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
   };
 
   return (
-    <div style={{ background: "white", border: "1px solid #e5e7eb", borderRadius: 16, padding: 24 }}>
-      {/* ...your existing UI unchanged... */}
+    <div
+      style={{
+        background: "white",
+        border: "1px solid #e5e7eb",
+        borderRadius: 16,
+        padding: 24,
+        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 18, fontWeight: 600, color: "#111827" }}>
+            {listing.productName ?? "Unknown Product"}
+          </h3>
+        </div>
 
-      <div style={{ display: "flex", gap: 10 }}>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            navigate(`/consumer/product/${listing.productId}`);
+        <span
+          style={{
+            fontSize: 11,
+            padding: "4px 10px",
+            borderRadius: 999,
+            background: listing.blockchainStatus === "on blockchain" ? "#dcfce7" : "#fef3c7",
+            color: listing.blockchainStatus === "on blockchain" ? "#166534" : "#92400e",
+            height: "fit-content",
+            whiteSpace: "nowrap",
           }}
         >
-          Timeline
-        </button>
+          {listing.blockchainStatus}
+        </span>
+      </div>
 
-        <button
-          onClick={async (e) => {
-            e.stopPropagation();
+      <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 16 }}>
+        <div>
+          <p style={{ margin: 0, fontSize: 12, color: "#6b7280", fontWeight: 500 }}>Price</p>
+          <p style={{ margin: "4px 0 0 0", fontWeight: 700, fontSize: 16, color: "#111827" }}>
+            {priceText}
+          </p>
+        </div>
 
-            if (authLoading) {
-              alert("Checking session… please try again.");
-              return;
-            }
-            if (!buyerId) {
-              alert("Please log in to chat");
-              return;
-            }
+        <div style={{ textAlign: "right" }}>
+          <p style={{ margin: 0, fontSize: 12, color: "#6b7280", fontWeight: 500 }}>Seller</p>
+          <p style={{ margin: "4px 0 0 0", fontSize: 14, fontWeight: 500, color: "#111827" }}>
+            {listing.seller.username} ({listing.seller.role})
+          </p>
+        </div>
+      </div>
 
-            try {
-              const res = await axios.post(
-                `${API_ROOT}/chats/create-thread`,
-                {
-                  listingId: listing.listingId,
-                  userId: buyerId,
-                  otherUserId: listing.seller.userId,
-                },
-                { withCredentials: true }
-              );
+      {listing.notes && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: 14,
+            background: "#f9fafb",
+            borderRadius: 10,
+            borderLeft: "3px solid #3b82f6",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: 11,
+              color: "#6b7280",
+              fontWeight: 600,
+              marginBottom: 6,
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Seller Notes
+          </p>
+          <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
+            {listing.notes}
+          </p>
+        </div>
+      )}
 
-              if (res.data.success) {
-                navigate(`/consumer/chats/${res.data.thread.thread_id}`);
-              } else {
-                alert(res.data.error || "Failed to open chat");
+      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button
+            style={{
+              background: "#6c757d",
+              color: "white",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 20px",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "all 0.2s",
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              navigate(`/consumer/product/${listing.productId}`);
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#545b62";
+              e.currentTarget.style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#6c757d";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+            title="View product journey timeline"
+          >
+            Timeline
+          </button>
+
+          <button
+            style={{
+              background: "#2563eb",
+              color: "white",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 20px",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              transition: "all 0.2s",
+            }}
+            onClick={async (e) => {
+              e.stopPropagation();
+
+              if (authLoading) {
+                alert("Checking session… please try again.");
+                return;
               }
-            } catch (err: any) {
-              alert(err?.response?.data?.error || "Failed to open chat");
-            }
-          }}
-        >
-          Message
-        </button>
+              if (!buyerId) {
+                alert("Please log in to chat");
+                return;
+              }
 
-        <button onClick={handleBuyNowClick} disabled={purchasing}>
-          {purchasing ? "Processing..." : "Buy Now"}
-        </button>
+              try {
+                const res = await axios.post(
+                  `${API_ROOT}/chats/create-thread`,
+                  {
+                    listingId: listing.listingId,
+                    userId: buyerId,
+                    otherUserId: listing.seller.userId,
+                  },
+                  { withCredentials: true }
+                );
 
-        <PurchaseModal
-          open={modalOpen}
-          onClose={() => {
-            setModalOpen(false);
-            setModalError(null);
-            setModalSuccess(null);
-          }}
-          productName={listing.productName || "Unknown Product"}
-          price={priceText}
-          sellerName={listing.seller.username}
-          onConfirm={handleModalConfirm}
-          loading={purchasing}
-          solAmount={solAmount}
-          error={modalError}
-          success={modalSuccess}
-        />
+                if (res.data.success) {
+                  navigate(`/consumer/chats/${res.data.thread.thread_id}`);
+                } else {
+                  alert(res.data.error || "Failed to open chat");
+                }
+              } catch (err: any) {
+                alert(err?.response?.data?.error || "Failed to open chat");
+              }
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "#1d4ed8";
+              e.currentTarget.style.transform = "translateY(-1px)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "#2563eb";
+              e.currentTarget.style.transform = "translateY(0)";
+            }}
+            title="Chat with seller"
+          >
+            Message
+          </button>
+
+          <button
+            style={{
+              background: purchasing ? "#6c757d" : "#28a745",
+              color: "white",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 20px",
+              cursor: purchasing ? "not-allowed" : "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              opacity: purchasing ? 0.6 : 1,
+              transition: "all 0.2s",
+            }}
+            onClick={handleBuyNowClick}
+            disabled={purchasing}
+            onMouseEnter={(e) => {
+              if (!purchasing) {
+                e.currentTarget.style.background = "#218838";
+                e.currentTarget.style.transform = "translateY(-1px)";
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (!purchasing) {
+                e.currentTarget.style.background = "#28a745";
+                e.currentTarget.style.transform = "translateY(0)";
+              }
+            }}
+          >
+            {purchasing ? "Processing..." : "Buy Now"}
+          </button>
+
+          <PurchaseModal
+            open={modalOpen}
+            onClose={() => {
+              setModalOpen(false);
+              setModalError(null);
+              setModalSuccess(null);
+            }}
+            productName={listing.productName || "Unknown Product"}
+            price={priceText}
+            sellerName={listing.seller.username}
+            onConfirm={handleModalConfirm}
+            loading={purchasing}
+            solAmount={solAmount}
+            error={modalError}
+            success={modalSuccess}
+          />
+        </div>
       </div>
     </div>
   );

@@ -168,6 +168,10 @@ export default function RegisterPage() {
             Login
           </Link>
         </p>
+
+        <p className="auth-footer-text">
+          For brands and companies, please email us at fyp.25.s4.20@gmail.com
+        </p>
       </div>
     </AuthLayout>
   );

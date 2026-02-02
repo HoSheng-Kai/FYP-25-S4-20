@@ -29,8 +29,8 @@ export default function MyProductsPage() {
     const loadProducts = async () => {
       setLoading(true);
       setError(null);
-
-      if (!Number.isFinite(userId)) {
+      if (auth.loading) return;
+      if (!userId) {
         setError("No userId found. Please login again.");
         setLoading(false);
         return;
