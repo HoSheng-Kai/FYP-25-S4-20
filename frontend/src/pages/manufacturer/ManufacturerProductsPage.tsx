@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
+import { useAuth } from "../../auth/AuthContext";
 
 /** =========================
  * Backend response for "products-by-user"
@@ -97,8 +98,12 @@ type UpdateResponse = {
 
 export default function ManufacturerProductsPage() {
   const navigate = useNavigate();
+  const { auth } = useAuth();
 
-  const manufacturerId = Number(localStorage.getItem("userId"));
+  if (auth.loading) return <p style={{ padding: 20 }}>Loading…</p>;
+  if (!auth.user) return <p style={{ padding: 20 }}>Not logged in.</p>;
+
+  const manufacturerId = auth.user.userId ?? 0;
   const [allProducts, setAllProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -288,8 +293,8 @@ export default function ManufacturerProductsPage() {
       }
 
       const res = await axios.post<GetProductsByUserResponse>(GET_BY_USER_URL, {
-        user_id: manufacturerId,
-      });
+        user_id: manufacturerId
+      }, { withCredentials: true });
 
       if (!res.data.success || !res.data.data) {
         setError(res.data.error || "Failed to load products.");
@@ -357,7 +362,7 @@ export default function ManufacturerProductsPage() {
 
     try {
       const res = await axios.delete(`${PRODUCTS_API_BASE_URL}/${productId}/draft`, {
-        data: { manufacturerId },
+        data: { manufacturerId }, withCredentials: true,
       });
 
       if (res.data.success) {
@@ -384,7 +389,8 @@ export default function ManufacturerProductsPage() {
   // ----------------------
   const handleLockDraft = async (productId: number) => {
     try {
-      const res = await axios.post(`${PRODUCTS_API_BASE_URL}/${productId}/confirm-draft`, { manufacturerId });
+      const res = await axios.post(`${PRODUCTS_API_BASE_URL}/${productId}/confirm-draft`, 
+        { manufacturerId }, { withCredentials: true });
 
       if (!res.data?.success) {
         alert(res.data?.error || "Failed to lock draft.");
@@ -431,7 +437,7 @@ export default function ManufacturerProductsPage() {
 
     try {
       const res = await axios.get<GetEditResponse>(`${PRODUCTS_API_BASE_URL}/${productId}/edit`, {
-        params: { manufacturerId },
+        params: { manufacturerId }, withCredentials: true,
       });
 
       if (!res.data.success || !res.data.data) {
@@ -510,7 +516,8 @@ export default function ManufacturerProductsPage() {
         description: editDescription.trim() || null,
       };
 
-      const res = await axios.put<UpdateResponse>(`${PRODUCTS_API_BASE_URL}/${editingProductId}`, payload);
+      const res = await axios.put<UpdateResponse>(`${PRODUCTS_API_BASE_URL}/${editingProductId}`
+        , payload, { withCredentials: true });
 
       if (!res.data.success || !res.data.data) {
         setEditError(res.data.error || "Failed to update product.");

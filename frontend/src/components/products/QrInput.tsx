@@ -1,12 +1,9 @@
-// src/components/verify/QrInput.tsx
 import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import jsQR from "jsqr";
-
 import { PRODUCTS_API_BASE_URL } from "../../config/api";
 import TransactionHistory from "./TransactionHistory";
 
-type ProductStatus = "registered" | "verified" | "suspicious";
 type Availability = "available" | "reserved" | "sold";
 
 type RegisteredBy = {
@@ -37,7 +34,6 @@ type LatestListing =
 type VerifyData = {
   serial: string;
   model: string | null;
-  status: ProductStatus;
   registeredOn: string;
   registeredBy: RegisteredBy;
   currentOwner: CurrentOwner;
@@ -55,7 +51,6 @@ type VerifyResponse = {
     category?: string | null;
     manufactureDate?: string | null;
     productDescription?: string | null;
-    status?: ProductStatus;
     registeredOn?: string;
 
     manufacturer?: {
@@ -94,12 +89,11 @@ type QrInputProps = {
   onSerialChange?: (serial: string) => void;
 };
 
-// ✅ If your backend route differs, change ONLY this
 const RESOLVE_SERIAL_URL = `${PRODUCTS_API_BASE_URL}/resolve-serial`;
 
 /**
  * QR payload is now URL like:
- *   https://fyp-25-s4-20.duckdns.org:5173/products/12/details
+ * https://fyp-25-s4-20-frontend.onrender.com/products/1/details
  * Extract productId from it.
  */
 const extractProductIdFromUrl = (inputRaw: string): number | null => {
@@ -200,7 +194,6 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       const mapped: VerifyData = {
         serial: payload.serialNumber ?? trimmed,
         model: payload.productName ?? null,
-        status: (payload.status ?? "registered") as ProductStatus,
         registeredOn: payload.registeredOn ?? "",
 
         registeredBy: payload.manufacturer?.username
@@ -252,11 +245,6 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
     return res.data.data.serialNumber;
   };
 
-  /**
-   * ✅ NEW behavior:
-   * - If QR is a details URL: resolve productId -> serial -> verify by serial (stay on this page)
-   * - Else: verify by serial extraction (legacy)
-   */
   const handleScannedPayload = async (payloadRaw: string) => {
     const raw = (payloadRaw ?? "").trim();
     if (!raw) {
@@ -467,23 +455,6 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
     void handleScannedPayload(productCode);
   };
 
-  // ========= STATUS COLOURS =========
-
-  const getStatusStyles = (status: ProductStatus) => {
-    switch (status) {
-      case "verified":
-        return { bg: "#ecfdf3", border: "#22c55e", text: "#15803d" };
-      case "registered":
-        return { bg: "#eff6ff", border: "#3b82f6", text: "#1d4ed8" };
-      case "suspicious":
-        return { bg: "#fef2f2", border: "#ef4444", text: "#b91c1c" };
-      default:
-        return { bg: "#f9fafb", border: "#e5e7eb", text: "#374151" };
-    }
-  };
-
-  const statusStyles = result ? getStatusStyles(result.status) : null;
-
   return (
     <div style={{ maxWidth: 1100, margin: "0 auto" }}>
       <h2 style={{ marginBottom: 8 }}>Scan or Enter Product Code</h2>
@@ -640,43 +611,23 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
 
         {/* RIGHT */}
         <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {result && statusStyles ? (
+          {result ? (
             <div
               style={{
-                background: statusStyles.bg,
+                background: "#f9fafb",
                 borderRadius: 16,
                 padding: 20,
-                border: `1px solid ${statusStyles.border}`,
+                border: "1px solid #e5e7eb",
               }}
             >
-              <h3
-                style={{
-                  marginTop: 0,
-                  marginBottom: 4,
-                  color: statusStyles.text,
-                }}
-              >
-                {result.status === "verified"
-                  ? "Product Verified"
-                  : result.status === "registered"
-                  ? "Product Registered"
-                  : "Suspicious Product"}
+              <h3 style={{ marginTop: 0, marginBottom: 6, color: "#111827" }}>
+                Product Verification Result
               </h3>
 
-              <p
-                style={{
-                  marginTop: 0,
-                  marginBottom: 12,
-                  color: statusStyles.text,
-                  fontSize: 13,
-                }}
-              >
-                {result.isAuthentic === true &&
-                  "This product is authentic and registered in BlockTrace."}
-                {result.isAuthentic === false &&
-                  "This product is flagged as suspicious. Please contact support or the seller."}
-                {result.isAuthentic === null &&
-                  "This product is registered but not yet fully verified."}
+              <p style={{ marginTop: 0, marginBottom: 12, fontSize: 13, color: "#4b5563" }}>
+                {result.isAuthentic === true && "This product is authentic and registered in BlockTrace."}
+                {result.isAuthentic === false && "This product is flagged as suspicious. Please contact support or the seller."}
+                {result.isAuthentic === null && "This product is registered but not yet fully verified."}
               </p>
 
               <div
@@ -703,26 +654,18 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
                 <div style={{ fontSize: 13 }}>
                   <p style={{ margin: 0, marginBottom: 4 }}>
                     <strong>Registered by:</strong>{" "}
-                    {result.registeredBy
-                      ? result.registeredBy.username
-                      : "Unknown"}
+                    {result.registeredBy ? result.registeredBy.username : "Unknown"}
                   </p>
                   <p style={{ margin: 0, marginBottom: 4 }}>
                     <strong>Current owner:</strong>{" "}
-                    {result.currentOwner
-                      ? result.currentOwner.username
-                      : "Unknown"}
+                    {result.currentOwner ? result.currentOwner.username : "Unknown"}
                   </p>
 
                   {result.latestListing && (
                     <p style={{ margin: 0 }}>
-                      <strong>Latest listing:</strong>{" "}
-                      {result.latestListing.price}{" "}
-                      {result.latestListing.currency} (
-                      {result.latestListing.status}) on{" "}
-                      {new Date(
-                        result.latestListing.created_on
-                      ).toLocaleDateString()}
+                      <strong>Latest listing:</strong> {result.latestListing.price}{" "}
+                      {result.latestListing.currency} ({result.latestListing.status}) on{" "}
+                      {new Date(result.latestListing.created_on).toLocaleDateString()}
                     </p>
                   )}
                 </div>
@@ -739,15 +682,14 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
                 color: "#4b5563",
               }}
             >
-              <h4 style={{ marginTop: 0, marginBottom: 8 }}>
-                Product Verification
-              </h4>
+              <h4 style={{ marginTop: 0, marginBottom: 8 }}>Product Verification</h4>
               <p style={{ margin: 0 }}>
-                Scan/upload to verify and see product details here. Transaction
-                history will appear below after a serial is detected.
+                Scan/upload to verify and see product details here. Transaction history will
+                appear below after a serial is detected.
               </p>
             </div>
           )}
+
         </section>
       </div>
 

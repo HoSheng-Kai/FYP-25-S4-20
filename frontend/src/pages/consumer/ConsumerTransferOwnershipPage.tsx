@@ -3,9 +3,8 @@ import { useNavigate } from "react-router-dom";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 import axios from "axios";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-
-
-const API = "https://fyp-25-s4-20.duckdns.org/api/products";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 type OwnedProduct = {
   productId: number;
@@ -27,11 +26,8 @@ export default function ConsumerTransferOwnershipPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notif, setNotif] = useState<string | null>(null);
-
-  const userId = (() => {
-    const raw = localStorage.getItem("userId");
-    return raw ? Number(raw) : NaN;
-  })();
+  const { auth } = useAuth();
+  const userId = auth.user?.userId ?? 0;
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -43,7 +39,7 @@ export default function ConsumerTransferOwnershipPage() {
         return;
       }
       try {
-        const res = await axios.get<{ success: boolean; data?: OwnedProduct[]; error?: string }>(`${API}/owned`, { params: { userId } });
+        const res = await axios.get<{ success: boolean; data?: OwnedProduct[]; error?: string }>(`${API_ROOT}/products/owned`, { params: { userId } });
         if (res.data.success && res.data.data) {
           setProducts(res.data.data);
         } else {

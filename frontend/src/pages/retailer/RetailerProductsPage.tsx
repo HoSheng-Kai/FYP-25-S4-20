@@ -5,10 +5,8 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
-/** =========================
- * Backend response for "products-by-user"
- * ========================= */
 type BackendProduct = {
   product_id: number;
   serial_no: string;
@@ -36,9 +34,6 @@ type GetProductsByUserResponse = {
   details?: string;
 };
 
-/** =========================
- * Your UI types
- * ========================= */
 type ProductRow = {
   productId: number;
   serialNumber: string;
@@ -61,9 +56,10 @@ type FilterMode = "all" | "owned";
 
 export default function RetailerProductsPage() {
   const navigate = useNavigate();
+  const { auth } = useAuth();
 
-  const retailerId = Number(localStorage.getItem("userId"));
-    
+  const retailerId = auth.user?.userId ?? NaN;
+
   const wallet = useWallet();
   const walletConnected = !!wallet.connected && !!wallet.publicKey;
 
@@ -71,7 +67,7 @@ export default function RetailerProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ✅ filter (only All / Owned)
+  // filter (only All / Owned)
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
 
   // ======================
@@ -79,9 +75,10 @@ export default function RetailerProductsPage() {
   // ======================
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-  // ✅ transfer modal
+  // transfer modal
   const [transferOpen, setTransferOpen] = useState(false);
 
+  // NOTE: you currently hit distributors endpoint; keep as-is unless you have a retailer endpoint
   const GET_BY_USER_URL = `${API_ROOT}/distributors/products-by-user`;
 
   // ======================
@@ -93,10 +90,7 @@ export default function RetailerProductsPage() {
     const onDocMouseDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
       if (!t) return;
-
-      // click inside menu => don't close
       if (t.closest?.("[data-actions-menu-root='true']")) return;
-
       setOpenMenuForId(null);
     };
 
@@ -124,7 +118,12 @@ export default function RetailerProductsPage() {
   // ----------------------
   const isOnChainConfirmed = (p: ProductRow) => {
     const s = (p.blockchainStatus || "").toLowerCase();
-    return s.includes("confirmed") || s.includes("on blockchain") || s.includes("on-chain") || s.includes("onchain");
+    return (
+      s.includes("confirmed") ||
+      s.includes("on blockchain") ||
+      s.includes("on-chain") ||
+      s.includes("onchain")
+    );
   };
 
   const isTransferEligible = (p: ProductRow) => {
@@ -137,7 +136,7 @@ export default function RetailerProductsPage() {
     return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
   };
 
-  // ✅ filtered list
+  // filtered list
   const products = useMemo(() => {
     if (filterMode === "owned") {
       return allProducts.filter((p) => p.relationship === "owner");
@@ -145,15 +144,13 @@ export default function RetailerProductsPage() {
     return allProducts;
   }, [allProducts, filterMode]);
 
-  // ✅ clear hidden selections when filter changes
+  // clear hidden selections when filter changes
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
       const visibleIds = new Set(products.map((p) => p.productId));
       const next = new Set<number>();
-      for (const id of prev) {
-        if (visibleIds.has(id)) next.add(id);
-      }
+      for (const id of prev) if (visibleIds.has(id)) next.add(id);
       return next;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -162,9 +159,15 @@ export default function RetailerProductsPage() {
   // ----------------------
   // Selection helpers (eligible-only)
   // ----------------------
-  const selectedProducts = useMemo(() => products.filter((p) => selectedIds.has(p.productId)), [products, selectedIds]);
+  const selectedProducts = useMemo(
+    () => products.filter((p) => selectedIds.has(p.productId)),
+    [products, selectedIds]
+  );
 
-  const selectedEligibleProducts = useMemo(() => selectedProducts.filter(isTransferEligible), [selectedProducts]);
+  const selectedEligibleProducts = useMemo(
+    () => selectedProducts.filter(isTransferEligible),
+    [selectedProducts]
+  );
 
   const anyEligibleSelected = selectedEligibleProducts.length > 0;
 
@@ -190,7 +193,6 @@ export default function RetailerProductsPage() {
     setSelectedIds((prev) => {
       const eligibleIds = products.filter(isTransferEligible).map((p) => p.productId);
       const allEligibleSelected = eligibleIds.length > 0 && eligibleIds.every((id) => prev.has(id));
-
       if (allEligibleSelected) return new Set();
       return new Set(eligibleIds);
     });
@@ -203,14 +205,16 @@ export default function RetailerProductsPage() {
   // ----------------------
   const loadProducts = async () => {
     try {
-      if (!retailerId || Number.isNaN(retailerId)) {
+      if (!Number.isFinite(retailerId)) {
         setError("Retailer ID missing. Please login again.");
         return;
       }
 
-      const res = await axios.post<GetProductsByUserResponse>(GET_BY_USER_URL, {
-        user_id: retailerId,
-      });
+      const res = await axios.post<GetProductsByUserResponse>(
+        GET_BY_USER_URL,
+        { user_id: retailerId },
+        { withCredentials: true }
+      );
 
       if (!res.data.success || !res.data.data) {
         setError(res.data.error || "Failed to load products.");
@@ -223,7 +227,8 @@ export default function RetailerProductsPage() {
         const confirmed = !!(p.tx_hash && p.product_pda);
         const relationship = (p.relationship as any) ?? null;
 
-        const lifecycleStatus: ProductRow["lifecycleStatus"] = relationship === "owner" ? "active" : "transferred";
+        const lifecycleStatus: ProductRow["lifecycleStatus"] =
+          relationship === "owner" ? "active" : "transferred";
 
         return {
           productId: p.product_id,
@@ -245,16 +250,22 @@ export default function RetailerProductsPage() {
       setAllProducts(mapped);
       setError(null);
     } catch (err: any) {
-      setError(err?.response?.data?.error || err?.response?.data?.details || "Error fetching products.");
+      setError(
+        err?.response?.data?.error ||
+          err?.response?.data?.details ||
+          "Error fetching products."
+      );
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (auth.loading) return;
+    if (!auth.user) return;
     loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [auth.loading, auth.user?.userId]);
 
   // ----------------------
   // OPEN TRANSFER MODAL
@@ -265,6 +276,8 @@ export default function RetailerProductsPage() {
     setTransferOpen(true);
   };
 
+  if (auth.loading) return <p style={{ padding: 20 }}>Loading…</p>;
+  if (!auth.user) return null;
   if (loading) return <p style={{ padding: 20 }}>Loading products...</p>;
 
   return (
@@ -283,7 +296,12 @@ export default function RetailerProductsPage() {
         <h1 style={{ margin: 0 }}>My Products</h1>
 
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-          <FilterPill active={filterMode === "all"} onClick={() => setFilterMode("all")} label="All" subtitle={`${allProducts.length}`} />
+          <FilterPill
+            active={filterMode === "all"}
+            onClick={() => setFilterMode("all")}
+            label="All"
+            subtitle={`${allProducts.length}`}
+          />
           <FilterPill
             active={filterMode === "owned"}
             onClick={() => setFilterMode("owned")}
@@ -293,7 +311,9 @@ export default function RetailerProductsPage() {
         </div>
       </div>
 
-      <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>Select products to transfer ownership</h2>
+      <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>
+        Select products to transfer ownership
+      </h2>
 
       {/* Transfer button (opens modal) */}
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10, alignItems: "center" }}>
@@ -387,13 +407,14 @@ export default function RetailerProductsPage() {
 
         <tbody>
           {products.map((p) => {
-            const locked = isOnChainConfirmed(p);
+            const confirmed = isOnChainConfirmed(p);
             const eligible = isTransferEligible(p);
-            
+
             const go = (fn: () => void) => {
               fn();
               setOpenMenuForId(null);
             };
+
             return (
               <tr key={p.productId}>
                 <td style={td}>
@@ -404,7 +425,7 @@ export default function RetailerProductsPage() {
                     disabled={!eligible}
                     aria-label={`Select product ${p.productId}`}
                     title={
-                      !locked
+                      !confirmed
                         ? "Cannot transfer: product not confirmed on-chain"
                         : p.lifecycleStatus === "transferred"
                         ? "Cannot transfer: you are no longer the current owner"
@@ -419,7 +440,6 @@ export default function RetailerProductsPage() {
                 <td style={td}>{safeDate(p.registeredOn)}</td>
 
                 <td style={td}>
-                  {/* Ownership */}
                   <span
                     style={{
                       marginLeft: 10,
@@ -438,7 +458,6 @@ export default function RetailerProductsPage() {
                     {p.lifecycleStatus === "active" ? "owned" : "transferred"}
                   </span>
 
-                  {/* Stage pill */}
                   {p.stage && (
                     <span
                       style={{
@@ -456,7 +475,6 @@ export default function RetailerProductsPage() {
                   )}
                 </td>
 
-                {/* Actions Menu*/}
                 <td style={td}>
                   <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
                     <button
@@ -491,9 +509,6 @@ export default function RetailerProductsPage() {
 
       {products.length === 0 && <p style={{ marginTop: 20, opacity: 0.6 }}>No products found for this filter.</p>}
 
-      {/* =======================
-          TRANSFER OWNERSHIP MODAL
-      ======================== */}
       <TransferOwnershipModal
         open={transferOpen}
         onClose={() => setTransferOpen(false)}

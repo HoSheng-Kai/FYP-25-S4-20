@@ -1,21 +1,10 @@
 import { useEffect, useState } from "react";
 import NotificationsPanel from "../../components/notifications/NotificationsPanel";
+import { useAuth } from "../../auth/AuthContext";
 
 export default function ConsumerDashboardPage() {
-  const [username, setUsername] = useState<string>("");
-  const [userId, setUserId] = useState<string>("");
-
-  useEffect(() => {
-    const storedUsername = localStorage.getItem("username");
-    const storedUserId = localStorage.getItem("userId");
-    
-    if (storedUsername) {
-      setUsername(storedUsername);
-    }
-    if (storedUserId) {
-      setUserId(storedUserId);
-    }
-  }, []);
+  const { auth } = useAuth();
+  const username = auth.user?.username ?? "";
 
   return (
     <div>
@@ -37,9 +26,7 @@ export default function ConsumerDashboardPage() {
           </p>
         </div>
       </div>
-
-      {/* ...ownership transfer link removed, now in sidebar... */}
-
+      
       {/* Notifications */}
       <NotificationsPanel />
     </div>

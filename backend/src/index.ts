@@ -15,6 +15,8 @@ import ChatEntity from "./entities/Chat";
 import { upsertProductMetadata } from "./controller/ProductMetadata";
 import { sanitize } from "./utils/sanitise";
 
+import cookieParser from "cookie-parser";
+
 const app = express();
 
 app.use(express.json());
@@ -64,6 +66,8 @@ app.use((req, _res, next) => {
   }
   next();
 });
+// cookies
+app.use(cookieParser());
 
 // routes
 app.use("/api/users", userRouter);

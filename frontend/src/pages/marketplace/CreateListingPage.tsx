@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useMemo } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-
-const API = "https://fyp-25-s4-20.duckdns.org/api/products";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 type OwnedProduct = {
   productId: number;
@@ -18,11 +18,11 @@ type OwnedProduct = {
 
 export default function CreateListingPage() {
   const navigate = useNavigate();
-  
-  const userId = useMemo(() => {
-    const raw = localStorage.getItem("userId");
-    return raw ? Number(raw) : NaN;
-  }, []);
+  const { auth } = useAuth();
+
+  const authLoading = auth.loading;
+  const user = auth.user;
+  const userId = user?.userId;
 
   const [products, setProducts] = useState<OwnedProduct[]>([]);
   const [loading, setLoading] = useState(false);
@@ -37,8 +37,13 @@ export default function CreateListingPage() {
 
   useEffect(() => {
     const loadOwnedProducts = async () => {
-      if (!Number.isFinite(userId)) {
-        setError("No userId found. Please login again.");
+      // wait for /users/me to finish
+      if (authLoading) return;
+
+      // not logged in
+      if (!userId) {
+        setError("You are not logged in. Please login again.");
+        setProducts([]);
         return;
       }
 
@@ -50,7 +55,10 @@ export default function CreateListingPage() {
           success: boolean;
           data?: OwnedProduct[];
           error?: string;
-        }>(`${API}/owned`, { params: { userId } });
+        }>(`${API_ROOT}/products/owned`, {
+          params: { userId },
+          withCredentials: true,
+        });
 
         if (!res.data.success || !res.data.data) {
           setError(res.data.error || "Failed to load your products");
@@ -61,7 +69,11 @@ export default function CreateListingPage() {
         setProducts(res.data.data);
       } catch (err: any) {
         console.error(err);
-        setError("Unable to load your products");
+        setError(
+          err?.response?.data?.error ||
+            err?.response?.data?.details ||
+            "Unable to load your products"
+        );
         setProducts([]);
       } finally {
         setLoading(false);
@@ -69,11 +81,17 @@ export default function CreateListingPage() {
     };
 
     loadOwnedProducts();
-  }, [userId]);
+  }, [authLoading, userId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitError(null);
+
+    // defensive: user might become null if session expires
+    if (!userId) {
+      setSubmitError("Session expired. Please login again.");
+      return;
+    }
 
     if (!selectedProductId) {
       setSubmitError("Please select a product");
@@ -94,35 +112,44 @@ export default function CreateListingPage() {
         data?: any;
         error?: string;
         details?: string;
-      }>(`${API}/listings`, {
-        userId,
-        productId: selectedProductId,
-        price: priceNum,
-        currency,
-        status: "available",
-        notes: notes.trim() || null,
-      });
+      }>(
+        `${API_ROOT}/products/listings`,
+        {
+          userId,
+          productId: selectedProductId,
+          price: priceNum,
+          currency,
+          status: "available",
+          notes: notes.trim() || null,
+        },
+        { withCredentials: true }
+      );
 
       if (!res.data.success) {
         setSubmitError(res.data.error || res.data.details || "Failed to create listing");
         return;
       }
 
-      // Success - navigate to my listings
       navigate("/consumer/my-listings");
     } catch (err: any) {
       console.error(err);
       setSubmitError(
         err?.response?.data?.error ||
-        err?.response?.data?.details ||
-        "Unable to create listing"
+          err?.response?.data?.details ||
+          "Unable to create listing"
       );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const availableProducts = products.filter((p) => p.canCreateListing);
+  const availableProducts = useMemo(
+    () => products.filter((p) => p.canCreateListing),
+    [products]
+  );
+
+  // optional: show a stable loading state during auth check
+  if (authLoading) return <p>Checking session...</p>;
 
   return (
     <div>
@@ -144,15 +171,7 @@ export default function CreateListingPage() {
       </div>
 
       {error && (
-        <div
-          style={{
-            background: "#fee",
-            color: "#c00",
-            padding: 16,
-            borderRadius: 8,
-            marginBottom: 20,
-          }}
-        >
+        <div style={{ background: "#fee", color: "#c00", padding: 16, borderRadius: 8, marginBottom: 20 }}>
           {error}
         </div>
       )}
@@ -162,18 +181,8 @@ export default function CreateListingPage() {
       {!loading && !error && (
         <>
           {availableProducts.length === 0 ? (
-            <div
-              style={{
-                background: "#fff",
-                padding: 30,
-                borderRadius: 12,
-                textAlign: "center",
-                color: "#666",
-              }}
-            >
-              <p style={{ margin: 0, fontSize: 16 }}>
-                You don't have any products available to list.
-              </p>
+            <div style={{ background: "#fff", padding: 30, borderRadius: 12, textAlign: "center", color: "#666" }}>
+              <p style={{ margin: 0, fontSize: 16 }}>You don't have any products available to list.</p>
               <p style={{ margin: "8px 0 0 0", fontSize: 14 }}>
                 Products that already have active listings cannot be listed again.
               </p>
@@ -182,20 +191,12 @@ export default function CreateListingPage() {
             <div style={{ background: "#fff", padding: 30, borderRadius: 12 }}>
               <form onSubmit={handleSubmit}>
                 <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
-                    Select Product *
-                  </label>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Select Product *</label>
                   <select
                     value={selectedProductId || ""}
                     onChange={(e) => setSelectedProductId(Number(e.target.value))}
                     required
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      fontSize: 15,
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                    }}
+                    style={{ width: "100%", padding: 12, fontSize: 15, border: "1px solid #ddd", borderRadius: 8 }}
                   >
                     <option value="">-- Choose a product --</option>
                     {availableProducts.map((prod) => (
@@ -207,9 +208,7 @@ export default function CreateListingPage() {
                 </div>
 
                 <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
-                    Price *
-                  </label>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Price *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -218,31 +217,17 @@ export default function CreateListingPage() {
                     onChange={(e) => setPrice(e.target.value)}
                     required
                     placeholder="e.g. 150.00"
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      fontSize: 15,
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                    }}
+                    style={{ width: "100%", padding: 12, fontSize: 15, border: "1px solid #ddd", borderRadius: 8 }}
                   />
                 </div>
 
                 <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
-                    Currency *
-                  </label>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Currency *</label>
                   <select
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value as "SGD" | "USD" | "EUR")}
                     required
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      fontSize: 15,
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                    }}
+                    style={{ width: "100%", padding: 12, fontSize: 15, border: "1px solid #ddd", borderRadius: 8 }}
                   >
                     <option value="SGD">SGD</option>
                     <option value="USD">USD</option>
@@ -251,9 +236,7 @@ export default function CreateListingPage() {
                 </div>
 
                 <div style={{ marginBottom: 20 }}>
-                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>
-                    Notes (optional)
-                  </label>
+                  <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Notes (optional)</label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -270,9 +253,7 @@ export default function CreateListingPage() {
                       minHeight: 100,
                     }}
                   />
-                  <p style={{ margin: "8px 0 0 0", fontSize: 12, color: "#999" }}>
-                    {notes.length}/500 characters
-                  </p>
+                  <p style={{ margin: "8px 0 0 0", fontSize: 12, color: "#999" }}>{notes.length}/500 characters</p>
                 </div>
 
                 {submitError && (

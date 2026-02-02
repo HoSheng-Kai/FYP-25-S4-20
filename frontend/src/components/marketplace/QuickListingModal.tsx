@@ -1,22 +1,20 @@
 import React, { useState } from "react";
 import axios from "axios";
 import type { OwnedProduct } from "../../pages/consumer/MyProductsPage";
-
-const API = "https://fyp-25-s4-20.duckdns.org/api/products";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 interface QuickListingModalProps {
   product: OwnedProduct;
-  userId: number;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function QuickListingModal({
-  product,
-  userId,
-  onClose,
-  onSuccess,
-}: QuickListingModalProps) {
+export default function QuickListingModal({ product, onClose, onSuccess }: QuickListingModalProps) {
+  const { auth } = useAuth();
+  const authLoading = auth.loading;
+  const userId = auth.user?.userId;
+
   const [price, setPrice] = useState("");
   const [currency, setCurrency] = useState<"SGD" | "USD" | "EUR">("SGD");
   const [notes, setNotes] = useState("");
@@ -26,6 +24,15 @@ export default function QuickListingModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (authLoading) {
+      setError("Checking session… please try again.");
+      return;
+    }
+    if (!userId) {
+      setError("You are not logged in. Please login again.");
+      return;
+    }
 
     const priceNum = Number(price);
     if (Number.isNaN(priceNum) || priceNum <= 0) {
@@ -41,14 +48,18 @@ export default function QuickListingModal({
         data?: any;
         error?: string;
         details?: string;
-      }>(`${API}/listings`, {
-        userId,
-        productId: product.productId,
-        price: priceNum,
-        currency,
-        status: "available",
-        notes: notes.trim() || null,
-      });
+      }>(
+        `${API_ROOT}/products/listings`,
+        {
+          userId,
+          productId: product.productId,
+          price: priceNum,
+          currency,
+          status: "available",
+          notes: notes.trim() || null,
+        },
+        { withCredentials: true }
+      );
 
       if (!res.data.success) {
         setError(res.data.error || res.data.details || "Failed to create listing");
@@ -116,18 +127,14 @@ export default function QuickListingModal({
           }}
         >
           <div style={{ marginBottom: 12 }}>
-            <p style={{ margin: "0 0 4px 0", fontSize: 12, color: "#666" }}>
-              Product Name
-            </p>
+            <p style={{ margin: "0 0 4px 0", fontSize: 12, color: "#666" }}>Product Name</p>
             <p style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>
               {product.model || "Product"}
             </p>
           </div>
 
           <div style={{ marginBottom: 12 }}>
-            <p style={{ margin: "0 0 4px 0", fontSize: 12, color: "#666" }}>
-              Serial Number
-            </p>
+            <p style={{ margin: "0 0 4px 0", fontSize: 12, color: "#666" }}>Serial Number</p>
             <p
               style={{
                 margin: 0,
@@ -143,9 +150,7 @@ export default function QuickListingModal({
 
           {product.category && (
             <div>
-              <p style={{ margin: "0 0 4px 0", fontSize: 12, color: "#666" }}>
-                Category
-              </p>
+              <p style={{ margin: "0 0 4px 0", fontSize: 12, color: "#666" }}>Category</p>
               <p style={{ margin: 0, fontSize: 14 }}>{product.category}</p>
             </div>
           )}
@@ -223,13 +228,7 @@ export default function QuickListingModal({
                 boxSizing: "border-box",
               }}
             />
-            <p
-              style={{
-                margin: "4px 0 0 0",
-                fontSize: 12,
-                color: "#999",
-              }}
-            >
+            <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "#999" }}>
               {notes.length}/500 characters
             </p>
           </div>
@@ -255,6 +254,7 @@ export default function QuickListingModal({
             <button
               type="button"
               onClick={onClose}
+              disabled={submitting}
               style={{
                 flex: 1,
                 padding: "10px 16px",
@@ -263,11 +263,13 @@ export default function QuickListingModal({
                 borderRadius: 6,
                 fontSize: 14,
                 fontWeight: 600,
-                cursor: "pointer",
+                cursor: submitting ? "not-allowed" : "pointer",
+                opacity: submitting ? 0.7 : 1,
               }}
             >
               Cancel
             </button>
+
             <button
               type="submit"
               disabled={submitting}

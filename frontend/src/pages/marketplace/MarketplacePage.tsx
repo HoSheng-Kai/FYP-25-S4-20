@@ -1,13 +1,10 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import ListingCard from "../../components/marketplace/ListingCard";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
-const API = "https://fyp-25-s4-20.duckdns.org/api/products";
-
-/**
- * This matches EXACTLY what your backend returns in ProductController.getMarketplaceListings()
- */
 export type MarketplaceListing = {
   listingId: number;
   productId: number;
@@ -34,77 +31,65 @@ export type MarketplaceListing = {
 };
 
 const MarketplacePage: React.FC = () => {
+  const { auth } = useAuth();
+  const authLoading = auth.loading;
+  const userId = auth.user?.userId;
+
   const [items, setItems] = useState<MarketplaceListing[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [minPrice, setMinPrice] = useState<string>("");
   const [maxPrice, setMaxPrice] = useState<string>("");
   const [sortBy, setSortBy] = useState<string>("latest");
 
-  const userId = useMemo(() => {
-    const raw = localStorage.getItem("userId");
-    return raw ? Number(raw) : NaN;
+  const fetchMarketplace = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+
+    try {
+      const res = await axios.get<{
+        success: boolean;
+        data?: MarketplaceListing[];
+        error?: string;
+      }>(`${API_ROOT}/products/marketplace/listings`, { withCredentials: true });
+
+      if (!res.data.success || !res.data.data) {
+        setErr(res.data.error || "Failed to load marketplace listings.");
+        setItems([]);
+        return;
+      }
+
+      setItems(res.data.data);
+    } catch (e) {
+      console.error(e);
+      setErr("Unable to load marketplace listings.");
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      setErr(null);
-      try {
-        const res = await axios.get<{
-          success: boolean;
-          data?: MarketplaceListing[];
-          error?: string;
-        }>(`${API}/marketplace/listings`);
-
-        if (!res.data.success || !res.data.data) {
-          setErr(res.data.error || "Failed to load marketplace listings.");
-          setItems([]);
-          return;
-        }
-
-        // Filter out user's own listings
-        const filtered = Number.isFinite(userId)
-          ? res.data.data.filter((item) => Number(item.seller.userId) !== userId)
-          : res.data.data;
-
-        setItems(filtered);
-      } catch (e) {
-        console.error(e);
-        setErr("Unable to load marketplace listings.");
-        setItems([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
-  }, [userId]);
+    void fetchMarketplace();
+  }, [fetchMarketplace]);
 
   const handlePurchaseSuccess = () => {
     // Reload the marketplace to remove purchased items
-    const load = async () => {
-      try {
-        const res = await axios.get<{
-          success: boolean;
-          data?: MarketplaceListing[];
-        }>(`${API}/marketplace/listings`);
-
-        if (res.data.success && res.data.data) {
-          const filtered = Number.isFinite(userId)
-            ? res.data.data.filter((item) => Number(item.seller.userId) !== userId)
-            : res.data.data;
-          setItems(filtered);
-        }
-      } catch (e) {
-        console.error("Failed to refresh marketplace:", e);
-      }
-    };
-    void load();
+    void fetchMarketplace();
   };
 
+  // Filter out user's own listings AFTER auth resolves
+  const visibleItems = useMemo(() => {
+    if (authLoading) return items; // while checking session, just show all
+    if (!userId) return items; // not logged in, no filtering needed
+
+    return items.filter((item) => Number(item.seller.userId) !== userId);
+  }, [items, authLoading, userId]);
+
   const filteredItems = useMemo(() => {
-    let result = items.filter((item) => {
+    let result = visibleItems.filter((item) => {
       // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
@@ -112,6 +97,7 @@ const MarketplacePage: React.FC = () => {
           (item.productName?.toLowerCase().includes(query) || false) ||
           item.serialNumber.toLowerCase().includes(query) ||
           item.seller.username.toLowerCase().includes(query);
+
         if (!matchesSearch) return false;
       }
 
@@ -125,7 +111,7 @@ const MarketplacePage: React.FC = () => {
       return true;
     });
 
-    // Apply sorting
+    // Sorting
     result = result.sort((a, b) => {
       switch (sortBy) {
         case "latest":
@@ -142,13 +128,14 @@ const MarketplacePage: React.FC = () => {
     });
 
     return result;
-  }, [items, searchQuery, minPrice, maxPrice, sortBy]);
+  }, [visibleItems, searchQuery, minPrice, maxPrice, sortBy]);
 
   return (
     <div style={{ padding: 24, maxWidth: "100%", overflow: "hidden", position: "relative" }}>
       <div style={{ position: "fixed", top: 18, right: 32, zIndex: 2000 }}>
         <WalletMultiButton />
       </div>
+
       <h1 style={{ margin: 0, fontSize: 24 }}>Consumer Marketplace</h1>
       <p style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
         Browse blockchain-registered products listed for sale.
@@ -264,13 +251,11 @@ const MarketplacePage: React.FC = () => {
         ))}
       </div>
 
-      {!loading && !err && items.length === 0 && (
-        <p style={{ marginTop: 12, color: "#6b7280" }}>
-          No available listings right now.
-        </p>
+      {!loading && !err && visibleItems.length === 0 && (
+        <p style={{ marginTop: 12, color: "#6b7280" }}>No available listings right now.</p>
       )}
 
-      {!loading && !err && items.length > 0 && filteredItems.length === 0 && (
+      {!loading && !err && visibleItems.length > 0 && filteredItems.length === 0 && (
         <p style={{ marginTop: 12, color: "#6b7280" }}>
           No items match your filters. Try adjusting your search.
         </p>

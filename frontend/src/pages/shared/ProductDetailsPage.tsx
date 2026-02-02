@@ -136,7 +136,7 @@ export default function ProductDetailsPage() {
 
   const onChain = !!product.tx_hash;
 
-  // Use PNG endpoint (best)
+  // Use PNG endpoint
   const qrImgSrc = `${PRODUCTS_API_BASE_URL}/${product.product_id}/qrcode`;
 
   return (

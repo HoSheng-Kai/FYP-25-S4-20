@@ -1,24 +1,20 @@
-import { useEffect, useState } from "react";
+import { useAuth } from "../../auth/AuthContext";
 import NotificationsPanel from "../../components/notifications/NotificationsPanel";
 
 export default function RetailerDashboardPage() {
-  const [username, setUsername] = useState<string>("");
+  const { auth } = useAuth();
 
-  useEffect(() => {
-    const storedUsername = localStorage.getItem("username");
-    if (storedUsername) setUsername(storedUsername);
-  }, []);
+  if (auth.loading) return <div style={{ padding: 20 }}>Loading…</div>;
+  if (!auth.user) return null;
 
   return (
     <div>
-      {/* Page header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ marginBottom: 8, fontSize: 32, color: "#111827" }}>
-          Welcome{username ? `, ${username}` : ""}!
+          Welcome{auth.user.username ? `, ${auth.user.username}` : ""}!
         </h1>
       </div>
 
-      {/* Notifications */}
       <NotificationsPanel />
     </div>
   );

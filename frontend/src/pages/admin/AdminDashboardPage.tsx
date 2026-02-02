@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { USERS_API_BASE_URL, ADMIN_API_BASE_URL } from "../../config/api";
+import { ADMIN_API_BASE_URL } from "../../config/api";
 import NotificationsPanel from "../../components/notifications/NotificationsPanel";
+import { useAuth } from "../../auth/AuthContext";
 
 interface DashboardStats {
   totalUsers: number;
@@ -25,7 +26,8 @@ const activeStyle: React.CSSProperties = {
 
 export default function AdminDashboardPage() {
   const navigate = useNavigate();
-  const [username, setUsername] = useState<string>("");
+  const { auth, logout } = useAuth();
+  const username = auth.user?.username ?? "";
   const [stats, setStats] = useState<DashboardStats>({
     totalUsers: 0,
     verifiedUsers: 0,
@@ -35,9 +37,6 @@ export default function AdminDashboardPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedUsername = localStorage.getItem("username");
-    if (storedUsername) setUsername(storedUsername);
-
     loadDashboardStats();
   }, []);
 
@@ -45,8 +44,8 @@ export default function AdminDashboardPage() {
     try {
       setLoading(true);
       const [usersRes, listingsRes] = await Promise.all([
-        axios.get(`${ADMIN_API_BASE_URL}/view-accounts`),
-        axios.get(`${ADMIN_API_BASE_URL}/read-product-listings`),
+        axios.get(`${ADMIN_API_BASE_URL}/view-accounts`, { withCredentials: true }),
+        axios.get(`${ADMIN_API_BASE_URL}/read-product-listings`, { withCredentials: true }),
       ]);
 
       const users = usersRes.data.data || [];
@@ -67,14 +66,10 @@ export default function AdminDashboardPage() {
 
   const handleLogout = async () => {
     try {
-      await axios.post(`${USERS_API_BASE_URL}/logout-account`);
+      await logout();
     } catch (err) {
       console.error("Logout failed:", err);
     } finally {
-      localStorage.removeItem("isAuthenticated");
-      localStorage.removeItem("username");
-      localStorage.removeItem("userRole");
-      localStorage.removeItem("userId");
       navigate("/login");
     }
   };

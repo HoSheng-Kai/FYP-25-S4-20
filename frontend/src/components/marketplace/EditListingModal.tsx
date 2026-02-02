@@ -1,5 +1,3 @@
-// frontend/src/components/marketplace/EditListingModal.tsx
-
 import { useState } from "react";
 import type { MyListing } from "../../pages/marketplace/MyListingsPage";
 

@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
-
-const API = "https://fyp-25-s4-20.duckdns.org/api/chats";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 type Thread = {
   thread_id: number;
@@ -24,7 +24,8 @@ type Thread = {
 };
 
 export default function ChatsPage() {
-  const userId = useMemo(() => Number(localStorage.getItem("userId")), []);
+  const { auth } = useAuth();
+  const userId = auth.user?.userId;
   const [threads, setThreads] = useState<Thread[]>([]);
   const [archivedThreads, setArchivedThreads] = useState<Thread[]>([]);
   const [loading, setLoading] = useState(false);
@@ -38,7 +39,7 @@ export default function ChatsPage() {
     setLoading(true);
     setErr(null);
     try {
-      const res = await axios.get(`${API}/threads`, { params: { userId } });
+      const res = await axios.get(`${API_ROOT}/chats/threads`, { params: { userId }, withCredentials: true });
       if (res.data.success) {
         const all: Thread[] = res.data.threads || [];
         const active = all.filter((t) => t.archived_by !== userId);
@@ -62,7 +63,7 @@ export default function ChatsPage() {
     if (!window.confirm("Are you sure you want to delete this chat permanently?")) return;
     
     try {
-      await axios.delete(`${API}/${threadId}`, { data: { userId } });
+      await axios.delete(`${API_ROOT}/chats/${threadId}`, { data: { userId }, withCredentials: true });
       await load();
       setMenuOpen(null);
     } catch (e: any) {
@@ -72,7 +73,7 @@ export default function ChatsPage() {
 
   const handleArchive = async (threadId: number) => {
     try {
-      const res = await axios.post(`${API}/${threadId}/archive`, { userId });
+      const res = await axios.post(`${API_ROOT}/chats/${threadId}/archive`, { userId }, { withCredentials: true });
       if (res.data.success) {
         await load();
         setMenuOpen(null);
@@ -85,7 +86,7 @@ export default function ChatsPage() {
 
   const handleUnarchive = async (threadId: number) => {
     try {
-      const res = await axios.post(`${API}/${threadId}/unarchive`, { userId });
+      const res = await axios.post(`${API_ROOT}/chats/${threadId}/unarchive`, { userId }, { withCredentials: true });
       if (res.data.success) {
         await load();
         setMenuOpen(null);

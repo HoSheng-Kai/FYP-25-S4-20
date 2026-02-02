@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
-
-const API = "https://fyp-25-s4-20.duckdns.org/api/products";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 type ListingStatus = "available" | "reserved" | "sold";
 
@@ -20,12 +20,10 @@ type EditListingPrefill = {
 export default function EditListingPage() {
   const navigate = useNavigate();
   const { listingId } = useParams();
+  const { auth } = useAuth();
 
-  const userId = useMemo(() => {
-    const raw = localStorage.getItem("userId");
-    const n = raw ? Number(raw) : NaN;
-    return Number.isFinite(n) ? n : null;
-  }, []);
+  const authLoading = auth.loading;
+  const userId = auth.user?.userId;
 
   const [data, setData] = useState<EditListingPrefill | null>(null);
   const [price, setPrice] = useState<string>("");
@@ -39,8 +37,11 @@ export default function EditListingPage() {
 
   useEffect(() => {
     if (!listingId) return;
+    if (authLoading) return;
+
     if (!userId) {
-      setErr("userId not found in localStorage. Please login again.");
+      setErr("You are not logged in. Please login again.");
+      setData(null);
       return;
     }
 
@@ -49,37 +50,52 @@ export default function EditListingPage() {
       setErr(null);
 
       try {
-        const res = await axios.get<{ success: boolean; data?: any; error?: string; details?: string }>(
-          `${API}/listings/${listingId}/edit`,
-          { params: { userId } }
-        );
+        const res = await axios.get<{
+          success: boolean;
+          data?: EditListingPrefill;
+          error?: string;
+          details?: string;
+        }>(`${API_ROOT}/products/listings/${listingId}/edit`, {
+          params: { userId },
+          withCredentials: true,
+        });
 
         if (!res.data.success || !res.data.data) {
           setErr(res.data.error || res.data.details || "Failed to load listing.");
+          setData(null);
           return;
         }
 
-        const d = res.data.data as EditListingPrefill;
+        const d = res.data.data;
         setData(d);
 
         setPrice(d.price ?? "");
         setCurrency(d.currency ?? "SGD");
         setStatus(d.status ?? "available");
-      } catch (e) {
-        setErr("Unable to load listing. Are you the seller of this listing?");
+      } catch (e: any) {
+        console.error(e);
+        setErr(
+          e?.response?.data?.error ||
+            e?.response?.data?.details ||
+            "Unable to load listing. Are you the seller of this listing?"
+        );
+        setData(null);
       } finally {
         setLoading(false);
       }
     };
 
     void load();
-  }, [listingId, userId]);
+  }, [listingId, authLoading, userId]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!listingId) return;
+
+    if (authLoading) return;
+
     if (!userId) {
-      setErr("userId missing. Please login again.");
+      setErr("Session expired. Please login again.");
       return;
     }
 
@@ -88,14 +104,20 @@ export default function EditListingPage() {
     setOk(null);
 
     try {
-      const res = await axios.put<{ success: boolean; data?: any; error?: string; details?: string }>(
-        `${API}/listings/${listingId}`,
+      const res = await axios.put<{
+        success: boolean;
+        data?: any;
+        error?: string;
+        details?: string;
+      }>(
+        `${API_ROOT}/products/listings/${listingId}`,
         {
           userId,
           price: price === "" ? null : Number(price),
           currency,
           status,
-        }
+        },
+        { withCredentials: true }
       );
 
       if (!res.data.success) {
@@ -104,14 +126,22 @@ export default function EditListingPage() {
       }
 
       setOk("Listing updated successfully!");
-      // go back after a short success message
       setTimeout(() => navigate("/my-listings"), 700);
     } catch (e: any) {
+      console.error(e);
       setErr(e?.response?.data?.error || e?.response?.data?.details || "Unable to update listing.");
     } finally {
       setSaving(false);
     }
   };
+
+  if (authLoading) {
+    return (
+      <div style={{ padding: 24, maxWidth: 720 }}>
+        <p style={{ color: "#6b7280" }}>Checking session…</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 24, maxWidth: 720 }}>
@@ -182,7 +212,7 @@ export default function EditListingPage() {
             <label style={{ fontSize: 12, color: "#6b7280" }}>Availability</label>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as any)}
+              onChange={(e) => setStatus(e.target.value as ListingStatus)}
               style={{
                 width: "100%",
                 marginTop: 6,
@@ -203,7 +233,7 @@ export default function EditListingPage() {
           <div style={{ display: "flex", gap: 10 }}>
             <button
               type="button"
-              onClick={() => navigate("/my-listings")}
+              onClick={() => navigate("/consumer/my-listings")}
               style={{
                 flex: 1,
                 background: "white",

@@ -1,46 +1,29 @@
 import type { FormEvent } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import AuthLayout from "../../components/layout/AuthLayout";
 import { USERS_API_BASE_URL } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 type Role = "admin" | "manufacturer" | "distributor" | "retailer" | "consumer";
 
 type LoginResponse = {
   success: boolean;
-  otp: number;
-
-  // backend may return role here
-  role?: Role;
-
-  // backend might return either userId or userid
-  userId?: number;
-  userid?: number;
-
+  tempAuthId?: string;
   error?: string;
   details?: string;
 };
 
-const isRole = (value: string | null): value is Role => {
-  return (
-    value === "admin" ||
-    value === "manufacturer" ||
-    value === "distributor" ||
-    value === "retailer" ||
-    value === "consumer"
-  );
+type ForgotPasswordResponse = {
+  success: boolean;
+  otp?: number;
+  userId?: number;
+  userid?: number;
+  error?: string;
+  details?: string;
 };
 
-/**
- * IMPORTANT:
- * We redirect to the ROLE ROOT path now:
- *  consumer -> /consumer
- *  manufacturer -> /manufacturer
- *  distributor -> /distributor
- *  retailer -> /retailer
- * This ensures the correct Layout + Sidebar is used.
- */
 const roleToRootPath = (r: Role) => {
   switch (r) {
     case "admin":
@@ -61,12 +44,8 @@ const roleToRootPath = (r: Role) => {
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-
-  const [step, setStep] = useState<"credentials" | "otp" | "forgot-password" | "forgot-password-otp" | "forgot-password-reset">("credentials");
-  const [serverOtp, setServerOtp] = useState<number | null>(null);
   const [otpInput, setOtpInput] = useState("");
-  const [role, setRole] = useState<Role | null>(null);
-  const [userId, setUserId] = useState<number | null>(null);
+  const [step, setStep] = useState<"credentials" | "otp" | "forgot-password" | "forgot-password-otp" | "forgot-password-reset">("credentials");
 
   // Forgot password state
   const [forgotUsername, setForgotUsername] = useState("");
@@ -79,20 +58,9 @@ export default function LoginPage() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+  const [tempAuthId, setTempAuthId] = useState<string | null>(null);
   const navigate = useNavigate();
-
-  // Auto redirect if already authenticated
-  useEffect(() => {
-    const existingRole = localStorage.getItem("userRole");
-    const isAuthenticated = localStorage.getItem("isAuthenticated") === "true";
-
-    if (isAuthenticated && isRole(existingRole)) {
-      navigate(roleToRootPath(existingRole));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  const { refresh, auth } = useAuth();
   // ----------------------------
   // Step 1 — credentials login
   // ----------------------------
@@ -104,33 +72,21 @@ export default function LoginPage() {
     try {
       const res = await axios.post<LoginResponse>(
         `${USERS_API_BASE_URL}/login-account`,
-        { username, password }
+        { username, password },
+        { withCredentials: true }
       );
 
       if (!res.data.success) {
-        setError(res.data.error || "Failed to login");
+        setError(res.data.error || "Invalid username");
         return;
       }
 
-      if (!res.data.role) {
-        setError("Server did not return your role. Please try again.");
+      if (!res.data.tempAuthId) {
+        setError("Missing tempAuthId from server. Please try again.");
         return;
       }
 
-      const idFromServer = res.data.userId ?? res.data.userid ?? null;
-
-      setServerOtp(res.data.otp);
-      setRole(res.data.role);
-      setUserId(idFromServer);
-
-      // Persist for OTP step (in case refresh happens)
-      localStorage.setItem("pendingRole", res.data.role);
-      if (idFromServer != null && !Number.isNaN(idFromServer)) {
-        localStorage.setItem("pendingUserId", String(idFromServer));
-      } else {
-        localStorage.removeItem("pendingUserId");
-      }
-
+      setTempAuthId(res.data.tempAuthId);
       setStep("otp");
     } catch (err: any) {
       setError(
@@ -146,56 +102,39 @@ export default function LoginPage() {
   // ----------------------------
   // Step 2 — OTP verification
   // ----------------------------
-  const handleOtpSubmit = (e: FormEvent<HTMLFormElement>) => {
+  const handleOtpSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
+    setIsSubmitting(true);
 
-    if (!serverOtp) {
-      setError("No OTP found. Please login again.");
-      setStep("credentials");
-      return;
-    }
-
-    // Recover role if state lost
-    let finalRole: Role | null = role;
-    if (!finalRole) {
-      const stored = localStorage.getItem("pendingRole");
-      if (isRole(stored)) finalRole = stored;
-    }
-
-    if (!finalRole) {
-      setError("User role not found. Please login again.");
-      setStep("credentials");
-      return;
-    }
-
-    // Recover userId if state lost
-    let finalUserId: number | null = userId;
-    if (finalUserId == null) {
-      const storedUserId = localStorage.getItem("pendingUserId");
-      finalUserId = storedUserId ? Number(storedUserId) : null;
-    }
-
-    if (parseInt(otpInput, 10) === serverOtp) {
-      // ✅ final session saved
-      localStorage.setItem("isAuthenticated", "true");
-      localStorage.setItem("username", username);
-      localStorage.setItem("userRole", finalRole);
-
-      if (finalUserId != null && !Number.isNaN(finalUserId)) {
-        localStorage.setItem("userId", String(finalUserId));
-      } else {
-        localStorage.removeItem("userId");
+    try {
+      if (!tempAuthId) {
+        setError("Session expired. Please login again.");
+        setStep("credentials");
+        return;
       }
 
-      // cleanup
-      localStorage.removeItem("pendingRole");
-      localStorage.removeItem("pendingUserId");
+      const res = await axios.post(
+        `${USERS_API_BASE_URL}/verify-otp`,
+        { tempAuthId, otp: otpInput },
+        { withCredentials: true }
+      );
 
-      // ✅ redirect to ROLE ROOT (layout)
-      navigate(roleToRootPath(finalRole));
-    } else {
-      setError("Incorrect OTP. Please try again.");
+      if (!res.data?.success) {
+        setError(res.data?.error || "Invalid OTP");
+        return;
+      }
+
+      await refresh();
+
+      const me = await axios.get(`${USERS_API_BASE_URL}/me`, { withCredentials: true });
+      const role = me.data.user.role as Role;
+
+      navigate(roleToRootPath(role));
+    } catch (err: any) {
+      setError(err?.response?.data?.error || "Invalid or expired OTP.");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -208,7 +147,7 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const res = await axios.post<LoginResponse>(
+      const res = await axios.post<ForgotPasswordResponse>(
         `${USERS_API_BASE_URL}/forgot-password`,
         { username: forgotUsername }
       );
@@ -220,7 +159,7 @@ export default function LoginPage() {
 
       const idFromServer = res.data.userId ?? res.data.userid ?? null;
 
-      setForgotServerOtp(res.data.otp);
+      setForgotServerOtp(res.data.otp ?? null);
       setForgotUserId(idFromServer);
       setStep("forgot-password-otp");
     } catch (err: any) {
@@ -554,11 +493,8 @@ export default function LoginPage() {
                 onClick={() => {
                   setStep("credentials");
                   setOtpInput("");
-                  setServerOtp(null);
-                  setRole(null);
-                  setUserId(null);
-                  localStorage.removeItem("pendingRole");
-                  localStorage.removeItem("pendingUserId");
+                  setTempAuthId(null);
+                  setError(null);
                 }}
               >
                 Back to login

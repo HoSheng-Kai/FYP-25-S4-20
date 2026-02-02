@@ -3,8 +3,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-
-const API = "https://fyp-25-s4-20.duckdns.org/api/chats";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 type Message = {
   message_id: number;
@@ -29,9 +29,10 @@ type ThreadDetails = {
 
 export default function ChatThreadPage() {
   const wallet = useWallet();
+  const { auth } = useAuth();
   const { threadId } = useParams<{ threadId: string }>();
   const navigate = useNavigate();
-  const userId = useMemo(() => Number(localStorage.getItem("userId")), []);
+  const userId = auth.user?.userId;
   const [messages, setMessages] = useState<Message[]>([]);
   const [thread, setThread] = useState<ThreadDetails | null>(null);
   const [text, setText] = useState("");
@@ -46,11 +47,12 @@ export default function ChatThreadPage() {
   const [reportReason, setReportReason] = useState("Fraudulent activity");
   const [reportSubmitting, setReportSubmitting] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
-
+  
   const load = async () => {
     if (!threadId || !userId) return;
     try {
-      const res = await axios.get(`${API}/${threadId}/messages`, { params: { userId, limit: 200 } });
+      const res = await axios.get(`${API_ROOT}/chats/${threadId}/messages`, { params: { userId, limit: 200 } ,
+        withCredentials: true });
       if (res.data.success) {
         setMessages(res.data.messages);
         setThread(res.data.thread);
@@ -74,7 +76,7 @@ export default function ChatThreadPage() {
     const content = text.trim();
     if (!content || !threadId) return;
     try {
-      const res = await axios.post(`${API}/${threadId}/messages`, { userId, content });
+      const res = await axios.post(`${API_ROOT}/chats/${threadId}/messages`, { userId, content }, { withCredentials: true });
       if (res.data.success) {
         setText("");
         await load();
@@ -100,8 +102,9 @@ export default function ChatThreadPage() {
     setPurchasing(true);
     try {
       const res = await axios.post(
-        `https://fyp-25-s4-20.duckdns.org/api/products/listings/${thread.listing_id}/purchase`,
-        { buyerId: userId }
+        `${API_ROOT}/products/listings/${thread.listing_id}/purchase`,
+        { buyerId: userId },
+        { withCredentials: true }
       );
       if (res.data.success) {
         alert(`Purchase successful! You now own ${thread.product_model || 'this product'}`);
@@ -124,7 +127,7 @@ export default function ChatThreadPage() {
     if (!window.confirm("Are you sure you want to delete this chat? This cannot be undone.")) return;
     
     try {
-      const res = await axios.delete(`${API}/${threadId}`, { data: { userId } });
+      const res = await axios.delete(`${API_ROOT}/chats/${threadId}`, { data: { userId }, withCredentials: true });
       if (res.data.success) {
         alert("Chat deleted successfully");
         window.location.href = "/consumer/chats"; // Redirect back to chats list
@@ -140,13 +143,13 @@ export default function ChatThreadPage() {
     setSubmittingReview(true);
     try {
       const res = await axios.post(
-        `https://fyp-25-s4-20.duckdns.org/api/reviews`,
+        `${API_ROOT}/api/reviews`,
         {
           owner_id: thread.seller_id,
           author_id: userId,
           rating: reviewRating,
           comment: reviewComment.trim(),
-        }
+        }, { withCredentials: true }
       );
 
       if (res.data.success) {
@@ -167,10 +170,10 @@ export default function ChatThreadPage() {
     if (!threadId || !reportReason) return;
     setReportSubmitting(true);
     try {
-      const res = await axios.post(`https://fyp-25-s4-20.duckdns.org/api/chats/${threadId}/report`, {
+      const res = await axios.post(`${API_ROOT}/chats/${threadId}/report`, {
         userId,
         reason: reportReason,
-      });
+      }, { withCredentials: true });
       if (res.data.success) {
         alert("Report sent to admin");
         setShowReportModal(false);

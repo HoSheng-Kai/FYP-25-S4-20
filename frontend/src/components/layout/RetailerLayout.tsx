@@ -1,8 +1,6 @@
 import React from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import axios from "axios";
-
-const USERS_API_BASE_URL = "https://fyp-25-s4-20.duckdns.org/api/user";
+import { useAuth } from "../../auth/AuthContext";
 
 const linkBaseStyle: React.CSSProperties = {
   color: "white",
@@ -18,38 +16,21 @@ const activeStyle: React.CSSProperties = {
 
 export default function RetailerLayout() {
   const navigate = useNavigate();
-  const [username, setUsername] = React.useState("");
-  const [userRole, setUserRole] = React.useState("");
-
-  React.useEffect(() => {
-    const storedUsername = localStorage.getItem("username");
-    const storedRole = localStorage.getItem("userRole");
-    setUsername(storedUsername || "");
-    setUserRole(storedRole || "");
-  }, []);
+  const { auth, logout } = useAuth();
 
   const handleLogout = async () => {
     try {
-      await axios.post(`${USERS_API_BASE_URL}/logout-account`);
-    } catch {
-      // ignore
+      await logout();
     } finally {
-      localStorage.removeItem("isAuthenticated");
-      localStorage.removeItem("username");
-      localStorage.removeItem("userRole");
-      localStorage.removeItem("userId");
-      navigate("/login");
+      navigate("/login", { replace: true });
     }
   };
 
+  if (auth.loading) return <div style={{ padding: 40 }}>Loading…</div>;
+  if (!auth.user) return null;
+
   return (
-    <div
-      style={{
-        display: "flex",
-        height: "100vh",
-        overflow: "hidden",
-      }}
-    >
+    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
       <aside
         style={{
           width: 240,
@@ -64,18 +45,29 @@ export default function RetailerLayout() {
         }}
       >
         {/* User Info Section */}
-        <div style={{
-          background: "rgba(255,255,255,0.1)",
-          borderRadius: 10,
-          padding: 14,
-          marginBottom: 24,
-          borderLeft: "3px solid #3b82f6",
-        }}>
-          <div style={{ fontSize: 11, color: "rgba(255,255,255,0.7)", fontWeight: 600, marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+        <div
+          style={{
+            background: "rgba(255,255,255,0.1)",
+            borderRadius: 10,
+            padding: 14,
+            marginBottom: 24,
+            borderLeft: "3px solid #3b82f6",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: "rgba(255,255,255,0.7)",
+              fontWeight: 600,
+              marginBottom: 4,
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
             Logged In As
           </div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "white" }}>
-            @{username}
+            @{auth.user.username}
           </div>
         </div>
 
@@ -84,38 +76,25 @@ export default function RetailerLayout() {
         <nav>
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
             <li>
-              <NavLink
-                to=""
-                end
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-              >
+              <NavLink to="" end style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
                 Dashboard
               </NavLink>
             </li>
 
             <li>
-              <NavLink
-                to="scan-qr"
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-              >
+              <NavLink to="scan-qr" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
                 Scan QR
               </NavLink>
             </li>
 
             <li>
-              <NavLink
-                to="products"
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-              >
+              <NavLink to="products" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
                 My Products
               </NavLink>
             </li>
 
             <li>
-              <NavLink
-                to="reviews"
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-              >
+              <NavLink to="reviews" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
                 Reviews
               </NavLink>
             </li>
@@ -123,15 +102,12 @@ export default function RetailerLayout() {
         </nav>
 
         <div style={{ marginTop: "auto", paddingTop: 16 }}>
-          <NavLink
-            to="settings"
-            style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-          >
+          <NavLink to="settings" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
             ⚙ Settings
           </NavLink>
-          
+
           <button
-            onClick={handleLogout}
+            onClick={() => void handleLogout()}
             style={{
               width: "100%",
               background: "none",

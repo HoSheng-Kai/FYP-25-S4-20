@@ -3,36 +3,45 @@ import { useNavigate } from "react-router-dom";
 import type { MarketplaceListing } from "../../pages/marketplace/MarketplacePage";
 import axios from "axios";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { Connection, PublicKey, LAMPORTS_PER_SOL, Transaction, SystemProgram } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+  Transaction,
+  SystemProgram,
+} from "@solana/web3.js";
 import PurchaseModal from "./PurchaseModal";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 type Props = {
   listing: MarketplaceListing;
   onPurchaseSuccess?: () => void;
 };
 
-const API = "https://fyp-25-s4-20.duckdns.org/api/products";
-
 const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
   const navigate = useNavigate();
+  const { auth } = useAuth();
+  const authLoading = auth.loading;
+  const buyerId = auth.user?.userId;
+
   const [purchasing, setPurchasing] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [solAmount, setSolAmount] = useState(0);
-  const [modalError, setModalError] = useState<string|null>(null);
-  const [modalSuccess, setModalSuccess] = useState<string|null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [modalSuccess, setModalSuccess] = useState<string | null>(null);
+
   const wallet = useWallet();
 
   const priceText =
     listing.price && listing.currency ? `${listing.price} ${listing.currency}` : "—";
 
-  const statusBadge =
-    listing.productStatus === "verified" ? "Verified" : listing.productStatus;
-
-  // Helper: Convert SGD to SOL (placeholder, replace with real API if needed)
+  // Helper: Convert SGD to SOL
   const convertSgdToSol = async (sgd: number): Promise<number> => {
     try {
-      // Use a real price API in production
-      const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=sgd");
+      const res = await fetch(
+        "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=sgd"
+      );
       const data = await res.json();
       const solPrice = data.solana?.sgd || 0;
       if (!solPrice) return 0;
@@ -45,6 +54,18 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
   const handleBuyNowClick = async () => {
     setModalError(null);
     setModalSuccess(null);
+
+    if (authLoading) {
+      setModalError("Checking your session… please try again in a moment.");
+      setModalOpen(true);
+      return;
+    }
+    if (!buyerId) {
+      setModalError("Please log in to purchase.");
+      setModalOpen(true);
+      return;
+    }
+
     if (!wallet.connected || !wallet.publicKey) {
       setModalError("Please connect your Phantom wallet to purchase.");
       setModalOpen(true);
@@ -55,12 +76,14 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
       setModalOpen(true);
       return;
     }
+
     const priceNum = parseFloat(listing.price || "0");
     if (!priceNum) {
       setModalError("Invalid price");
       setModalOpen(true);
       return;
     }
+
     setPurchasing(true);
     const sol = await convertSgdToSol(priceNum);
     setSolAmount(sol);
@@ -72,14 +95,20 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
     setPurchasing(true);
     setModalError(null);
     setModalSuccess(null);
+
     try {
+      if (authLoading) throw new Error("Session loading");
+      if (!buyerId) throw new Error("User not logged in");
+
       if (!wallet.connected || !wallet.publicKey) throw new Error("Wallet not connected");
       if (!listing.seller.publicKey) throw new Error("Seller wallet missing");
-      // 1. Send SOL from buyer to seller
+
+      // 1) Send SOL
       const connection = new Connection("https://api.devnet.solana.com");
       const toPubkey = new PublicKey(listing.seller.publicKey);
       const fromPubkey = wallet.publicKey;
       const lamports = Math.round(solAmount * LAMPORTS_PER_SOL);
+
       const tx = new Transaction().add(
         SystemProgram.transfer({
           fromPubkey,
@@ -87,29 +116,28 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
           lamports,
         })
       );
-      // Send transaction using wallet adapter
+
       // @ts-ignore
       const signature = await wallet.sendTransaction(tx, connection);
-      // Optionally: Wait for confirmation
       await connection.confirmTransaction(signature, "confirmed");
 
-      // 2. Call backend to transfer ownership
-      const userId = localStorage.getItem("userId");
-      if (!userId) throw new Error("User not logged in");
+      // 2) Call backend to transfer ownership (cookie auth)
       const res = await axios.post(
-        `${API}/listings/${listing.listingId}/purchase`,
+        `${API_ROOT}/products/listings/${listing.listingId}/purchase`,
         {
-          buyerId: Number(userId),
+          buyerId,
           solTx: signature,
           buyerPublicKey: wallet.publicKey.toBase58(),
-        }
+        },
+        { withCredentials: true }
       );
+
       if (res.data.success) {
-        setModalSuccess(`Purchase successful! You now own ${listing.productName || 'this product'}`);
+        setModalSuccess(`Purchase successful! You now own ${listing.productName || "this product"}`);
         setTimeout(() => {
           setModalOpen(false);
           setModalSuccess(null);
-          if (onPurchaseSuccess) onPurchaseSuccess();
+          onPurchaseSuccess?.();
         }, 1800);
       } else {
         throw new Error(res.data.error || "Ownership transfer failed");
@@ -146,10 +174,8 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
             fontSize: 11,
             padding: "4px 10px",
             borderRadius: 999,
-            background:
-              listing.blockchainStatus === "on blockchain" ? "#dcfce7" : "#fef3c7",
-            color:
-              listing.blockchainStatus === "on blockchain" ? "#166534" : "#92400e",
+            background: listing.blockchainStatus === "on blockchain" ? "#dcfce7" : "#fef3c7",
+            color: listing.blockchainStatus === "on blockchain" ? "#166534" : "#92400e",
             height: "fit-content",
             whiteSpace: "nowrap",
           }}
@@ -161,7 +187,9 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
       <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", gap: 16 }}>
         <div>
           <p style={{ margin: 0, fontSize: 12, color: "#6b7280", fontWeight: 500 }}>Price</p>
-          <p style={{ margin: "4px 0 0 0", fontWeight: 700, fontSize: 16, color: "#111827" }}>{priceText}</p>
+          <p style={{ margin: "4px 0 0 0", fontWeight: 700, fontSize: 16, color: "#111827" }}>
+            {priceText}
+          </p>
         </div>
 
         <div style={{ textAlign: "right" }}>
@@ -173,26 +201,35 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
       </div>
 
       {listing.notes && (
-        <div style={{ 
-          marginTop: 16, 
-          padding: 14, 
-          background: "#f9fafb", 
-          borderRadius: 10,
-          borderLeft: "3px solid #3b82f6"
-        }}>
-          <p style={{ margin: 0, fontSize: 11, color: "#6b7280", fontWeight: 600, marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.5px" }}>Seller Notes</p>
-          <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{listing.notes}</p>
+        <div
+          style={{
+            marginTop: 16,
+            padding: 14,
+            background: "#f9fafb",
+            borderRadius: 10,
+            borderLeft: "3px solid #3b82f6",
+          }}
+        >
+          <p
+            style={{
+              margin: 0,
+              fontSize: 11,
+              color: "#6b7280",
+              fontWeight: 600,
+              marginBottom: 6,
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Seller Notes
+          </p>
+          <p style={{ margin: 0, fontSize: 13, color: "#374151", lineHeight: 1.5 }}>
+            {listing.notes}
+          </p>
         </div>
       )}
 
-      <div
-        style={{
-          marginTop: 16,
-          display: "flex",
-          flexDirection: "column",
-          gap: 12,
-        }}
-      >
+      <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", gap: 10 }}>
           <button
             style={{
@@ -211,12 +248,12 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
               navigate(`/consumer/product/${listing.productId}`);
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "#545b62";
-              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+              e.currentTarget.style.background = "#545b62";
+              e.currentTarget.style.transform = "translateY(-1px)";
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "#6c757d";
-              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+              e.currentTarget.style.background = "#6c757d";
+              e.currentTarget.style.transform = "translateY(0)";
             }}
             title="View product journey timeline"
           >
@@ -237,14 +274,27 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
             }}
             onClick={async (e) => {
               e.stopPropagation();
-              const userId = localStorage.getItem("userId");
-              if (!userId) { alert("Please log in to chat"); return; }
+
+              if (authLoading) {
+                alert("Checking session… please try again.");
+                return;
+              }
+              if (!buyerId) {
+                alert("Please log in to chat");
+                return;
+              }
+
               try {
-                const res = await axios.post("https://fyp-25-s4-20.duckdns.org/api/chats/create-thread", {
-                  listingId: listing.listingId,
-                  userId: Number(userId),
-                  otherUserId: listing.seller.userId,
-                });
+                const res = await axios.post(
+                  `${API_ROOT}/chats/create-thread`,
+                  {
+                    listingId: listing.listingId,
+                    userId: buyerId,
+                    otherUserId: listing.seller.userId,
+                  },
+                  { withCredentials: true }
+                );
+
                 if (res.data.success) {
                   navigate(`/consumer/chats/${res.data.thread.thread_id}`);
                 } else {
@@ -255,12 +305,12 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
               }
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "#1d4ed8";
-              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+              e.currentTarget.style.background = "#1d4ed8";
+              e.currentTarget.style.transform = "translateY(-1px)";
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "#2563eb";
-              (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+              e.currentTarget.style.background = "#2563eb";
+              e.currentTarget.style.transform = "translateY(0)";
             }}
             title="Chat with seller"
           >
@@ -284,31 +334,36 @@ const ListingCard: React.FC<Props> = ({ listing, onPurchaseSuccess }) => {
             disabled={purchasing}
             onMouseEnter={(e) => {
               if (!purchasing) {
-                (e.currentTarget as HTMLButtonElement).style.background = "#218838";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
+                e.currentTarget.style.background = "#218838";
+                e.currentTarget.style.transform = "translateY(-1px)";
               }
             }}
             onMouseLeave={(e) => {
               if (!purchasing) {
-                (e.currentTarget as HTMLButtonElement).style.background = "#28a745";
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
+                e.currentTarget.style.background = "#28a745";
+                e.currentTarget.style.transform = "translateY(0)";
               }
             }}
           >
             {purchasing ? "Processing..." : "Buy Now"}
           </button>
-              <PurchaseModal
-                open={modalOpen}
-                onClose={() => { setModalOpen(false); setModalError(null); setModalSuccess(null); }}
-                productName={listing.productName || "Unknown Product"}
-                price={priceText}
-                sellerName={listing.seller.username}
-                onConfirm={handleModalConfirm}
-                loading={purchasing}
-                solAmount={solAmount}
-                error={modalError}
-                success={modalSuccess}
-              />
+
+          <PurchaseModal
+            open={modalOpen}
+            onClose={() => {
+              setModalOpen(false);
+              setModalError(null);
+              setModalSuccess(null);
+            }}
+            productName={listing.productName || "Unknown Product"}
+            price={priceText}
+            sellerName={listing.seller.username}
+            onConfirm={handleModalConfirm}
+            loading={purchasing}
+            solAmount={solAmount}
+            error={modalError}
+            success={modalSuccess}
+          />
         </div>
       </div>
     </div>

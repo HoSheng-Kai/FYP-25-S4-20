@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { useAuth } from "./auth/AuthContext";
 
 import LoginPage from "./pages/auth/LoginPage";
 import RegisterPage from "./pages/auth/RegisterPage";
@@ -32,12 +33,11 @@ import TransactionHistory from "./components/products/TransactionHistory";
 // Consumer pages
 import MyProductsPage from "./pages/consumer/MyProductsPage";
 import UserReviewsPage from "./pages/consumer/UserReviewsPage";
-import ProductDetailsPage from "./pages/consumer/ProductDetailsPage";
 import ConsumerTransferOwnershipPage from "./pages/consumer/ConsumerTransferOwnershipPage";
 
 // Manufacturer pages
 import ManufacturerProductsPage from "./pages/manufacturer/ManufacturerProductsPage";
-import RegisterOnChainPage from "./pages/blockchain/RegisterOnChainPage";
+import RegisterProductPage from "./pages/manufacturer/RegisterProductPage";
 
 // Marketplace
 import MarketplacePage from "./pages/marketplace/MarketplacePage";
@@ -55,6 +55,31 @@ import RetailerReviewsPage from "./pages/retailer/RetailerReviewsPage";
 // Shared
 import SharedProductDetailsPage from "./pages/shared/ProductDetailsPage";
 import SettingsPage from "./pages/shared/SettingsPage";
+
+function HomeRedirect() {
+  const { auth } = useAuth();
+
+  if (auth.loading) return <div style={{ padding: 40 }}>Loading…</div>;
+
+  // not logged in
+  if (!auth.user) return <Navigate to="/login" replace />;
+
+  // logged in -> send to dashboard by role
+  switch (auth.user.role) {
+    case "admin":
+      return <Navigate to="/admin" replace />;
+    case "manufacturer":
+      return <Navigate to="/manufacturer" replace />;
+    case "distributor":
+      return <Navigate to="/distributor" replace />;
+    case "retailer":
+      return <Navigate to="/retailer" replace />;
+    case "consumer":
+      return <Navigate to="/consumer" replace />;
+    default:
+      return <Navigate to="/login" replace />;
+  }
+}
 
 export default function App() {
   return (
@@ -77,12 +102,11 @@ export default function App() {
         <Route element={<RequireRole allow={["manufacturer"]} />}>
           <Route path="/manufacturer" element={<ManufacturerLayout />}>
             <Route index element={<ManufacturerDashboardPage />} />
-            <Route path="register" element={<RegisterOnChainPage />} />
+            <Route path="register" element={<RegisterProductPage />} />
             <Route path="scan-qr" element={<QrInput />} />
             <Route path="my-products" element={<ManufacturerProductsPage />} />
             <Route path="product/:productId" element={<SharedProductDetailsPage />} />
             <Route path="settings" element={<SettingsPage />} />
-            <Route path="transfer-ownership" element={<ConsumerTransferOwnershipPage />} />
           </Route>
         </Route>
 
@@ -115,7 +139,7 @@ export default function App() {
             <Route index element={<ConsumerDashboardPage />} />
             <Route path="scan-qr" element={<QrInput />} />
             <Route path="my-products" element={<MyProductsPage />} />
-            <Route path="product/:productId" element={<ProductDetailsPage />} />
+            <Route path="product/:productId" element={<SharedProductDetailsPage />} />
             <Route path="marketplace" element={<MarketplacePage />} />
             <Route path="chats" element={<ChatsPage />} />
             <Route path="chats/:threadId" element={<ChatThreadPage />} />
@@ -134,8 +158,8 @@ export default function App() {
       </Route>
 
       {/* Default */}
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<HomeRedirect />} />
+      <Route path="*" element={<HomeRedirect />} />
     </Routes>
   );
 }

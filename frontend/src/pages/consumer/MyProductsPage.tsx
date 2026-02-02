@@ -1,10 +1,8 @@
-// frontend/src/pages/consumer/MyProductsPage.tsx
-
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import MyProductCard from "../../components/products/MyProductCard";
-
-const API = "https://fyp-25-s4-20.duckdns.org/api/products";
+import { API_ROOT } from "../../config/api";
+import { useAuth } from "../../auth/AuthContext";
 
 export type OwnedProduct = {
   productId: number;
@@ -19,11 +17,9 @@ export type OwnedProduct = {
 };
 
 export default function MyProductsPage() {
-  const userId = useMemo(() => {
-    const raw = localStorage.getItem("userId");
-    return raw ? Number(raw) : NaN;
-  }, []);
-
+  const { auth } = useAuth();
+  const userId = auth.user?.userId;
+  
   const [products, setProducts] = useState<OwnedProduct[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,8 +29,8 @@ export default function MyProductsPage() {
     const loadProducts = async () => {
       setLoading(true);
       setError(null);
-
-      if (!Number.isFinite(userId)) {
+      if (auth.loading) return;
+      if (!userId) {
         setError("No userId found. Please login again.");
         setLoading(false);
         return;
@@ -45,7 +41,7 @@ export default function MyProductsPage() {
           success: boolean;
           data?: OwnedProduct[];
           error?: string;
-        }>(`${API}/owned`, { params: { userId } });
+        }>(`${API_ROOT}/products/owned`, { params: { userId }, withCredentials: true });
 
         if (res.data.success && res.data.data) {
           setProducts(res.data.data);

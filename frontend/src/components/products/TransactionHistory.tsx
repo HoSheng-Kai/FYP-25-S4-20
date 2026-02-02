@@ -88,7 +88,7 @@ export default function TransactionHistory({
 
       try {
         const res = await axios.get<HistoryResponse>(`${PRODUCTS_API_BASE_URL}/history`, {
-          params: { serial },
+          params: { serial }, withCredentials: true,
         });
 
         if (!res.data.success || !res.data.data) {

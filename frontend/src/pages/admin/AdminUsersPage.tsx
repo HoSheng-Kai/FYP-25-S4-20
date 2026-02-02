@@ -1,20 +1,21 @@
 import { useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
+import { useAuth } from "../../auth/AuthContext";
 import { USERS_API_BASE_URL, ADMIN_API_BASE_URL } from "../../config/api";
 
 interface User {
   user_id: number;
   username: string;
   email: string;
-  role_id: string; // Changed from number to string ('admin', 'manufacturer', etc.)
+  role_id: string;
   verified: boolean;
   created_on: string;
   banned?: boolean;
 }
 
 interface Role {
-  role_id: string; // Changed from number to string
+  role_id: string;
   role_name: string;
 }
 
@@ -48,6 +49,7 @@ export default function AdminUsersPage() {
 
   // Delete confirmation modal
   const [deleteModalUsers, setDeleteModalUsers] = useState<User[]>([]);
+  const { logout } = useAuth();
 
   const roles: Role[] = [
     { role_id: "consumer", role_name: "Consumer" },
@@ -68,7 +70,7 @@ export default function AdminUsersPage() {
   const loadUsers = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`${ADMIN_API_BASE_URL}/view-accounts`);
+      const res = await axios.get(`${ADMIN_API_BASE_URL}/view-accounts`, { withCredentials: true });
       if (res.data.success && res.data.data) {
         // Filter out admin accounts
         const nonAdminUsers = res.data.data.filter((user: User) => user.role_id !== "admin");
@@ -105,14 +107,10 @@ export default function AdminUsersPage() {
 
   const handleLogout = async () => {
     try {
-      await axios.post(`${USERS_API_BASE_URL}/logout-account`);
+      await logout();
     } catch (err) {
       console.error("Logout failed:", err);
     } finally {
-      localStorage.removeItem("isAuthenticated");
-      localStorage.removeItem("username");
-      localStorage.removeItem("userRole");
-      localStorage.removeItem("userId");
       navigate("/login");
     }
   };
@@ -145,7 +143,7 @@ export default function AdminUsersPage() {
       await axios.post(`${ADMIN_API_BASE_URL}/ban-account`, {
         userId: user.user_id,
         banned: !user.banned,
-      });
+      }, { withCredentials: true });
       alert(`Successfully ${user.banned ? "unbanned" : "banned"} ${user.username}`);
       await loadUsers();
     } catch (error: any) {
@@ -172,7 +170,7 @@ export default function AdminUsersPage() {
     try {
       // Delete each user individually
       for (const user of usersToDelete) {
-        await axios.delete(`${USERS_API_BASE_URL}/${user.user_id}`);
+        await axios.delete(`${USERS_API_BASE_URL}/${user.user_id}`, { withCredentials: true });
       }
       alert(`Successfully deleted ${usersToDelete.length} user(s)`);
       await loadUsers();
@@ -192,7 +190,7 @@ export default function AdminUsersPage() {
       await axios.post(`${ADMIN_API_BASE_URL}/update-accounts`, {
         username: editingUser.username,
         role_id: newRoleId,
-      });
+      }, { withCredentials: true });
       alert("Successfully updated user role");
       await loadUsers();
       setEditingUser(null);
@@ -394,7 +392,7 @@ export default function AdminUsersPage() {
                   if (!confirm(`Verify ${usernames.length} user(s)?`)) {
                     return;
                   }
-                  axios.post(`${ADMIN_API_BASE_URL}/create-accounts`, { usernames })
+                  axios.post(`${ADMIN_API_BASE_URL}/create-accounts`, { usernames }, { withCredentials: true })
                     .then(() => {
                       alert(`Successfully verified ${usernames.length} user(s)`);
                       loadUsers();
