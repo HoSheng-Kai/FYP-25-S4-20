@@ -26,10 +26,12 @@ function getJwtSecret() {
 export function setAuthCookie(res: Response, payload: AuthPayload) {
   const token = jwt.sign(payload, getJwtSecret(), { expiresIn: "7d" });
 
+  const isProd = process.env.NODE_ENV !== "production";
+
   res.cookie(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: false,       // set true only when using HTTPS
-    sameSite: "lax",     // OK for localhost ports
+    secure: isProd,
+    sameSite: isProd ? "none" : "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000,
     path: "/",
   });
