@@ -136,8 +136,7 @@ async function markStopTracking(productId: number) {
   // If you didn't add track column yet, you can comment out track = false and keep status only.
   await pool.query(
     `UPDATE fyp_25_s4_20.product
-     SET status = 'suspicious',
-         track = FALSE
+     SET track = FALSE
      WHERE product_id = $1`,
     [productId]
   );
