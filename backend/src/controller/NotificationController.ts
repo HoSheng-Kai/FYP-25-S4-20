@@ -14,14 +14,14 @@ export class NotificationController {
     res.setHeader("Cache-Control", "no-cache, no-transform"); // ✅ important
     res.setHeader("Connection", "keep-alive");
 
-    // ✅ CORS for SSE + cookies
-    res.setHeader("Access-Control-Allow-Origin", "https://fyp-25-s4-20-frontend.onrender.com");
+    // CORS for SSE + cookies, CHANGE DURING DEPLOYMENT
+    res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
     res.setHeader("Access-Control-Allow-Credentials", "true");
 
     // Optional (nginx); harmless elsewhere
     res.setHeader("X-Accel-Buffering", "no");
 
-    // ✅ Flush headers so the connection is established immediately
+    // Flush headers so the connection is established immediately
     (res as any).flushHeaders?.();
 
     // register client
@@ -30,7 +30,7 @@ export class NotificationController {
     // connected event
     res.write(`event: connected\ndata: ${JSON.stringify({ ok: true })}\n\n`);
 
-    // ✅ Heartbeat as COMMENT (best for keeping proxies happy)
+    // Heartbeat as COMMENT (best for keeping proxies happy)
     const heartbeat = setInterval(() => {
       res.write(`: ping ${Date.now()}\n\n`);
     }, 20000);
