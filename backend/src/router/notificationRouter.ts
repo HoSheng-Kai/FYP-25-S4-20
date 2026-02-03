@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { NotificationController } from "../controller/NotificationController";
+import { requireAuth } from "../auth/auth";
 
 const router = Router();
 const c = new NotificationController();
@@ -7,7 +8,7 @@ const c = new NotificationController();
 // GET /api/notifications?userId=2&onlyUnread=true
 router.get("/", c.getUserNotifications.bind(c));
 
-router.get("/stream", c.stream.bind(c));
+router.get("/stream", requireAuth, c.stream.bind(c));
 
 // PUT /api/notifications/:notificationId/read?userId=2
 router.put("/:notificationId/read", c.markOneRead.bind(c));

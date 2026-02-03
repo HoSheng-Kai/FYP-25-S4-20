@@ -5,46 +5,43 @@ import { addClient, removeClient, emitToUser } from "../service/NotificationSse"
 
 export class NotificationController {
 
-// GET /api/notifications/stream?userId=2
+  // GET /api/notifications/stream?userId=2
   async stream(req: Request, res: Response): Promise<void> {
-    const userIdParam = req.query.userId as string | undefined;
-    if (!userIdParam) {
-      res.status(400).json({ success: false, error: "Missing 'userId' query parameter" });
-      return;
-    }
+    const userId = req.auth!.userId; // ✅ from cookie session, not query
 
-    const userId = Number(userIdParam);
-    if (Number.isNaN(userId)) {
-      res.status(400).json({ success: false, error: "Invalid 'userId' – must be a number" });
-      return;
-    }
-
-    // SSE headers
     res.status(200);
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform"); // ✅ important
     res.setHeader("Connection", "keep-alive");
 
-    // If you’re behind nginx sometimes this helps:
-    // res.setHeader("X-Accel-Buffering", "no");
+    // ✅ CORS for SSE + cookies
+    res.setHeader("Access-Control-Allow-Origin", "https://fyp-25-s4-20-frontend.onrender.com");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
 
-    // Send an initial event so frontend knows it's connected
-    res.write(`event: connected\ndata: ${JSON.stringify({ ok: true })}\n\n`);
+    // Optional (nginx); harmless elsewhere
+    res.setHeader("X-Accel-Buffering", "no");
 
+    // ✅ Flush headers so the connection is established immediately
+    (res as any).flushHeaders?.();
+
+    // register client
     addClient(userId, res);
 
-    // Heartbeat to keep connection alive (every 25s)
-    const heartbeat = setInterval(() => {
-      res.write(`event: ping\ndata: ${JSON.stringify({ t: Date.now() })}\n\n`);
-    }, 25_000);
+    // connected event
+    res.write(`event: connected\ndata: ${JSON.stringify({ ok: true })}\n\n`);
 
-    // Cleanup when client closes connection
+    // ✅ Heartbeat as COMMENT (best for keeping proxies happy)
+    const heartbeat = setInterval(() => {
+      res.write(`: ping ${Date.now()}\n\n`);
+    }, 20000);
+
     req.on("close", () => {
       clearInterval(heartbeat);
       removeClient(userId, res);
       res.end();
     });
   }
+
 
   // GET /api/notifications?userId=2&onlyUnread=true
   async getUserNotifications(req: Request, res: Response): Promise<void> {
@@ -260,6 +257,10 @@ export class NotificationController {
         txHash: txHash ?? null,
         isRead: false,
       });
+
+      emitToUser(Number(userId), "notification", { test: true });
+      console.log("emitToUser fired for user", userId);
+
       emitToUser(Number(userId), "notification", {
         notificationId: row.notification_id,
         userId: row.user_id,
