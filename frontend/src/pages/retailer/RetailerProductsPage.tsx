@@ -6,6 +6,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
+import ReactDOM from "react-dom";
 
 type BackendProduct = {
   product_id: number;
@@ -15,9 +16,7 @@ type BackendProduct = {
   product_pda: string | null;
   tx_hash: string | null;
   track: boolean | null;
-
   stage?: string | null; // 'draft' | 'confirmed' | 'onchain'
-
   owned_since?: string | null;
   relationship?: string | null; // 'owner' | 'manufacturer' | null
 };
@@ -58,7 +57,8 @@ export default function RetailerProductsPage() {
   const navigate = useNavigate();
   const { auth } = useAuth();
 
-  const retailerId = auth.user?.userId ?? NaN;
+  // cookie-auth source of truth
+  const retailerId = auth.user?.userId ?? 0;
 
   const wallet = useWallet();
   const walletConnected = !!wallet.connected && !!wallet.publicKey;
@@ -67,68 +67,108 @@ export default function RetailerProductsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // filter (only All / Owned)
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
 
-  // ======================
-  // SELECTION
-  // ======================
+  // selection
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-
-  // transfer modal
   const [transferOpen, setTransferOpen] = useState(false);
 
   // NOTE: you currently hit distributors endpoint; keep as-is unless you have a retailer endpoint
   const GET_BY_USER_URL = `${API_ROOT}/distributors/products-by-user`;
 
-  // ======================
-  // ACTIONS MENU (⋯)
-  // ======================
+  // actions menu
   const [openMenuForId, setOpenMenuForId] = useState<number | null>(null);
+  const [menuPos, setMenuPos] = useState<{
+    id: number;
+    top: number;
+    left: number;
+    placement: "down" | "up";
+  } | null>(null);
 
+  const MENU_WIDTH = 220;
+  const MENU_HEIGHT = 70;
+
+  const openMenu = (id: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
+
+    // default open DOWN
+    const downTop = r.bottom + scrollY + 6;
+
+    // open UP candidate
+    const upTop = r.top + scrollY - MENU_HEIGHT - 6;
+
+    const spaceBelow = window.innerHeight - r.bottom;
+    const spaceAbove = r.top;
+
+    const shouldFlipUp = spaceBelow < MENU_HEIGHT && spaceAbove > MENU_HEIGHT;
+
+    // align right edge of menu with button
+    const leftRaw = r.right + scrollX - MENU_WIDTH;
+
+    const left = Math.min(
+      scrollX + window.innerWidth - MENU_WIDTH - 12,
+      Math.max(scrollX + 12, leftRaw)
+    );
+
+    setOpenMenuForId(id);
+    setMenuPos({
+      id,
+      top: shouldFlipUp ? upTop : downTop,
+      left,
+      placement: shouldFlipUp ? "up" : "down",
+    });
+  };
+
+  const closeMenu = () => {
+    setOpenMenuForId(null);
+    setMenuPos(null);
+  };
+
+  // close action menu on outside click / esc / scroll
   useEffect(() => {
-    const onDocMouseDown = (e: MouseEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (!t) return;
-      if (t.closest?.("[data-actions-menu-root='true']")) return;
-      setOpenMenuForId(null);
-    };
+  const onDocMouseDown = (e: MouseEvent) => {
+    const t = e.target as HTMLElement | null;
+    if (!t) return;
 
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenMenuForId(null);
-    };
+    // click inside row menu button container
+    if (t.closest?.("[data-actions-menu-root='true']")) return;
 
-    const onScrollOrResize = () => setOpenMenuForId(null);
+    // click inside portal menu itself
+    if (t.closest?.("[data-actions-menu-portal='true']")) return;
 
-    document.addEventListener("mousedown", onDocMouseDown);
-    document.addEventListener("keydown", onEsc);
-    window.addEventListener("scroll", onScrollOrResize, true);
-    window.addEventListener("resize", onScrollOrResize);
+    closeMenu();
+  };
 
-    return () => {
-      document.removeEventListener("mousedown", onDocMouseDown);
-      document.removeEventListener("keydown", onEsc);
-      window.removeEventListener("scroll", onScrollOrResize, true);
-      window.removeEventListener("resize", onScrollOrResize);
-    };
-  }, []);
+  const onEsc = (e: KeyboardEvent) => {
+    if (e.key === "Escape") closeMenu();
+  };
 
-  // ----------------------
-  // HELPERS
-  // ----------------------
+  const onScrollOrResize = () => closeMenu();
+
+  document.addEventListener("mousedown", onDocMouseDown);
+  document.addEventListener("keydown", onEsc);
+  window.addEventListener("scroll", onScrollOrResize, true);
+  window.addEventListener("resize", onScrollOrResize);
+
+  return () => {
+    document.removeEventListener("mousedown", onDocMouseDown);
+    document.removeEventListener("keydown", onEsc);
+    window.removeEventListener("scroll", onScrollOrResize, true);
+    window.removeEventListener("resize", onScrollOrResize);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+  // helpers
   const isOnChainConfirmed = (p: ProductRow) => {
     const s = (p.blockchainStatus || "").toLowerCase();
-    return (
-      s.includes("confirmed") ||
-      s.includes("on blockchain") ||
-      s.includes("on-chain") ||
-      s.includes("onchain")
-    );
+    return s.includes("confirmed") || s.includes("on blockchain") || s.includes("on-chain") || s.includes("onchain");
   };
 
-  const isTransferEligible = (p: ProductRow) => {
-    return isOnChainConfirmed(p) && p.relationship === "owner";
-  };
+  const isTransferEligible = (p: ProductRow) => isOnChainConfirmed(p) && p.relationship === "owner";
 
   const safeDate = (iso: string) => {
     if (!iso) return "—";
@@ -138,9 +178,7 @@ export default function RetailerProductsPage() {
 
   // filtered list
   const products = useMemo(() => {
-    if (filterMode === "owned") {
-      return allProducts.filter((p) => p.relationship === "owner");
-    }
+    if (filterMode === "owned") return allProducts.filter((p) => p.relationship === "owner");
     return allProducts;
   }, [allProducts, filterMode]);
 
@@ -156,19 +194,9 @@ export default function RetailerProductsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterMode, products.length]);
 
-  // ----------------------
-  // Selection helpers (eligible-only)
-  // ----------------------
-  const selectedProducts = useMemo(
-    () => products.filter((p) => selectedIds.has(p.productId)),
-    [products, selectedIds]
-  );
-
-  const selectedEligibleProducts = useMemo(
-    () => selectedProducts.filter(isTransferEligible),
-    [selectedProducts]
-  );
-
+  // selection helpers
+  const selectedProducts = useMemo(() => products.filter((p) => selectedIds.has(p.productId)), [products, selectedIds]);
+  const selectedEligibleProducts = useMemo(() => selectedProducts.filter(isTransferEligible), [selectedProducts]);
   const anyEligibleSelected = selectedEligibleProducts.length > 0;
 
   const allSelected = useMemo(() => {
@@ -200,12 +228,10 @@ export default function RetailerProductsPage() {
 
   const clearSelected = () => setSelectedIds(new Set());
 
-  // ----------------------
-  // LOAD PRODUCTS
-  // ----------------------
+  // load products
   const loadProducts = async () => {
     try {
-      if (!Number.isFinite(retailerId)) {
+      if (!retailerId || Number.isNaN(retailerId)) {
         setError("Retailer ID missing. Please login again.");
         return;
       }
@@ -250,26 +276,20 @@ export default function RetailerProductsPage() {
       setAllProducts(mapped);
       setError(null);
     } catch (err: any) {
-      setError(
-        err?.response?.data?.error ||
-          err?.response?.data?.details ||
-          "Error fetching products."
-      );
+      setError(err?.response?.data?.error || err?.response?.data?.details || "Error fetching products.");
     } finally {
       setLoading(false);
     }
   };
 
+  // ✅ wait until auth is resolved so retailerId is valid
   useEffect(() => {
     if (auth.loading) return;
     if (!auth.user) return;
-    loadProducts();
+    void loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [auth.loading, auth.user?.userId]);
 
-  // ----------------------
-  // OPEN TRANSFER MODAL
-  // ----------------------
   const openTransferModal = () => {
     if (!walletConnected) return;
     if (!anyEligibleSelected) return;
@@ -277,11 +297,18 @@ export default function RetailerProductsPage() {
   };
 
   if (auth.loading) return <p style={{ padding: 20 }}>Loading…</p>;
-  if (!auth.user) return null;
+  if (!auth.user) return <p style={{ padding: 20 }}>Not logged in.</p>;
   if (loading) return <p style={{ padding: 20 }}>Loading products...</p>;
 
   return (
-    <div style={{ padding: "40px" }}>
+    <div
+      style={{
+        padding: "24px 16px",
+        maxWidth: 1100,
+        margin: "0 auto",
+        boxSizing: "border-box",
+      }}
+    >
       {/* Header + filter pills */}
       <div
         style={{
@@ -311,12 +338,10 @@ export default function RetailerProductsPage() {
         </div>
       </div>
 
-      <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>
-        Select products to transfer ownership
-      </h2>
+      <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>Select products to transfer ownership</h2>
 
-      {/* Transfer button (opens modal) */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10, alignItems: "center" }}>
+      {/* Transfer row */}
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10, alignItems: "center", flexWrap: "wrap" }}>
         <WalletMultiButton />
 
         <button
@@ -363,149 +388,166 @@ export default function RetailerProductsPage() {
       )}
 
       {error && (
-        <div
-          style={{
-            background: "#ffe0e0",
-            padding: "10px",
-            borderRadius: "8px",
-            marginBottom: "16px",
-            color: "#a11",
-          }}
-        >
+        <div style={{ background: "#ffe0e0", padding: "10px", borderRadius: "8px", marginBottom: "16px", color: "#a11" }}>
           {error}
         </div>
       )}
 
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          background: "white",
-          borderRadius: "10px",
-          overflow: "visible",
-        }}
-      >
-        <thead style={{ background: "#e9ecef" }}>
-          <tr>
-            <th style={{ ...th, width: 46 }}>
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={toggleSelectAll}
-                aria-label="Select all transferable products"
-                title="Select all transferable products"
-              />
-            </th>
-            <th style={th}>Product ID</th>
-            <th style={th}>Product Name</th>
-            <th style={th}>Category</th>
-            <th style={th}>Owned Since</th>
-            <th style={th}>Status</th>
-            <th style={th}>Actions</th>
-          </tr>
-        </thead>
+      {/* ✅ IMPORTANT: keep table scroll INSIDE this wrapper */}
+      <div className="table-scroll" style={{ width: "100%", overflowX: "auto" }}>
+        <table
+          style={{
+            width: "100%",
+            minWidth: 720, // forces inner scroll on small screens instead of body overflow
+            borderCollapse: "collapse",
+            background: "white",
+            borderRadius: "10px",
+            overflow: "hidden",
+          }}
+        >
+          <thead style={{ background: "#e9ecef" }}>
+            <tr>
+              <th style={{ ...th, width: 46 }}>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleSelectAll}
+                  aria-label="Select all transferable products"
+                  title="Select all transferable products"
+                />
+              </th>
+              <th style={th}>Product ID</th>
+              <th style={th}>Product Name</th>
+              <th style={th}>Category</th>
+              <th style={th}>Owned Since</th>
+              <th style={th}>Status</th>
+              <th style={th}>Actions</th>
+            </tr>
+          </thead>
 
-        <tbody>
-          {products.map((p) => {
-            const confirmed = isOnChainConfirmed(p);
-            const eligible = isTransferEligible(p);
+          <tbody>
+            {products.map((p) => {
+              const confirmed = isOnChainConfirmed(p);
+              const eligible = isTransferEligible(p);
 
-            const go = (fn: () => void) => {
-              fn();
-              setOpenMenuForId(null);
-            };
+              const go = (fn: () => void) => {
+                fn();
+                closeMenu();
+              };
 
-            return (
-              <tr key={p.productId}>
-                <td style={td}>
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.has(p.productId)}
-                    onChange={() => toggleSelected(p.productId)}
-                    disabled={!eligible}
-                    aria-label={`Select product ${p.productId}`}
-                    title={
-                      !confirmed
-                        ? "Cannot transfer: product not confirmed on-chain"
-                        : p.lifecycleStatus === "transferred"
-                        ? "Cannot transfer: you are no longer the current owner"
-                        : "Transfer eligible"
-                    }
-                  />
-                </td>
+              return (
+                <tr key={p.productId}>
+                  <td style={td}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(p.productId)}
+                      onChange={() => toggleSelected(p.productId)}
+                      disabled={!eligible}
+                      aria-label={`Select product ${p.productId}`}
+                      title={
+                        !confirmed
+                          ? "Cannot transfer: product not confirmed on-chain"
+                          : p.lifecycleStatus === "transferred"
+                          ? "Cannot transfer: you are no longer the current owner"
+                          : "Transfer eligible"
+                      }
+                    />
+                  </td>
 
-                <td style={td}>{p.productId}</td>
-                <td style={td}>{p.productName || "—"}</td>
-                <td style={td}>{p.category || "—"}</td>
-                <td style={td}>{safeDate(p.registeredOn)}</td>
+                  <td style={td}>{p.productId}</td>
+                  <td style={td}>{p.productName || "—"}</td>
+                  <td style={td}>{p.category || "—"}</td>
+                  <td style={td}>{safeDate(p.registeredOn)}</td>
 
-                <td style={td}>
-                  <span
-                    style={{
-                      marginLeft: 10,
-                      padding: "4px 10px",
-                      borderRadius: "999px",
-                      fontSize: 12,
-                      background: p.lifecycleStatus === "active" ? "#dcfce7" : "#fee2e2",
-                      color: p.lifecycleStatus === "active" ? "#166534" : "#991b1b",
-                    }}
-                    title={
-                      p.lifecycleStatus === "active"
-                        ? "You currently own this product"
-                        : "You have transferred this product"
-                    }
-                  >
-                    {p.lifecycleStatus === "active" ? "owned" : "transferred"}
-                  </span>
-
-                  {p.stage && (
+                  <td style={td}>
                     <span
                       style={{
                         marginLeft: 10,
                         padding: "4px 10px",
                         borderRadius: "999px",
                         fontSize: 12,
-                        background: "#f3f4f6",
-                        color: "#111827",
+                        background: p.lifecycleStatus === "active" ? "#dcfce7" : "#fee2e2",
+                        color: p.lifecycleStatus === "active" ? "#166534" : "#991b1b",
                       }}
-                      title="DB Stage"
+                      title={p.lifecycleStatus === "active" ? "You currently own this product" : "You have transferred this product"}
                     >
-                      {p.stage}
+                      {p.lifecycleStatus === "active" ? "owned" : "transferred"}
                     </span>
-                  )}
-                </td>
 
-                <td style={td}>
-                  <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
-                    <button
-                      type="button"
-                      onClick={() => setOpenMenuForId((prev) => (prev === p.productId ? null : p.productId))}
-                      style={kebabBtn}
-                      aria-label="Open actions"
-                      title="Actions"
-                    >
-                      ⋯
-                    </button>
-
-                    {openMenuForId === p.productId && (
-                      <div style={menuCard} role="menu" aria-label="Row actions">
-                        <button
-                          type="button"
-                          style={menuItem}
-                          onClick={() => go(() => navigate(`/products/${p.productId}/details`))}
-                          role="menuitem"
-                        >
-                          View details
-                        </button>
-                      </div>
+                    {p.stage && (
+                      <span
+                        style={{
+                          marginLeft: 10,
+                          padding: "4px 10px",
+                          borderRadius: "999px",
+                          fontSize: 12,
+                          background: "#f3f4f6",
+                          color: "#111827",
+                        }}
+                        title="DB Stage"
+                      >
+                        {p.stage}
+                      </span>
                     )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  </td>
+
+                  <td style={td}>
+                    <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          const same = openMenuForId === p.productId;
+                          if (same) {
+                            closeMenu();
+                            return;
+                          }
+                          openMenu(p.productId, e.currentTarget);
+                        }}
+                        style={kebabBtn}
+                        aria-label="Open actions"
+                        title="Actions"
+                      >
+                        ⋯
+                      </button>
+
+                      {openMenuForId === p.productId &&
+                        menuPos?.id === p.productId &&
+                        ReactDOM.createPortal(
+                          <div
+                            data-actions-menu-portal="true"
+                            style={{
+                              ...menuCard,
+                              position: "absolute",
+                              top: menuPos.top,
+                              left: menuPos.left,
+                              right: "auto",
+                              transformOrigin: menuPos.placement === "up" ? "bottom right" : "top right",
+                            }}
+                            role="menu"
+                            aria-label="Row actions"
+                          >
+                            <button
+                              type="button"
+                              style={menuItem}
+                              onClick={() => {
+                                navigate(`/products/${p.productId}/details`);
+                                closeMenu();
+                              }}
+                              role="menuitem"
+                            >
+                              View details
+                            </button>
+                          </div>,
+                          document.body
+                        )}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       {products.length === 0 && <p style={{ marginTop: 20, opacity: 0.6 }}>No products found for this filter.</p>}
 
@@ -609,7 +651,7 @@ const menuCard: React.CSSProperties = {
   position: "absolute",
   top: "calc(100% + 6px)",
   right: 0,
-  minWidth: 200,
+  minWidth: 220,
   background: "white",
   border: "1px solid #e5e7eb",
   borderRadius: 12,

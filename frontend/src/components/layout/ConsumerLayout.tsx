@@ -18,11 +18,14 @@ const activeStyle: React.CSSProperties = {
 };
 
 export default function ConsumerLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const { auth, logout } = useAuth();
 
-  const [showCreateListing, setShowCreateListing] = React.useState(false);
+  const [showCreateListing, setShowCreateListing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const closeSidebar = () => setSidebarOpen(false);
 
   // Load unread chat count (poll)
   useEffect(() => {
@@ -70,19 +73,61 @@ export default function ConsumerLayout() {
   };
 
   if (auth.loading) return <div style={{ padding: 40 }}>Loading…</div>;
-  if (!auth.user) return null; // RequireAuth will redirect
+  if (!auth.user) return null;
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div className="app-shell" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      {/* Mobile top bar (hidden on desktop via CSS) */}
+      <div className="mobile-topbar">
+        <button
+          type="button"
+          className="hamburger"
+          aria-label="Open sidebar"
+          onClick={() => setSidebarOpen(true)}
+        >
+          ☰
+        </button>
+        <div className="mobile-title">Consumer</div>
+      </div>
+
+      {/* Backdrop (mobile only) */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          role="button"
+          aria-label="Close sidebar"
+          tabIndex={0}
+          onClick={closeSidebar}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === "Escape") closeSidebar();
+          }}
+        />
+      )}
+
       <aside
+        className={`app-sidebar ${sidebarOpen ? "open" : ""}`}
         style={{
           width: 240,
+          flexShrink: 0,
           background: "#0d1b2a",
           color: "white",
           padding: 20,
-          position: "relative",
+          height: "100vh",
+          boxSizing: "border-box",
+          display: "flex",
+          flexDirection: "column",
         }}
       >
+        {/* Mobile close button (hidden on desktop via CSS) */}
+        <button
+          type="button"
+          className="close-btn"
+          aria-label="Close sidebar"
+          onClick={closeSidebar}
+        >
+          ✕
+        </button>
+
         {/* User Info Section */}
         <div
           style={{
@@ -112,34 +157,55 @@ export default function ConsumerLayout() {
 
         <h2 style={{ marginBottom: 30 }}>Consumer</h2>
 
-        <nav>
+        <nav className="app-nav">
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
             <li>
-              <NavLink to="" end style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+              <NavLink
+                to=""
+                end
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
                 Dashboard
               </NavLink>
             </li>
 
             <li>
-              <NavLink to="scan-qr" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+              <NavLink
+                to="scan-qr"
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
                 Scan QR
               </NavLink>
             </li>
 
             <li>
-              <NavLink to="my-products" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+              <NavLink
+                to="my-products"
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
                 My Products
               </NavLink>
             </li>
 
             <li>
-              <NavLink to="marketplace" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+              <NavLink
+                to="marketplace"
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
                 Marketplace
               </NavLink>
             </li>
 
             <li>
-              <NavLink to="chats" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+              <NavLink
+                to="chats"
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
                 <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   Messages
                   {unreadCount > 0 && (
@@ -158,9 +224,13 @@ export default function ConsumerLayout() {
             </li>
 
             <li>
-              <div onMouseEnter={() => setShowCreateListing(true)} onMouseLeave={() => setShowCreateListing(false)}>
+              <div
+                onMouseEnter={() => setShowCreateListing(true)}
+                onMouseLeave={() => setShowCreateListing(false)}
+              >
                 <NavLink
                   to="my-listings"
+                  onClick={closeSidebar}
                   style={({ isActive }) => ({
                     ...linkBaseStyle,
                     ...(isActive ? activeStyle : {}),
@@ -184,6 +254,7 @@ export default function ConsumerLayout() {
                 {showCreateListing && (
                   <NavLink
                     to="create-listing"
+                    onClick={closeSidebar}
                     style={({ isActive }) => ({
                       ...linkBaseStyle,
                       paddingLeft: 24,
@@ -200,6 +271,7 @@ export default function ConsumerLayout() {
             <li>
               <NavLink
                 to="transfer-ownership"
+                onClick={closeSidebar}
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
                 Transfer Ownership
@@ -207,15 +279,23 @@ export default function ConsumerLayout() {
             </li>
 
             <li>
-              <NavLink to="reviews" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+              <NavLink
+                to="reviews"
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
                 Reviews
               </NavLink>
             </li>
           </ul>
         </nav>
 
-        <div style={{ position: "absolute", bottom: 30, left: 20, right: 20 }}>
-          <NavLink to="settings" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+        <div style={{ marginTop: "auto", paddingTop: 16 }}>
+          <NavLink
+            to="settings"
+            onClick={closeSidebar}
+            style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+          >
             ⚙ Settings
           </NavLink>
 
@@ -237,7 +317,19 @@ export default function ConsumerLayout() {
         </div>
       </aside>
 
-      <main style={{ flexGrow: 1, background: "#f5f7fb", padding: 40 }}>
+      <main
+        className="app-main"
+        onClick={() => {
+          if (sidebarOpen) closeSidebar();
+        }}
+        style={{
+          flexGrow: 1,
+          background: "#f5f7fb",
+          padding: 40,
+          overflowY: "auto",
+          boxSizing: "border-box",
+        }}
+      >
         <Outlet />
       </main>
     </div>

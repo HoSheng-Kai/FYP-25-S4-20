@@ -13,6 +13,7 @@ import ConsumerLayout from "./components/layout/ConsumerLayout";
 import ManufacturerLayout from "./components/layout/ManufacturerLayout";
 import DistributorLayout from "./components/layout/DistributorLayout";
 import RetailerLayout from "./components/layout/RetailerLayout";
+import AdminLayout from "./components/layout/AdminLayout";
 
 // Dashboards
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
@@ -92,12 +93,13 @@ export default function App() {
       <Route element={<RequireAuth />}>
         {/* Admin */}
         <Route element={<RequireRole allow={["admin"]} />}>
-          <Route path="/admin" element={<AdminDashboardPage />} />
-          <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="/admin/listings" element={<AdminListingsPage />} />
-          <Route path="/admin/register" element={<AdminRegistrationPage />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboardPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/listings" element={<AdminListingsPage />} />
+            <Route path="/admin/register" element={<AdminRegistrationPage />} />
+          </Route>
         </Route>
-
         {/* Manufacturer */}
         <Route element={<RequireRole allow={["manufacturer"]} />}>
           <Route path="/manufacturer" element={<ManufacturerLayout />}>

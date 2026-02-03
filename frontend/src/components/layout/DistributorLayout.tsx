@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 
@@ -15,6 +15,7 @@ const activeStyle: React.CSSProperties = {
 };
 
 export default function DistributorLayout() {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const { auth, logout } = useAuth();
 
@@ -29,9 +30,39 @@ export default function DistributorLayout() {
   if (auth.loading) return <div style={{ padding: 40 }}>Loading…</div>;
   if (!auth.user) return null;
 
+  const closeSidebar = () => setSidebarOpen(false);
+
   return (
-    <div style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+    <div className="app-shell" style={{ display: "flex", height: "100vh", overflow: "hidden" }}>
+      {/* Mobile top bar (hidden on desktop via CSS) */}
+      <div className="mobile-topbar">
+        <button
+          type="button"
+          className="hamburger"
+          aria-label="Open sidebar"
+          onClick={() => setSidebarOpen(true)}
+        >
+          ☰
+        </button>
+        <div className="mobile-title">Distributor</div>
+      </div>
+
+      {/* Backdrop (mobile only) */}
+      {sidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          role="button"
+          aria-label="Close sidebar"
+          tabIndex={0}
+          onClick={closeSidebar}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === "Escape") closeSidebar();
+          }}
+        />
+      )}
+
       <aside
+        className={`app-sidebar ${sidebarOpen ? "open" : ""}`}
         style={{
           width: 240,
           flexShrink: 0,
@@ -44,6 +75,16 @@ export default function DistributorLayout() {
           flexDirection: "column",
         }}
       >
+        {/* Mobile close button (hidden on desktop via CSS) */}
+        <button
+          type="button"
+          className="close-btn"
+          aria-label="Close sidebar"
+          onClick={closeSidebar}
+        >
+          ✕
+        </button>
+
         {/* User Info Section */}
         <div
           style={{
@@ -73,30 +114,50 @@ export default function DistributorLayout() {
 
         <h2 style={{ marginBottom: 30 }}>Distributor</h2>
 
-        <nav>
-          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
+        <nav className="app-nav">
+          <ul
+            className="app-nav-list"
+            style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}
+          >
             <li>
-              <NavLink to="" end style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+              <NavLink
+                to=""
+                end
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
                 Dashboard
               </NavLink>
             </li>
 
             <li>
-              <NavLink to="scan-qr" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+              <NavLink
+                to="scan-qr"
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
                 Scan QR
               </NavLink>
             </li>
 
             <li>
-              <NavLink to="products" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+              <NavLink
+                to="products"
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
                 My Products
               </NavLink>
             </li>
           </ul>
         </nav>
 
-        <div style={{ marginTop: "auto", paddingTop: 16 }}>
-          <NavLink to="settings" style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}>
+        <div className="app-sidebar-bottom" style={{ marginTop: "auto", paddingTop: 16 }}>
+          <NavLink
+            to="settings"
+            onClick={closeSidebar}
+            style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+          >
             ⚙ Settings
           </NavLink>
 
@@ -119,6 +180,10 @@ export default function DistributorLayout() {
       </aside>
 
       <main
+        className="app-main"
+        onClick={() => {
+          if (sidebarOpen) closeSidebar();
+        }}
         style={{
           flexGrow: 1,
           background: "#f5f7fb",

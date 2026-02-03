@@ -47,10 +47,15 @@ type GetEditResponse = {
   details?: string;
 };
 
-const API_BASE = API_ROOT.replace(/\/api\s*$/, "");
-
 const styles: Record<string, React.CSSProperties> = {
-  page: { maxWidth: 980, margin: "28px auto", padding: "0 16px 32px" },
+  page: {
+  maxWidth: 980,
+  width: "100%",
+  boxSizing: "border-box",
+  margin: "28px auto",
+  padding: "0 16px 32px",
+},
+
   headerRow: {
     display: "flex",
     alignItems: "flex-start",
@@ -336,7 +341,7 @@ export default function RegisterProductPage() {
       return "";
     });
 
-    const res = await axios.get(`${API_BASE}/api/products/${pid}/qrcode`, {
+    const res = await axios.get(`${API_ROOT}/products/${pid}/qrcode`, {
       responseType: "arraybuffer", withCredentials: true,
     });
 
@@ -349,7 +354,7 @@ export default function RegisterProductPage() {
     try {
       setUiError("");
 
-      const res = await axios.get<GetEditResponse>(`${API_BASE}/api/products/${pid}/edit`, {
+      const res = await axios.get<GetEditResponse>(`$${API_ROOT}/products/${pid}/edit`, {
         params: { manufacturerId }, withCredentials: true,
       });
 
@@ -407,7 +412,7 @@ export default function RegisterProductPage() {
     if (!s) throw new Error("Serial number is required");
     if (isLocked) throw new Error("Product is locked (confirmed/finalized).");
 
-    const dbRes = await axios.post(`${API_BASE}/api/products/draft`, {
+    const dbRes = await axios.post(`$${API_ROOT}/products/draft`, {
       manufacturerId,
       serialNo: s,
       productName,
@@ -460,7 +465,7 @@ export default function RegisterProductPage() {
       if (!productId) throw new Error("No productId. Save draft first.");
       if (isLocked) throw new Error("Draft is locked (confirmed/finalized). Cannot delete.");
 
-      await axios.delete(`${API_BASE}/api/products/${productId}/draft`, {
+      await axios.delete(`$${API_ROOT}/products/${productId}/draft`, {
         data: { manufacturerId }, withCredentials: true,
         headers: { "Content-Type": "application/json" },
       });
@@ -484,7 +489,7 @@ export default function RegisterProductPage() {
       if (!productId) throw new Error("No productId. Save draft first.");
       if (isLocked) throw new Error("Already locked.");
 
-      await axios.post(`${API_BASE}/api/products/${productId}/confirm-draft`, 
+      await axios.post(`$${API_ROOT}/products/${productId}/confirm-draft`, 
         { manufacturerId }, { withCredentials: true });
       setDraftStage("confirmed");
 
@@ -510,7 +515,7 @@ export default function RegisterProductPage() {
       if (draftStage !== "confirmed") throw new Error("Draft not confirmed. Click 'Confirm Draft' first.");
       if (isFinalized) throw new Error("Already finalized.");
 
-      const metaRes = await axios.post(`${API_BASE}/api/products/${productId}/metadata-final`, {
+      const metaRes = await axios.post(`$${API_ROOT}/products/${productId}/metadata-final`, {
         manufacturerId, 
         metadata: meta,
       }, { withCredentials: true });
@@ -547,7 +552,7 @@ export default function RegisterProductPage() {
       setTxSig(sig);
       setProductPdaStr(productPda.toBase58());
 
-      await axios.post(`${API_BASE}/api/products/${productId}/confirm`, {
+      await axios.post(`$${API_ROOT}/products/${productId}/confirm`, {
         manufacturerId,
         txHash: sig,
         productPda: productPda.toBase58(),
@@ -578,14 +583,14 @@ export default function RegisterProductPage() {
   }
 
   return (
-    <div style={styles.page}>
-      <div style={styles.headerRow}>
+    <div className="rp-page" style={styles.page}>
+      <div className="rp-header" style={styles.headerRow}>
         <div style={styles.titleWrap}>
           <h1 style={styles.h1}>Register New Product</h1>
           <div style={styles.subtitle}>Add a new product to the blockchain system</div>
         </div>
 
-        <div style={styles.rightTop}>
+        <div className="rp-rightTop" style={styles.rightTop}>
           <WalletMultiButton />
           <div style={styles.walletHint}>
             Connected:{" "}
@@ -608,7 +613,7 @@ export default function RegisterProductPage() {
 
           <div style={styles.sectionTitle}>Enter the details of the product you want to register</div>
 
-          <div style={styles.grid}>
+          <div className="rp-grid" style={styles.grid}>
             <div style={styles.field}>
               <div style={styles.labelRow}>
                 <span style={styles.label}>Product ID</span>

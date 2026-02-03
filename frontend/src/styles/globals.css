@@ -9,6 +9,15 @@ body {
   background: #f3f4f8;
 }
 
+/* Prevent media from overflowing on small screens */
+img,
+video,
+canvas,
+svg {
+  max-width: 100%;
+  height: auto;
+}
+
 #root {
   min-height: 100vh;
 }
@@ -277,4 +286,259 @@ body {
   font-size: 0.8rem;
   color: #6b7280;
   text-align: center;
+}
+
+/* ========== RESPONSIVE HELPERS (ALL PAGES) ========== */
+
+/* App shells (role layouts + admin pages). */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  box-sizing: border-box;
+}
+
+.app-main {
+  box-sizing: border-box;
+  min-width: 0; /* prevent overflow in flex layouts */
+}
+
+/* Tables: allow horizontal scroll on narrow screens without breaking desktop */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-scroll table {
+  min-width: 720px;
+}
+
+/* AUTH: keep desktop look, but stack on mobile */
+@media (max-width: 900px) {
+  .auth-page {
+    flex-direction: column;
+  }
+
+  .auth-hero {
+    padding: 32px 24px;
+  }
+
+  .auth-form-wrapper {
+    padding: 24px;
+  }
+}
+
+/* Tablet */
+@media (max-width: 1024px) {
+  .app-main {
+    padding: 24px !important;
+  }
+}
+
+/* ========== MOBILE DRAWER SIDEBAR ========== */
+
+/* Hidden by default (desktop) */
+.mobile-topbar,
+.hamburger,
+.close-btn,
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* ✅ Key change: stack topbar + main vertically */
+  .app-shell {
+    flex-direction: column !important;
+    height: 100vh;
+  }
+
+  /* Topbar sits on top like a real app header */
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: #0d1b2a;
+    color: #fff;
+
+    position: sticky;
+    top: 0;
+    z-index: 60;
+
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    line-height: 1;
+    padding: 6px 8px;
+    border-radius: 10px;
+  }
+
+  .hamburger:active {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .mobile-title {
+    font-weight: 700;
+    font-size: 1rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ✅ Sidebar becomes true overlay drawer (never takes layout width) */
+  .app-sidebar {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    height: 100vh !important;
+
+    width: 280px !important;
+    max-width: 86vw !important;
+
+    transform: translateX(-110%);
+    transition: transform 0.25s ease;
+
+    z-index: 80 !important;
+
+    padding: 16px !important;
+    box-sizing: border-box;
+
+    /* ensure it scrolls if content is tall */
+    overflow-y: auto !important;
+  }
+
+  .app-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+    border-radius: 10px;
+    cursor: pointer;
+    margin-bottom: 12px;
+    font-size: 18px;
+  }
+
+  /* Backdrop behind drawer */
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 70;
+  }
+
+  /* ✅ Main content uses full width (no left dark block) */
+  .app-main {
+    width: 100% !important;
+    flex: 1 1 auto;
+    padding: 16px !important;
+    box-sizing: border-box;
+  }
+
+  /* Optional: stop nav list from becoming 2-column weird inside drawer */
+  .app-nav-list {
+    display: grid !important;
+    gap: 10px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .table-scroll table {
+    min-width: 640px;
+  }
+}
+
+/* ===== RegisterProductPage responsive fixes ===== */
+
+/* Prevent any tiny overflow from getting clipped on mobile */
+.rp-page {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Mobile: stack header + make grid 1 column so it never exceeds viewport */
+@media (max-width: 768px) {
+  .rp-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .rp-rightTop {
+    align-items: flex-start !important;
+    width: 100%;
+  }
+
+  /* Force single column grid (overrides inline gridTemplateColumns) */
+  .rp-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Small phones: reduce side padding a bit more */
+@media (max-width: 480px) {
+  .rp-page {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+/* ===== QR Verify page: stop horizontal scrolling on mobile ===== */
+
+.qr-page {
+  max-width: 100%;
+}
+
+/* Very common overflow cause: long strings inside cards */
+.qr-page * {
+  min-width: 0; /* allows grid/flex children to shrink */
+}
+
+/* Tablet + below: collapse 2-column layout to 1 column */
+@media (max-width: 900px) {
+  .qr-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Mobile: also collapse the result details grid */
+@media (max-width: 768px) {
+  .qr-result-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* Reduce big gaps/padding a bit so it fits nicely */
+  .qr-grid {
+    gap: 16px !important;
+  }
+}
+/* ===== ManufacturerProductsPage responsive fixes ===== */
+@media (max-width: 768px) {
+  .mp-page {
+    padding: 16px !important;
+  }
+  .mp-actions-row {
+    justify-content: flex-start !important;
+  }
 }

@@ -1,0 +1,39 @@
+@media (max-width: 520px) {
+  .notifPanel {
+    padding: 16px !important;
+  }
+
+  .notifHeader {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .notifHeaderControls {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  .notifWallet .wallet-adapter-button {
+    width: 100% !important;
+    justify-content: center !important;
+    display: flex !important;
+  }
+
+  /* Card: content first, actions below */
+  .notifCardTop {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .notifCardActions {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  /* Let buttons wrap and share space */
+  .notifCardActions button {
+    flex: 1 1 140px;
+    white-space: normal !important;
+    max-width: 100% !important;
+  }
+}

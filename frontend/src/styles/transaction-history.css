@@ -234,6 +234,7 @@
 }
 
 .tx-table {
+  min-width: 720px;
   width: 100%;
   border-collapse: collapse;
   font-size: 0.8rem;
@@ -384,4 +385,29 @@
 
 .tx-embedded .tx-step-step {
   font-size: 11px;
+}
+
+/* === Prevent long hashes/strings from causing horizontal overflow === */
+.tx-step-content,
+.tx-step-row,
+.tx-value,
+.tx-mono {
+  min-width: 0; /* critical for flex/grid shrink */
+}
+
+/* Break long hashes instead of overflowing */
+.tx-mono,
+.tx-value.tx-mono {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/* In timeline rows, allow values to wrap and not force width */
+.tx-step-row {
+  align-items: flex-start;
+}
+
+.tx-value {
+  max-width: 100%;
+  white-space: normal; /* override any nowrap behavior */
 }
