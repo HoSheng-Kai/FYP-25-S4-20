@@ -31,6 +31,22 @@ export type PurchaseDetails = PurchaseRequestRow & {
   buyer_username: string;
 };
 
+export type CompletedPurchaseDetails = {
+  request_id: number;
+  product_id: number;
+  listing_id: number | null;
+  seller_id: number;
+  buyer_id: number;
+  offered_price: string;
+  offered_currency: string;
+  status: PurchaseStatus;
+  created_on: Date;
+  updated_on: Date;
+  serial_no: string;
+  model: string | null;
+  seller_username: string;
+};
+
 export class MarketplacePurchase {
   // ======================================================
   // Helpers
@@ -596,5 +612,34 @@ export class MarketplacePurchase {
       [sellerId]
     );
     return r.rows as PurchaseDetails[];
+  }
+
+  static async findCompletedForBuyer(buyerId: number): Promise<CompletedPurchaseDetails[]> {
+    const r = await pool.query(
+      `
+      SELECT
+        pr.request_id,
+        pr.product_id,
+        pr.listing_id,
+        pr.seller_id,
+        pr.buyer_id,
+        pr.offered_price,
+        pr.offered_currency,
+        pr.status,
+        pr.created_on,
+        pr.updated_on,
+        p.serial_no,
+        p.model,
+        us.username AS seller_username
+      FROM fyp_25_s4_20.purchase_request pr
+      JOIN fyp_25_s4_20.product p ON p.product_id = pr.product_id
+      JOIN fyp_25_s4_20.users us ON us.user_id = pr.seller_id
+      WHERE pr.buyer_id = $1 AND pr.status = 'completed'
+      ORDER BY pr.updated_on DESC;
+      `,
+      [buyerId]
+    );
+
+    return r.rows as CompletedPurchaseDetails[];
   }
 }

@@ -2220,6 +2220,23 @@ class ProductController {
       return res.status(400).json({ success: false, error: e.message });
     }
   }
+
+  // GET /api/marketplace/purchase/completed?buyerId=1
+  async getBuyerCompletedPurchases(req: Request, res: Response) {
+    try {
+      const buyerIdParam = req.query.buyerId as string | undefined;
+      const buyerId = Number(buyerIdParam);
+
+      if (!buyerIdParam || Number.isNaN(buyerId) || buyerId <= 0) {
+        return res.status(400).json({ success: false, error: "Invalid buyerId" });
+      }
+
+      const data = await MarketplacePurchase.findCompletedForBuyer(buyerId);
+      return res.json({ success: true, data });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+  }
 }
 
 export default new ProductController();

@@ -75,6 +75,7 @@ router.post("/marketplace/purchase/pay", productController.payPurchase);
 router.post("/marketplace/purchase/finalize", productController.finalizePurchase);
 router.get("/marketplace/purchase/requests/buyer", productController.getBuyerPurchaseRequests.bind(productController));
 router.get("/marketplace/purchase/requests/seller", productController.getSellerPurchaseRequests.bind(productController));
+router.get("/marketplace/purchase/completed", productController.getBuyerCompletedPurchases.bind(productController));
 
 
 // Get products owned by user (for creating listings)
