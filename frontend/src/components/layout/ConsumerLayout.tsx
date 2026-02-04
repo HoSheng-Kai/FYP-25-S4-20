@@ -202,6 +202,16 @@ export default function ConsumerLayout() {
 
             <li>
               <NavLink
+                to="purchase-requests"
+                onClick={closeSidebar}
+                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
+              >
+                Purchase Requests
+              </NavLink>
+            </li>
+
+            <li>
+              <NavLink
                 to="chats"
                 onClick={closeSidebar}
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}

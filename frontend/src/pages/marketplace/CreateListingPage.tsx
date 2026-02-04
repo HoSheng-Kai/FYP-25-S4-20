@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
+import "../../styles/marketplace.css";
 
 type OwnedProduct = {
   productId: number;
@@ -10,7 +11,7 @@ type OwnedProduct = {
   model: string | null;
   batchNo: string | null;
   category: string | null;
-  status: string;
+  status?: string | null;
   registeredOn: string;
   listingStatus: string;
   canCreateListing: boolean;
@@ -152,43 +153,36 @@ export default function CreateListingPage() {
   if (authLoading) return <p>Checking session...</p>;
 
   return (
-    <div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 30 }}>
-        <h1 style={{ margin: 0, fontSize: 24 }}>Create Listing</h1>
+    <div className="marketplace-page">
+      <div className="marketplace-header" style={{ marginBottom: 24 }}>
+        <h1 className="marketplace-title">Create Listing</h1>
         <button
           onClick={() => navigate("/consumer/my-listings")}
-          style={{
-            background: "none",
-            border: "1px solid #ccc",
-            padding: "8px 16px",
-            borderRadius: 8,
-            cursor: "pointer",
-            fontSize: 14,
-          }}
+          className="btn btn-ghost"
         >
           ← Back to My Listings
         </button>
       </div>
 
       {error && (
-        <div style={{ background: "#fee", color: "#c00", padding: 16, borderRadius: 8, marginBottom: 20 }}>
+        <div className="marketplace-alert error" style={{ marginBottom: 20 }}>
           {error}
         </div>
       )}
 
-      {loading && <p>Loading your products...</p>}
+      {loading && <p className="marketplace-subtitle">Loading your products...</p>}
 
       {!loading && !error && (
         <>
           {availableProducts.length === 0 ? (
-            <div style={{ background: "#fff", padding: 30, borderRadius: 12, textAlign: "center", color: "#666" }}>
+            <div className="marketplace-empty">
               <p style={{ margin: 0, fontSize: 16 }}>You don't have any products available to list.</p>
               <p style={{ margin: "8px 0 0 0", fontSize: 14 }}>
                 Products that already have active listings cannot be listed again.
               </p>
             </div>
           ) : (
-            <div style={{ background: "#fff", padding: 30, borderRadius: 12 }}>
+            <div className="marketplace-panel">
               <form onSubmit={handleSubmit}>
                 <div style={{ marginBottom: 20 }}>
                   <label style={{ display: "block", marginBottom: 8, fontWeight: 600 }}>Select Product *</label>
@@ -196,14 +190,18 @@ export default function CreateListingPage() {
                     value={selectedProductId || ""}
                     onChange={(e) => setSelectedProductId(Number(e.target.value))}
                     required
-                    style={{ width: "100%", padding: 12, fontSize: 15, border: "1px solid #ddd", borderRadius: 8 }}
+                    className="marketplace-select"
+                    style={{ width: "100%" }}
                   >
                     <option value="">-- Choose a product --</option>
-                    {availableProducts.map((prod) => (
-                      <option key={prod.productId} value={prod.productId}>
-                        {prod.model || prod.serialNo} ({prod.serialNo}) - {prod.status}
-                      </option>
-                    ))}
+                    {availableProducts.map((prod) => {
+                      const statusLabel = prod.status || prod.listingStatus || "unlisted";
+                      return (
+                        <option key={prod.productId} value={prod.productId}>
+                          {prod.model || prod.serialNo} ({prod.serialNo}) - {statusLabel}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
 
@@ -217,7 +215,8 @@ export default function CreateListingPage() {
                     onChange={(e) => setPrice(e.target.value)}
                     required
                     placeholder="e.g. 150.00"
-                    style={{ width: "100%", padding: 12, fontSize: 15, border: "1px solid #ddd", borderRadius: 8 }}
+                    className="marketplace-input"
+                    style={{ width: "100%" }}
                   />
                 </div>
 
@@ -227,7 +226,8 @@ export default function CreateListingPage() {
                     value={currency}
                     onChange={(e) => setCurrency(e.target.value as "SGD" | "USD" | "EUR")}
                     required
-                    style={{ width: "100%", padding: 12, fontSize: 15, border: "1px solid #ddd", borderRadius: 8 }}
+                    className="marketplace-select"
+                    style={{ width: "100%" }}
                   >
                     <option value="SGD">SGD</option>
                     <option value="USD">USD</option>
@@ -242,49 +242,19 @@ export default function CreateListingPage() {
                     onChange={(e) => setNotes(e.target.value)}
                     placeholder="e.g. Item is in good condition, slight scratches on back"
                     maxLength={500}
-                    style={{
-                      width: "100%",
-                      padding: 12,
-                      fontSize: 15,
-                      border: "1px solid #ddd",
-                      borderRadius: 8,
-                      fontFamily: "inherit",
-                      resize: "vertical",
-                      minHeight: 100,
-                    }}
+                    className="marketplace-textarea"
+                    style={{ width: "100%", minHeight: 100, resize: "vertical" }}
                   />
                   <p style={{ margin: "8px 0 0 0", fontSize: 12, color: "#999" }}>{notes.length}/500 characters</p>
                 </div>
 
                 {submitError && (
-                  <div
-                    style={{
-                      background: "#fee",
-                      color: "#c00",
-                      padding: 12,
-                      borderRadius: 8,
-                      marginBottom: 20,
-                      fontSize: 14,
-                    }}
-                  >
+                  <div className="marketplace-alert error" style={{ marginBottom: 20 }}>
                     {submitError}
                   </div>
                 )}
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  style={{
-                    background: submitting ? "#ccc" : "#0066cc",
-                    color: "white",
-                    border: "none",
-                    padding: "12px 24px",
-                    borderRadius: 8,
-                    fontSize: 16,
-                    fontWeight: 600,
-                    cursor: submitting ? "not-allowed" : "pointer",
-                  }}
-                >
+                <button type="submit" disabled={submitting} className="btn btn-primary">
                   {submitting ? "Creating..." : "Create Listing"}
                 </button>
               </form>

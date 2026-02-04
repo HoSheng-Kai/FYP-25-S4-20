@@ -354,7 +354,7 @@ export default function RegisterProductPage() {
     try {
       setUiError("");
 
-      const res = await axios.get<GetEditResponse>(`$${API_ROOT}/products/${pid}/edit`, {
+      const res = await axios.get<GetEditResponse>(`${API_ROOT}/products/${pid}/edit`, {
         params: { manufacturerId }, withCredentials: true,
       });
 
@@ -412,7 +412,7 @@ export default function RegisterProductPage() {
     if (!s) throw new Error("Serial number is required");
     if (isLocked) throw new Error("Product is locked (confirmed/finalized).");
 
-    const dbRes = await axios.post(`$${API_ROOT}/products/draft`, {
+    const dbRes = await axios.post(`${API_ROOT}/products/draft`, {
       manufacturerId,
       serialNo: s,
       productName,
@@ -465,7 +465,7 @@ export default function RegisterProductPage() {
       if (!productId) throw new Error("No productId. Save draft first.");
       if (isLocked) throw new Error("Draft is locked (confirmed/finalized). Cannot delete.");
 
-      await axios.delete(`$${API_ROOT}/products/${productId}/draft`, {
+      await axios.delete(`${API_ROOT}/products/${productId}/draft`, {
         data: { manufacturerId }, withCredentials: true,
         headers: { "Content-Type": "application/json" },
       });
@@ -489,7 +489,7 @@ export default function RegisterProductPage() {
       if (!productId) throw new Error("No productId. Save draft first.");
       if (isLocked) throw new Error("Already locked.");
 
-      await axios.post(`$${API_ROOT}/products/${productId}/confirm-draft`, 
+      await axios.post(`${API_ROOT}/products/${productId}/confirm-draft`, 
         { manufacturerId }, { withCredentials: true });
       setDraftStage("confirmed");
 
@@ -515,7 +515,7 @@ export default function RegisterProductPage() {
       if (draftStage !== "confirmed") throw new Error("Draft not confirmed. Click 'Confirm Draft' first.");
       if (isFinalized) throw new Error("Already finalized.");
 
-      const metaRes = await axios.post(`$${API_ROOT}/products/${productId}/metadata-final`, {
+      const metaRes = await axios.post(`${API_ROOT}/products/${productId}/metadata-final`, {
         manufacturerId, 
         metadata: meta,
       }, { withCredentials: true });
@@ -552,7 +552,7 @@ export default function RegisterProductPage() {
       setTxSig(sig);
       setProductPdaStr(productPda.toBase58());
 
-      await axios.post(`$${API_ROOT}/products/${productId}/confirm`, {
+      await axios.post(`${API_ROOT}/products/${productId}/confirm`, {
         manufacturerId,
         txHash: sig,
         productPda: productPda.toBase58(),

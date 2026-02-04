@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { MyListing } from "../../pages/marketplace/MyListingsPage";
+import "../../styles/marketplace.css";
 
 type Props = {
   listing: MyListing;
@@ -44,33 +45,9 @@ export default function EditListingModal({ listing, isOpen, onClose, onSave }: P
   };
 
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: "rgba(0, 0, 0, 0.5)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: "white",
-          borderRadius: 16,
-          padding: 24,
-          maxWidth: 500,
-          width: "100%",
-          margin: 16,
-        }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 style={{ margin: 0, fontSize: 20, marginBottom: 8 }}>Edit Listing</h2>
+    <div className="marketplace-modal-backdrop" onClick={onClose}>
+      <div className="marketplace-modal" onClick={(e) => e.stopPropagation()}>
+        <h2 className="marketplace-modal-title">Edit Listing</h2>
         <p style={{ margin: 0, fontSize: 13, color: "#6b7280", marginBottom: 20 }}>
           Update the price and currency for this listing. Changes will be reflected in the marketplace.
         </p>
@@ -122,14 +99,8 @@ export default function EditListingModal({ listing, isOpen, onClose, onSave }: P
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             disabled={isSaving}
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: "1px solid #d1d5db",
-              fontSize: 14,
-              boxSizing: "border-box",
-            }}
+            className="marketplace-input"
+            style={{ width: "100%", boxSizing: "border-box" }}
             placeholder="Enter price"
           />
         </div>
@@ -152,21 +123,12 @@ export default function EditListingModal({ listing, isOpen, onClose, onSave }: P
             value={currency}
             onChange={(e) => setCurrency(e.target.value)}
             disabled={isSaving}
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: "1px solid #d1d5db",
-              fontSize: 14,
-              boxSizing: "border-box",
-            }}
+            className="marketplace-select"
+            style={{ width: "100%", boxSizing: "border-box" }}
           >
+            <option value="SGD">SGD</option>
             <option value="USD">USD</option>
             <option value="EUR">EUR</option>
-            <option value="GBP">GBP</option>
-            <option value="JPY">JPY</option>
-            <option value="SGD">SGD</option>
-            <option value="MYR">MYR</option>
           </select>
         </div>
 
@@ -189,16 +151,8 @@ export default function EditListingModal({ listing, isOpen, onClose, onSave }: P
             onChange={(e) => setNotes(e.target.value)}
             disabled={isSaving}
             rows={4}
-            style={{
-              width: "100%",
-              padding: "10px 12px",
-              borderRadius: 8,
-              border: "1px solid #d1d5db",
-              fontSize: 14,
-              boxSizing: "border-box",
-              fontFamily: "inherit",
-              resize: "vertical",
-            }}
+            className="marketplace-textarea"
+            style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }}
             placeholder="Add any additional details about this listing..."
           />
           <p style={{ margin: "4px 0 0 0", fontSize: 12, color: "#6b7280" }}>
@@ -207,42 +161,16 @@ export default function EditListingModal({ listing, isOpen, onClose, onSave }: P
         </div>
 
         {error && (
-          <p style={{ margin: "0 0 16px 0", fontSize: 13, color: "#b91c1c" }}>
+          <div className="marketplace-alert error" style={{ marginBottom: 16 }}>
             {error}
-          </p>
+          </div>
         )}
 
-        <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
-          <button
-            onClick={onClose}
-            disabled={isSaving}
-            style={{
-              padding: "10px 20px",
-              borderRadius: 8,
-              border: "1px solid #d1d5db",
-              background: "white",
-              cursor: isSaving ? "not-allowed" : "pointer",
-              fontSize: 14,
-              fontWeight: 600,
-              color: "#374151",
-            }}
-          >
+        <div className="marketplace-modal-actions">
+          <button onClick={onClose} disabled={isSaving} className="btn btn-ghost">
             Cancel
           </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            style={{
-              padding: "10px 20px",
-              borderRadius: 8,
-              border: "none",
-              background: isSaving ? "#93c5fd" : "#0066cc",
-              color: "white",
-              cursor: isSaving ? "not-allowed" : "pointer",
-              fontSize: 14,
-              fontWeight: 600,
-            }}
-          >
+          <button onClick={handleSave} disabled={isSaving} className="btn btn-primary">
             {isSaving ? "Saving..." : "Save Changes"}
           </button>
         </div>

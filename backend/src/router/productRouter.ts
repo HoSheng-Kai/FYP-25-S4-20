@@ -69,8 +69,12 @@ router.get('/marketplace/listings', productController.getMarketplaceListings.bin
 router.post("/marketplace/purchase/propose", productController.proposePurchase);
 router.post("/marketplace/purchase/accept", productController.acceptPurchase);
 router.post("/marketplace/purchase/reject", productController.rejectPurchase);
+router.post("/marketplace/purchase/buyer-accept", productController.buyerAcceptPurchase.bind(productController));
+router.post("/marketplace/purchase/buyer-cancel", productController.buyerCancelPurchase.bind(productController));
 router.post("/marketplace/purchase/pay", productController.payPurchase);
 router.post("/marketplace/purchase/finalize", productController.finalizePurchase);
+router.get("/marketplace/purchase/requests/buyer", productController.getBuyerPurchaseRequests.bind(productController));
+router.get("/marketplace/purchase/requests/seller", productController.getSellerPurchaseRequests.bind(productController));
 
 
 // Get products owned by user (for creating listings)

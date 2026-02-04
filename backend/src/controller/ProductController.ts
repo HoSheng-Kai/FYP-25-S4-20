@@ -12,6 +12,7 @@ import { MarketplacePurchase } from "../entities/Users/MarketplacePurchase";
 import { ConsumerProductListing, ListingStatus } from '../entities/Users/ConsumerProductListing';
 import { QrCodeService } from '../service/QrCodeService';
 import { Notification } from '../entities/Notification';
+import { emitToUser } from "../service/NotificationSse";
 
 import pool from '../schema/database';
 import fs from "fs";
@@ -1909,6 +1910,31 @@ class ProductController {
         offeredCurrency: offeredCurrency ?? undefined,
       });
 
+      // notify seller
+      try {
+        const title = "Purchase Request";
+        const message = `Buyer ${data.buyer_username} requested to buy ${data.model ?? data.serial_no}`;
+        const row = await Notification.create({
+          userId: data.seller_id,
+          title,
+          message,
+          productId: data.product_id,
+          isRead: false,
+        });
+        emitToUser(data.seller_id, "notification", {
+          notificationId: row.notification_id,
+          userId: row.user_id,
+          title: row.title,
+          message: row.message,
+          isRead: row.is_read,
+          createdOn: row.created_on,
+          productId: row.product_id,
+          txHash: row.tx_hash,
+        });
+      } catch (e) {
+        console.warn("purchase request notification skipped:", e);
+      }
+
       return res.json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({ success: false, error: e.message });
@@ -1918,11 +1944,38 @@ class ProductController {
   // POST /api/marketplace/purchase/accept
   async acceptPurchase(req: Request, res: Response) {
     try {
-      const { requestId, sellerId } = req.body;
+      const { requestId, sellerId, transferPda, productPda } = req.body;
       const data = await MarketplacePurchase.accept({
         requestId: Number(requestId),
         sellerId: Number(sellerId),
+        transferPda: typeof transferPda === "string" ? transferPda : null,
+        productPda: typeof productPda === "string" ? productPda : null,
       });
+
+      // notify buyer
+      try {
+        const title = "Purchase Accepted";
+        const message = `Your purchase request #${data.request_id} was accepted. Seller will finalize transfer.`;
+        const row = await Notification.create({
+          userId: data.buyer_id,
+          title,
+          message,
+          productId: data.product_id,
+          isRead: false,
+        });
+        emitToUser(data.buyer_id, "notification", {
+          notificationId: row.notification_id,
+          userId: row.user_id,
+          title: row.title,
+          message: row.message,
+          isRead: row.is_read,
+          createdOn: row.created_on,
+          productId: row.product_id,
+          txHash: row.tx_hash,
+        });
+      } catch (e) {
+        console.warn("purchase accept notification skipped:", e);
+      }
       return res.json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({ success: false, error: e.message });
@@ -1938,6 +1991,116 @@ class ProductController {
         sellerId: Number(sellerId),
         reason,
       });
+
+      // notify buyer
+      try {
+        const title = "Purchase Rejected";
+        const message = reason
+          ? `Your purchase request #${data.request_id} was rejected. Reason: ${reason}`
+          : `Your purchase request #${data.request_id} was rejected.`;
+        const row = await Notification.create({
+          userId: data.buyer_id,
+          title,
+          message,
+          productId: data.product_id,
+          isRead: false,
+        });
+        emitToUser(data.buyer_id, "notification", {
+          notificationId: row.notification_id,
+          userId: row.user_id,
+          title: row.title,
+          message: row.message,
+          isRead: row.is_read,
+          createdOn: row.created_on,
+          productId: row.product_id,
+          txHash: row.tx_hash,
+        });
+      } catch (e) {
+        console.warn("purchase reject notification skipped:", e);
+      }
+      return res.json({ success: true, data });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+  }
+
+  // POST /api/marketplace/purchase/buyer-accept
+  async buyerAcceptPurchase(req: Request, res: Response) {
+    try {
+      const { requestId, buyerId } = req.body;
+      const data = await MarketplacePurchase.buyerAccept({
+        requestId: Number(requestId),
+        buyerId: Number(buyerId),
+      });
+
+      // notify seller
+      try {
+        const title = "Buyer Accepted";
+        const message = `Buyer accepted request #${data.request_id}. You can now execute the transfer.`;
+        const row = await Notification.create({
+          userId: data.seller_id,
+          title,
+          message,
+          productId: data.product_id,
+          isRead: false,
+        });
+        emitToUser(data.seller_id, "notification", {
+          notificationId: row.notification_id,
+          userId: row.user_id,
+          title: row.title,
+          message: row.message,
+          isRead: row.is_read,
+          createdOn: row.created_on,
+          productId: row.product_id,
+          txHash: row.tx_hash,
+        });
+      } catch (e) {
+        console.warn("buyer accept notification skipped:", e);
+      }
+
+      return res.json({ success: true, data });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+  }
+
+  // POST /api/marketplace/purchase/buyer-cancel
+  async buyerCancelPurchase(req: Request, res: Response) {
+    try {
+      const { requestId, buyerId, reason } = req.body;
+      const data = await MarketplacePurchase.buyerCancel({
+        requestId: Number(requestId),
+        buyerId: Number(buyerId),
+        reason,
+      });
+
+      // notify seller
+      try {
+        const title = "Buyer Cancelled";
+        const message = reason
+          ? `Buyer cancelled request #${data.request_id}. Reason: ${reason}`
+          : `Buyer cancelled request #${data.request_id}.`;
+        const row = await Notification.create({
+          userId: data.seller_id,
+          title,
+          message,
+          productId: data.product_id,
+          isRead: false,
+        });
+        emitToUser(data.seller_id, "notification", {
+          notificationId: row.notification_id,
+          userId: row.user_id,
+          title: row.title,
+          message: row.message,
+          isRead: row.is_read,
+          createdOn: row.created_on,
+          productId: row.product_id,
+          txHash: row.tx_hash,
+        });
+      } catch (e) {
+        console.warn("buyer cancel notification skipped:", e);
+      }
+
       return res.json({ success: true, data });
     } catch (e: any) {
       return res.status(400).json({ success: false, error: e.message });
@@ -1968,11 +2131,94 @@ class ProductController {
         sellerId: Number(sellerId),
         transferTxHash: String(transferTxHash),
       });
+
+      // notify both buyer and seller
+      try {
+        const pr = await MarketplacePurchase.getRequestById(Number(requestId));
+        if (pr) {
+          const title = "Ownership Transferred";
+          const msg = `Ownership transfer completed for request #${pr.request_id}.`;
+
+          const rowBuyer = await Notification.create({
+            userId: pr.buyer_id,
+            title,
+            message: msg,
+            productId: pr.product_id,
+            txHash: String(transferTxHash),
+            isRead: false,
+          });
+          emitToUser(pr.buyer_id, "notification", {
+            notificationId: rowBuyer.notification_id,
+            userId: rowBuyer.user_id,
+            title: rowBuyer.title,
+            message: rowBuyer.message,
+            isRead: rowBuyer.is_read,
+            createdOn: rowBuyer.created_on,
+            productId: rowBuyer.product_id,
+            txHash: rowBuyer.tx_hash,
+          });
+
+          const rowSeller = await Notification.create({
+            userId: pr.seller_id,
+            title,
+            message: msg,
+            productId: pr.product_id,
+            txHash: String(transferTxHash),
+            isRead: false,
+          });
+          emitToUser(pr.seller_id, "notification", {
+            notificationId: rowSeller.notification_id,
+            userId: rowSeller.user_id,
+            title: rowSeller.title,
+            message: rowSeller.message,
+            isRead: rowSeller.is_read,
+            createdOn: rowSeller.created_on,
+            productId: rowSeller.product_id,
+            txHash: rowSeller.tx_hash,
+          });
+        }
+      } catch (e) {
+        console.warn("purchase finalize notification skipped:", e);
+      }
       return res.json({ success: true });
     } catch (e: any) {
       return res.status(400).json({ success: false, error: e.message });
     }
     
+  }
+
+  // GET /api/marketplace/purchase/requests/buyer?buyerId=1
+  async getBuyerPurchaseRequests(req: Request, res: Response) {
+    try {
+      const buyerIdParam = req.query.buyerId as string | undefined;
+      const buyerId = Number(buyerIdParam);
+
+      if (!buyerIdParam || Number.isNaN(buyerId)) {
+        return res.status(400).json({ success: false, error: "Invalid buyerId" });
+      }
+
+      const data = await MarketplacePurchase.findForBuyer(buyerId);
+      return res.json({ success: true, data });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
+  }
+
+  // GET /api/marketplace/purchase/requests/seller?sellerId=1
+  async getSellerPurchaseRequests(req: Request, res: Response) {
+    try {
+      const sellerIdParam = req.query.sellerId as string | undefined;
+      const sellerId = Number(sellerIdParam);
+
+      if (!sellerIdParam || Number.isNaN(sellerId)) {
+        return res.status(400).json({ success: false, error: "Invalid sellerId" });
+      }
+
+      const data = await MarketplacePurchase.findForSeller(sellerId);
+      return res.json({ success: true, data });
+    } catch (e: any) {
+      return res.status(400).json({ success: false, error: e.message });
+    }
   }
 }
 

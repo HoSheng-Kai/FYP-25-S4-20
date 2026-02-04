@@ -18,6 +18,8 @@ export type PurchaseRequestRow = {
   offered_currency: string; // 'SGD' | 'USD' | 'EUR'
   status: PurchaseStatus;
   payment_tx_hash: string | null;
+  transfer_pda: string | null;
+  product_pda: string | null;
   created_on: Date;
   updated_on: Date;
 };
@@ -222,7 +224,12 @@ export class MarketplacePurchase {
   // ======================================================
   // 2) Seller accepts / rejects
   // ======================================================
-  static async accept(args: { requestId: number; sellerId: number }): Promise<PurchaseRequestRow> {
+  static async accept(args: {
+    requestId: number;
+    sellerId: number;
+    transferPda?: string | null;
+    productPda?: string | null;
+  }): Promise<PurchaseRequestRow> {
     const pr = await this.getRequestById(args.requestId);
     if (!pr) throw new Error("Request not found");
     if (pr.seller_id !== args.sellerId) throw new Error("Not seller for this request");
@@ -245,11 +252,14 @@ export class MarketplacePurchase {
     const r = await pool.query(
       `
       UPDATE fyp_25_s4_20.purchase_request
-      SET status = 'accepted_waiting_payment', updated_on = NOW()
+      SET status = 'accepted_waiting_payment',
+          transfer_pda = COALESCE($2, transfer_pda),
+          product_pda = COALESCE($3, product_pda),
+          updated_on = NOW()
       WHERE request_id = $1
       RETURNING *;
       `,
-      [args.requestId]
+      [args.requestId, args.transferPda ?? null, args.productPda ?? null]
     );
 
     return r.rows[0] as PurchaseRequestRow;
@@ -329,6 +339,83 @@ export class MarketplacePurchase {
   }
 
   // ======================================================
+  // 3b) Buyer accepts on-chain (no payment step)
+  // ======================================================
+  static async buyerAccept(args: { requestId: number; buyerId: number }): Promise<PurchaseRequestRow> {
+    const pr = await this.getRequestById(args.requestId);
+    if (!pr) throw new Error("Request not found");
+    if (pr.buyer_id !== args.buyerId) throw new Error("Not buyer for this request");
+    if (pr.status !== "accepted_waiting_payment") throw new Error(`Invalid status: ${pr.status}`);
+
+    const r = await pool.query(
+      `
+      UPDATE fyp_25_s4_20.purchase_request
+      SET status = 'paid_pending_transfer',
+          updated_on = NOW()
+      WHERE request_id = $1
+      RETURNING *;
+      `,
+      [args.requestId]
+    );
+
+    return r.rows[0] as PurchaseRequestRow;
+  }
+
+  // ======================================================
+  // 3c) Buyer cancels request
+  // ======================================================
+  static async buyerCancel(args: { requestId: number; buyerId: number; reason?: string }): Promise<PurchaseRequestRow> {
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+
+      const prRes = await client.query(
+        `SELECT * FROM fyp_25_s4_20.purchase_request WHERE request_id = $1 FOR UPDATE`,
+        [args.requestId]
+      );
+      if (prRes.rows.length === 0) throw new Error("Request not found");
+      const pr = prRes.rows[0] as PurchaseRequestRow;
+
+      if (pr.buyer_id !== args.buyerId) throw new Error("Not buyer for this request");
+      if (pr.status !== "pending_seller" && pr.status !== "accepted_waiting_payment") {
+        throw new Error(`Invalid status: ${pr.status}`);
+      }
+
+      const updated = await client.query(
+        `
+        UPDATE fyp_25_s4_20.purchase_request
+        SET status = 'cancelled', updated_on = NOW()
+        WHERE request_id = $1
+        RETURNING *;
+        `,
+        [args.requestId]
+      );
+
+      // release listing back to available (only if it was reserved by this request)
+      if (pr.listing_id) {
+        await client.query(
+          `
+          UPDATE fyp_25_s4_20.product_listing
+          SET status = 'available'
+          WHERE listing_id = $1 AND status = 'reserved';
+          `,
+          [pr.listing_id]
+        );
+      }
+
+      await client.query("COMMIT");
+      return updated.rows[0] as PurchaseRequestRow;
+    } catch (err) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {}
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+
+  // ======================================================
   // 4) Finalize transfer:
   // - close seller ownership row
   // - insert buyer ownership row with transferTxHash
@@ -352,7 +439,9 @@ export class MarketplacePurchase {
       const pr = prRes.rows[0] as PurchaseRequestRow;
 
       if (pr.seller_id !== args.sellerId) throw new Error("Not seller for this request");
-      if (pr.status !== "paid_pending_transfer") throw new Error(`Invalid status: ${pr.status}`);
+      if (pr.status !== "paid_pending_transfer" && pr.status !== "accepted_waiting_payment") {
+        throw new Error(`Invalid status: ${pr.status}`);
+      }
 
       // seller must still be current owner
       const ownerRes = await client.query(

@@ -502,6 +502,10 @@ CREATE TABLE IF NOT EXISTS fyp_25_s4_20.purchase_request (
   -- NEW: ownership transfer tx (used during finalize)
   transfer_tx_hash TEXT,
 
+  -- NEW: transfer request PDA + product PDA (to avoid mismatched derivations)
+  transfer_pda TEXT,
+  product_pda TEXT,
+
   created_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_on TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -509,6 +513,12 @@ CREATE TABLE IF NOT EXISTS fyp_25_s4_20.purchase_request (
 -- 3) Add column safely if table already existed (idempotent)
 ALTER TABLE fyp_25_s4_20.purchase_request
 ADD COLUMN IF NOT EXISTS transfer_tx_hash TEXT;
+
+ALTER TABLE fyp_25_s4_20.purchase_request
+ADD COLUMN IF NOT EXISTS transfer_pda TEXT;
+
+ALTER TABLE fyp_25_s4_20.purchase_request
+ADD COLUMN IF NOT EXISTS product_pda TEXT;
 
 -- 4) One active request per product (your original rule)
 CREATE UNIQUE INDEX IF NOT EXISTS ux_purchase_request_one_active_per_product
