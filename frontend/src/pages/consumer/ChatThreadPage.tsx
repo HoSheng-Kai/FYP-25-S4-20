@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
@@ -28,7 +27,6 @@ type ThreadDetails = {
 };
 
 export default function ChatThreadPage() {
-  const wallet = useWallet();
   const { auth } = useAuth();
   const { threadId } = useParams<{ threadId: string }>();
   const navigate = useNavigate();
@@ -89,34 +87,36 @@ export default function ChatThreadPage() {
   };
 
   const handlePurchase = async () => {
-    if (!wallet.connected || !wallet.publicKey) {
-      alert("Please connect your Phantom wallet to purchase.");
+    if (!userId) {
+      alert("Please log in to purchase.");
       return;
     }
     if (!thread) return;
     const priceText = thread.listing_price && thread.listing_currency ? `${thread.listing_price} ${thread.listing_currency}` : "—";
     const confirm = window.confirm(
-      `Purchase "${thread.product_model || 'this product'}" for ${priceText}?`
+      `Send a purchase request for "${thread.product_model || 'this product'}" at ${priceText}?`
     );
     if (!confirm) return;
     setPurchasing(true);
     try {
       const res = await axios.post(
-        `${API_ROOT}/products/listings/${thread.listing_id}/purchase`,
-        { buyerId: userId },
+        `${API_ROOT}/products/marketplace/purchase/propose`,
+        {
+          listingId: thread.listing_id,
+          buyerId: userId,
+        },
         { withCredentials: true }
       );
       if (res.data.success) {
-        alert(`Purchase successful! You now own ${thread.product_model || 'this product'}`);
-        setShowReviewForm(true);
-        setThread((prev) => (prev ? { ...prev, listing_status: "sold" } : prev));
+        alert(`Request sent! The seller will review it shortly.`);
+        setThread((prev) => (prev ? { ...prev, listing_status: "reserved" } : prev));
         await load();
       }
     } catch (e: any) {
       const errorMsg =
         e?.response?.data?.error ||
         e?.response?.data?.details ||
-        "Failed to complete purchase";
+        "Failed to send request";
       alert(errorMsg);
     } finally {
       setPurchasing(false);
