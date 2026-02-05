@@ -43,7 +43,6 @@ type ProductRow = {
   productName: string | null;
   lifecycleStatus: "active" | "transferred";
   blockchainStatus: string; // pending / confirmed
-  registeredOn: string;
   price: string | null;
   currency: string | null;
   listingStatus: string | null;
@@ -258,11 +257,6 @@ export default function ManufacturerProductsPage() {
     return p.relationship === "manufacturer";
   };
 
-  const safeDate = (iso: string) => {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
-  };
 
   // filtered list for the table
   const products = useMemo(() => {
@@ -709,7 +703,6 @@ export default function ManufacturerProductsPage() {
             <th style={th}>Product ID</th>
             <th style={th}>Product Name</th>
             <th style={th}>Category</th>
-            <th style={th}>Owned Since</th>
             <th style={th}>Status</th>
             <th style={th}>Actions</th>
           </tr>
@@ -751,7 +744,6 @@ export default function ManufacturerProductsPage() {
                 <td style={td}>{p.productId}</td>
                 <td style={td}>{p.productName || "—"}</td>
                 <td style={td}>{p.category || "—"}</td>
-                <td style={td}>{safeDate(p.registeredOn)}</td>
 
                 <td style={td}>
                   {/* Ownership */}
@@ -763,14 +755,17 @@ export default function ManufacturerProductsPage() {
                       fontSize: 12,
                       background: p.lifecycleStatus === "active" ? "#dcfce7" : "#fee2e2",
                       color: p.lifecycleStatus === "active" ? "#166534" : "#991b1b",
+                      whiteSpace: "nowrap",
+                      display: "inline-flex",
+                      alignItems: "center",
                     }}
                     title={
                       p.lifecycleStatus === "active"
                         ? "You currently own this product"
-                        : "You have transferred this product"
+                        : "You currently don't own this product"
                     }
                   >
-                    {p.lifecycleStatus === "active" ? "owned" : "transferred"}
+                    {p.lifecycleStatus === "active" ? "owned" : "not owned"}
                   </span>
 
                   {/* Stage pill */}
@@ -783,8 +778,11 @@ export default function ManufacturerProductsPage() {
                         fontSize: 12,
                         background: "#f3f4f6",
                         color: "#111827",
+                        whiteSpace: "nowrap",
+                        display: "inline-flex",
+                        alignItems: "center",
                       }}
-                      title="DB Stage"
+                      title="Product Stage"
                     >
                       {p.stage}
                     </span>

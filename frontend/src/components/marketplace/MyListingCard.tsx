@@ -1,6 +1,4 @@
-// frontend/src/components/marketplace/MyListingCard.tsx
-
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import type { MyListing, ListingStatus } from "../../pages/marketplace/MyListingsPage";
 import "../../styles/marketplace.css";
 

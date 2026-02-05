@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import ListingCard from "../../components/marketplace/ListingCard";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+// import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 import "../../styles/marketplace.css";
@@ -127,9 +127,9 @@ const MarketplacePage: React.FC = () => {
 
   return (
     <div className="marketplace-page">
-      <div className="marketplace-wallet">
+      {/* <div className="marketplace-wallet">
         <WalletMultiButton />
-      </div>
+      </div> */}
 
       <div className="marketplace-header">
         <div>

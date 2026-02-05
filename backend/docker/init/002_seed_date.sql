@@ -44,7 +44,7 @@ VALUES
 
 -- unverify test case
   ('nike_manufacturer','vault:v1:TIgpR0mBmqs1oimsvWt3tU/fhTOqiwbdEf1yQb23Zkl3qP8=','vault:v1:Uq6Q/6KiyaoQPD2j640sqMkxn34nf3LYjUm6sKotlM+pxhXuV0rfJ3O9M+8tL4KJdA==','manufacturer',
-   '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', FALSE, FALSE),
+   '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE),
 
   ('phantom_wallet_1','vault:v1:b/vksgJDZzUSaYdXRhll0mz6ibKgHQIZTZudmoU8dNTH99nUzyv/bM8H8Vc=','vault:v1:2ci0HxQoSI5/okUbC0ZYkClJXDeTJiC283MXgJ4nbqwtiqCEPNOtXtkNx7zeg5GOzw==','manufacturer',
     '4Vu8gxiWGHQYF7jfj3qiFUQmPQpyZNwvpmiLBXJ7gA4b', TRUE, FALSE),

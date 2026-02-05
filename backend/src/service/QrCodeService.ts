@@ -12,7 +12,7 @@ export class QrCodeService {
   static buildPayload(productId: number, serialNo: string, manufacturerId: number) {
     // const ts = Math.floor(Date.now() / 1000);
 
-    const base = `http://34.177.85.28:5173/products/${productId}/details`;
+    const base = `https://fyp-25-s4-20-frontend.onrender.com/products/${productId}/details`;
 
     // const sig = crypto
     //   .createHmac("sha256", this.secret())
@@ -34,7 +34,7 @@ export class QrCodeService {
       return { ok: false, reason: "Missing fields" as const };
     }
 
-    const base = `http://34.177.85.28:5173/products/${productId}/details`;
+    const base = `https://fyp-25-s4-20-frontend.onrender.com/products/${productId}/details`;
 
     const expected = crypto
       .createHmac("sha256", this.secret())

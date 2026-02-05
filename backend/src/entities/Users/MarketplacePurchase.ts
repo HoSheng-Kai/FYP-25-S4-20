@@ -447,6 +447,7 @@ export class MarketplacePurchase {
     try {
       await client.query("BEGIN");
 
+      // 1) Lock purchase request
       const prRes = await client.query(
         `SELECT * FROM fyp_25_s4_20.purchase_request WHERE request_id = $1 FOR UPDATE`,
         [args.requestId]
@@ -455,14 +456,14 @@ export class MarketplacePurchase {
       const pr = prRes.rows[0] as PurchaseRequestRow;
 
       if (pr.seller_id !== args.sellerId) throw new Error("Not seller for this request");
-      if (pr.status !== "paid_pending_transfer" && pr.status !== "accepted_waiting_payment") {
+      if (pr.status !== "paid_pending_transfer") {
         throw new Error(`Invalid status: ${pr.status}`);
       }
 
-      // seller must still be current owner
+      // 2) Ensure seller is still current owner (lock active ownership row)
       const ownerRes = await client.query(
         `
-        SELECT owner_id
+        SELECT owner_id, tx_hash
         FROM fyp_25_s4_20.ownership
         WHERE product_id = $1 AND end_on IS NULL
         LIMIT 1
@@ -470,11 +471,12 @@ export class MarketplacePurchase {
         `,
         [pr.product_id]
       );
-      if (ownerRes.rows.length > 0 && ownerRes.rows[0].owner_id !== args.sellerId) {
+      if (ownerRes.rows.length === 0) throw new Error("No active ownership record found");
+      if (ownerRes.rows[0].owner_id !== args.sellerId) {
         throw new Error("Seller is no longer the current owner");
       }
 
-      // seller public key (needed for blockchain_node)
+      // 3) Fetch seller + buyer public keys
       const sellerRes = await client.query(
         `SELECT public_key FROM fyp_25_s4_20.users WHERE user_id = $1`,
         [pr.seller_id]
@@ -482,7 +484,6 @@ export class MarketplacePurchase {
       const sellerPub = sellerRes.rows[0]?.public_key as string | undefined;
       if (!sellerPub) throw new Error("Seller missing public key");
 
-      // buyer public key (needed for ownership + blockchain_node)
       const buyerRes = await client.query(
         `SELECT public_key FROM fyp_25_s4_20.users WHERE user_id = $1`,
         [pr.buyer_id]
@@ -490,29 +491,46 @@ export class MarketplacePurchase {
       const buyerPub = buyerRes.rows[0]?.public_key as string | undefined;
       if (!buyerPub) throw new Error("Buyer missing public key");
 
-      // ✅ Ensure blockchain_node row exists for transferTxHash
-      // If you already created it elsewhere, this will do nothing.
+      // 4) Determine prev_tx_hash (latest tx for this product) and next block_slot
+      //    This avoids "wrong timeline order" and keeps chain linked.
+      const prevRes = await client.query(
+        `
+        SELECT tx_hash, block_slot
+        FROM fyp_25_s4_20.blockchain_node
+        WHERE product_id = $1
+        ORDER BY block_slot DESC, created_on DESC
+        LIMIT 1;
+        `,
+        [pr.product_id]
+      );
+
+      const prevTxHash: string | null = prevRes.rows[0]?.tx_hash ?? null;
+      const maxSlot: number = prevRes.rows[0]?.block_slot != null ? Number(prevRes.rows[0].block_slot) : 0;
+      const nextSlot: number = maxSlot + 1;
+
+      // 5) Ensure blockchain_node row exists for transferTxHash (FK requirement for ownership.tx_hash)
       await client.query(
         `
         INSERT INTO fyp_25_s4_20.blockchain_node
           (tx_hash, prev_tx_hash, from_user_id, from_public_key,
           to_user_id, to_public_key, product_id, block_slot, created_on, event)
         VALUES
-          ($1, NULL, $2, $3, $4, $5, $6, $7, NOW(), 'TRANSFER')
+          ($1, $2, $3, $4, $5, $6, $7, $8, NOW(), 'TRANSFER')
         ON CONFLICT (tx_hash) DO NOTHING;
         `,
         [
           args.transferTxHash,
+          prevTxHash,
           pr.seller_id,
           sellerPub,
           pr.buyer_id,
           buyerPub,
           pr.product_id,
-          Date.now() // use as dummy block_slot for now
+          nextSlot,
         ]
       );
 
-      // close current ownership
+      // 6) Close current ownership
       await client.query(
         `
         UPDATE fyp_25_s4_20.ownership
@@ -522,7 +540,7 @@ export class MarketplacePurchase {
         [pr.product_id]
       );
 
-      // insert new ownership (FK now satisfied because blockchain_node exists)
+      // 7) Insert new ownership for buyer (FK now satisfied)
       await client.query(
         `
         INSERT INTO fyp_25_s4_20.ownership
@@ -533,8 +551,7 @@ export class MarketplacePurchase {
         [pr.buyer_id, buyerPub, pr.product_id, args.transferTxHash]
       );
 
-      // mark request completed + store transfer tx
-      // (only works if you added transfer_tx_hash column; otherwise remove it)
+      // 8) Mark request completed + store transfer tx hash (requires transfer_tx_hash column)
       await client.query(
         `
         UPDATE fyp_25_s4_20.purchase_request
@@ -546,7 +563,7 @@ export class MarketplacePurchase {
         [args.requestId, args.transferTxHash]
       );
 
-      // mark listing sold
+      // 9) Mark listing sold
       if (pr.listing_id) {
         await client.query(
           `

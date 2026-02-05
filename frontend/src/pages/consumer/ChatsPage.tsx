@@ -98,7 +98,7 @@ export default function ChatsPage() {
   };
 
   return (
-    <div style={{ padding: 24 }}>
+    <div style={{ padding: "clamp(14px, 3vw, 24px)", maxWidth: 980, margin: "0 auto" }}>
       <h1 style={{ margin: 0, fontSize: 24 }}>Messages</h1>
       <p style={{ marginTop: 6, color: "#6b7280" }}>Conversations about your marketplace listings.</p>
 
@@ -136,6 +136,7 @@ export default function ChatsPage() {
               gap: 12,
               alignItems: "stretch",
               position: "relative",
+              flexWrap: "wrap",
             }}
           >
             <button onClick={() => navigate(`/consumer/chats/${t.thread_id}`)}
@@ -148,6 +149,7 @@ export default function ChatsPage() {
                 cursor: "pointer",
                 textAlign: "left",
                 transition: "all 0.2s",
+                minWidth: 0,
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.boxShadow = "0 4px 6px -1px rgba(0,0,0,0.1)";
@@ -159,7 +161,7 @@ export default function ChatsPage() {
               }}
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                     <strong style={{ fontSize: 15, color: "#111827" }}>@{t.other_username}</strong>
                     {t.unread_count > 0 && (
@@ -303,7 +305,7 @@ export default function ChatsPage() {
                   }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
                         <strong style={{ fontSize: 15, color: "#0f172a" }}>@{t.other_username}</strong>
                         <span style={{ background: "#e2e8f0", color: "#475569", borderRadius: 999, padding: "2px 10px", fontSize: 11, fontWeight: 600 }}>

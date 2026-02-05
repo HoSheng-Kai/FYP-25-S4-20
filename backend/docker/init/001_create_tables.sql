@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS product (
   category TEXT,
   manufacture_date TIMESTAMPTZ,
   description TEXT,
-  registered_on TIMESTAMP DEFAULT NOW(),
+  registered_on TIMESTAMPTZ,
 
   product_pda TEXT,
   tx_hash TEXT,
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS blockchain_node (
 
   product_id INT NOT NULL REFERENCES product(product_id) ON DELETE CASCADE,
   block_slot BIGINT NOT NULL,
-  created_on TIMESTAMP DEFAULT NOW(),
+  created_on TIMESTAMPTZ DEFAULT NOW(),
 
   event tx_event NOT NULL DEFAULT 'TRANSFER'
 );

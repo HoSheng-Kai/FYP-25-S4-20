@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { PublicKey } from "@solana/web3.js";
 import { useWallet } from "@solana/wallet-adapter-react";
@@ -404,7 +404,10 @@ export default function PurchaseRequestsPage() {
       )}
 
       {rows.length > 0 && (
-        <div className="marketplace-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))" }}>
+        <div
+          className="marketplace-grid"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}
+        >
           {rows.map((r) => (
             <div className="marketplace-card" key={r.request_id}>
               <div className="marketplace-card-header">
