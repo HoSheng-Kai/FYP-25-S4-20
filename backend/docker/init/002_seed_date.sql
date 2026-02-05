@@ -688,7 +688,15 @@ VALUES
 
   (6, 'Suspicious Activity',
    'Product ADIDAS-STAN-004 has been flagged as suspicious. Please review.',
-   FALSE, '2024-03-05 15:30:00', 8, NULL)
+   FALSE, '2024-03-05 15:30:00', 8, NULL),
+
+  (16, 'Welcome Admin',
+   'Welcome to the platform, sk_admin! You have been granted administrator privileges.',
+   TRUE, '2024-03-12 08:00:00', NULL, NULL),
+
+  (16, 'System Update',
+   'A new system update has been deployed. Please review the changelog for details.',
+   FALSE, '2024-03-12 09:30:00', NULL, NULL)
 
 ON CONFLICT ON CONSTRAINT notification_user_product_tx_uniq
 DO NOTHING;
