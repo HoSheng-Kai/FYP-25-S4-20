@@ -5,7 +5,7 @@ import { SystemProgram } from "@solana/web3.js";
 import axios from "axios";
 import { API_ROOT } from "../../config/api";
 import { Buffer } from "buffer";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "../../auth/AuthContext";
 import { getProvider, getProgram } from "../../lib/anchorClient";
 import { deriveProductPda } from "../../lib/pdas";
@@ -258,6 +258,32 @@ export default function RegisterProductPage() {
   const [productPdaStr, setProductPdaStr] = useState<string>("");
   const [isFinalized, setIsFinalized] = useState<boolean>(false);
 
+  const navigate = useNavigate();
+
+  function resetForm() {
+    // clear form fields
+    setSerialNo("");
+    setProductName("");
+    setBatchNo("");
+    setCategory("");
+    setManufactureDate("");
+    setDescription("");
+
+    // clear product state
+    setProductId(null);
+    setDraftStage("unknown");
+    setTxSig("");
+    setProductPdaStr("");
+    setIsFinalized(false);
+
+    // clear QR
+    setQrUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return "";
+    });
+
+    setUiError("");
+  }
 
   // QR (from backend)
   const [qrUrl, setQrUrl] = useState<string>("");
@@ -864,6 +890,18 @@ export default function RegisterProductPage() {
             >
               Register on Blockchain
             </button>
+            {isFinalized && (
+            <button
+              type="button"
+              style={styles.btnEmphasis}
+              onClick={() => {
+                resetForm();
+                navigate("/manufacturer/register", { replace: true });
+              }}
+            >
+              Register another product
+            </button>
+          )}
           </div>
         </div>
       </div>
