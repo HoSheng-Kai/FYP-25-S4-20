@@ -323,8 +323,6 @@ export default function ManufacturerProductsPage() {
     });
   };
 
-  const clearSelected = () => setSelectedIds(new Set());
-
   // ----------------------
   // LOAD PRODUCTS
   // ----------------------
@@ -915,14 +913,12 @@ export default function ManufacturerProductsPage() {
         open={transferOpen}
         onClose={() => setTransferOpen(false)}
         fromUserId={manufacturerId}
-        selectedProductIds={selectedEligibleProducts.map((p) => p.productId)}
+        selectedProducts={selectedEligibleProducts}
         title="Ownership Transfer"
         onTransferred={async (results) => {
           const anyFail = results.some((r) => !r.ok);
           if (!anyFail) {
             await loadProducts();
-            clearSelected();
-            setTransferOpen(false);
           }
         }}
       />

@@ -225,9 +225,6 @@ export default function RetailerProductsPage() {
       return new Set(eligibleIds);
     });
   };
-
-  const clearSelected = () => setSelectedIds(new Set());
-
   // load products
   const loadProducts = async () => {
     try {
@@ -555,14 +552,12 @@ export default function RetailerProductsPage() {
         open={transferOpen}
         onClose={() => setTransferOpen(false)}
         fromUserId={retailerId}
-        selectedProductIds={selectedEligibleProducts.map((p) => p.productId)}
+        selectedProducts={selectedEligibleProducts}
         title="Ownership Transfer"
         onTransferred={async (results) => {
           const anyFail = results.some((r) => !r.ok);
           if (!anyFail) {
             await loadProducts();
-            clearSelected();
-            setTransferOpen(false);
           }
         }}
       />

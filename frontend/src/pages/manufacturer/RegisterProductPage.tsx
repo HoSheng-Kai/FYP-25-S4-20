@@ -779,8 +779,8 @@ export default function RegisterProductPage() {
                     <div>
                       <b>Serial No:</b> {serialNo || "—"}
                     </div>
-                    <div>
-                      <b>Manufacturer ID:</b> {manufacturerId}
+                                        <div>
+                      <b>Product Name:</b> {productName || "—"}
                     </div>
                   </div>
                 </div>

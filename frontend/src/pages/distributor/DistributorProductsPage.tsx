@@ -216,8 +216,6 @@ export default function DistributorProductsPage() {
     });
   };
 
-  const clearSelected = () => setSelectedIds(new Set());
-
   const loadProducts = async () => {
     try {
       if (!distributorId || Number.isNaN(distributorId)) {
@@ -488,14 +486,12 @@ export default function DistributorProductsPage() {
         open={transferOpen}
         onClose={() => setTransferOpen(false)}
         fromUserId={distributorId}
-        selectedProductIds={selectedEligibleProducts.map((p) => p.productId)}
+        selectedProducts={selectedEligibleProducts}
         title="Ownership Transfer"
         onTransferred={async (results) => {
           const anyFail = results.some((r) => !r.ok);
           if (!anyFail) {
             await loadProducts();
-            clearSelected();
-            setTransferOpen(false);
           }
         }}
       />
