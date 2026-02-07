@@ -105,7 +105,17 @@ VALUES
    'AYW8eQ9xNwKZSnNZmupSnrLuYmBqSahPeoUj8viGJmkh', TRUE, FALSE),
 
   ('jiya_consumer','vault:v1:qIH/IA7gUCuqTI0csVtjVFyjMt8ztRojZ0iDzWvlVckgA76K','vault:v1:NGOQyyiPtJwsHFHiMpXPXmnJDaWSX6ladMkj1mcF5WtdpXjCwMIby5AhmDlstMi0eNk=','consumer',
-   'GKYR1iVV9prf7XmuC149TdtLKpgzDPbFmjLbqyWE5ZTb', TRUE, FALSE);
+   'GKYR1iVV9prf7XmuC149TdtLKpgzDPbFmjLbqyWE5ZTb', TRUE, FALSE),
+
+-- hk test accounts (one per role)
+  ('chaing_con_1','vault:v1:luITjxwaWJmIWAZ4wqIQQhpM1/Vye5xIsjbVT/qAD00h0uz6','vault:v1:+TEepokRgl8aJQiM7nXe1uBnfGrPz312khfxJ8PBdwf0sa1p1k79AL/zsXa779LWgPo=','consumer',
+   NULL, TRUE, FALSE),
+
+    ('chaing_con_2','vault:v1:luITjxwaWJmIWAZ4wqIQQhpM1/Vye5xIsjbVT/qAD00h0uz6','vault:v1:+TEepokRgl8aJQiM7nXe1uBnfGrPz312khfxJ8PBdwf0sa1p1k79AL/zsXa779LWgPo=','consumer',
+   NULL, TRUE, FALSE),
+
+    ('chaing_con_2','vault:v1:luITjxwaWJmIWAZ4wqIQQhpM1/Vye5xIsjbVT/qAD00h0uz6','vault:v1:+TEepokRgl8aJQiM7nXe1uBnfGrPz312khfxJ8PBdwf0sa1p1k79AL/zsXa779LWgPo=','manufacturer',
+   NULL, TRUE, FALSE);
 
 -- ===========================
 -- Insert Products
