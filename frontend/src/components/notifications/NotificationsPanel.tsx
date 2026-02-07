@@ -6,6 +6,7 @@ import { PublicKey } from "@solana/web3.js";
 import { getProvider, getProgram } from "../../lib/anchorClient";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { useAuth } from "../../auth/AuthContext";
+import "../../styles/NotificationsPanel.css";
 
 const TRANSFER_ACCEPT_URL = `${API_ROOT}/distributors/accept-transfer`;
 const TRANSFER_EXECUTE_URL = `${API_ROOT}/distributors/execute-transfer`;
@@ -800,17 +801,20 @@ export default function NotificationsPanel(props: {
   }
 
   return (
-    <div style={panel}>
+    <div style={panel} className="notifPanel">
       {showHeader && (
-        <div style={headerRow}>
+        <div style={headerRow} className="notifHeader">
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <h2 style={{ margin: 0 }}>{title}</h2>
             <span style={pill}>Unread: {unreadCount}</span>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}
+            className="notifHeaderControls"
+          >
             {!isAdmin && (
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }} className="notifWallet">
                 <WalletMultiButton />
               </div>
             )}
@@ -854,8 +858,12 @@ export default function NotificationsPanel(props: {
         ) : (
           <div style={{ display: "grid", gap: 10 }}>
             {items.map((n) => (
-              <div key={n.notificationId} style={{ ...card, background: n.isRead ? "#fff" : "#f9fafb" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+              <div
+                key={n.notificationId}
+                style={{ ...card, background: n.isRead ? "#fff" : "#f9fafb" }}
+                className="notifCard"
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }} className="notifCardTop">
                   <div style={{ minWidth: 0, flex: 1 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                       <div style={{ fontWeight: 700, color: "#111827" }}>{n.title}</div>
@@ -871,9 +879,11 @@ export default function NotificationsPanel(props: {
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                  <div
+                    style={{ display: "flex", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}
+                    className="notifCardActions"
+                  >
                     {renderTransferActions(n)}
-
                     {!isAdmin && n.txHash?.startsWith("thread:") && (
                       <button
                         onClick={() => {
@@ -977,7 +987,8 @@ const btnLight: React.CSSProperties = {
   border: "1px solid #e5e7eb",
   background: "white",
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "normal",
+  maxWidth: "100%",
 };
 
 const btnDark: React.CSSProperties = {

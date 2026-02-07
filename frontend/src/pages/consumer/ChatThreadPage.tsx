@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import axios from "axios";
-import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
@@ -28,36 +27,66 @@ type ThreadDetails = {
 };
 
 export default function ChatThreadPage() {
-  const wallet = useWallet();
   const { auth } = useAuth();
   const { threadId } = useParams<{ threadId: string }>();
   const navigate = useNavigate();
   const userId = auth.user?.userId;
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [thread, setThread] = useState<ThreadDetails | null>(null);
   const [text, setText] = useState("");
   const [err, setErr] = useState<string | null>(null);
+
   const [purchasing, setPurchasing] = useState(false);
   const [showReviewForm, setShowReviewForm] = useState(false);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
   const [hasReviewed, setHasReviewed] = useState(false);
+
   const [showReportModal, setShowReportModal] = useState(false);
   const [reportReason, setReportReason] = useState("Fraudulent activity");
   const [reportSubmitting, setReportSubmitting] = useState(false);
+
   const listRef = useRef<HTMLDivElement>(null);
-  
+
+  const [isMobile, setIsMobile] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+
+  // Detect mobile
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 820px)");
+    const apply = () => setIsMobile(mq.matches);
+    apply();
+
+    // Safari fallback: addListener/removeListener
+    const anyMq = mq as any;
+    if (mq.addEventListener) {
+      mq.addEventListener("change", apply);
+      return () => mq.removeEventListener("change", apply);
+    } else if (anyMq.addListener) {
+      anyMq.addListener(apply);
+      return () => anyMq.removeListener(apply);
+    }
+  }, []);
+
+  // On mobile, default to Chat view
+  useEffect(() => {
+    if (isMobile) setShowDetails(false);
+  }, [isMobile]);
+
   const load = async () => {
     if (!threadId || !userId) return;
     try {
-      const res = await axios.get(`${API_ROOT}/chats/${threadId}/messages`, { params: { userId, limit: 200 } ,
-        withCredentials: true });
+      const res = await axios.get(`${API_ROOT}/chats/${threadId}/messages`, {
+        params: { userId, limit: 200 },
+        withCredentials: true,
+      });
       if (res.data.success) {
         setMessages(res.data.messages);
         setThread(res.data.thread);
       } else setErr(res.data.error || "Failed to load messages");
-    } catch (e) {
+    } catch {
       setErr("Failed to load messages");
     }
   };
@@ -66,6 +95,7 @@ export default function ChatThreadPage() {
     void load();
     const id = setInterval(load, 3000); // simple polling
     return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [threadId, userId]);
 
   useEffect(() => {
@@ -76,70 +106,63 @@ export default function ChatThreadPage() {
     const content = text.trim();
     if (!content || !threadId) return;
     try {
-      const res = await axios.post(`${API_ROOT}/chats/${threadId}/messages`, { userId, content }, { withCredentials: true });
+      const res = await axios.post(
+        `${API_ROOT}/chats/${threadId}/messages`,
+        { userId, content },
+        { withCredentials: true }
+      );
       if (res.data.success) {
         setText("");
         await load();
       } else {
         setErr(res.data.error || "Failed to send");
       }
-    } catch (e) {
+    } catch {
       setErr("Failed to send message");
     }
   };
 
   const handlePurchase = async () => {
-    if (!wallet.connected || !wallet.publicKey) {
-      alert("Please connect your Phantom wallet to purchase.");
+    if (!userId) {
+      alert("Please log in to purchase.");
       return;
     }
     if (!thread) return;
-    const priceText = thread.listing_price && thread.listing_currency ? `${thread.listing_price} ${thread.listing_currency}` : "—";
+
+    const priceText =
+      thread.listing_price && thread.listing_currency
+        ? `${thread.listing_price} ${thread.listing_currency}`
+        : "—";
+
     const confirm = window.confirm(
-      `Purchase "${thread.product_model || 'this product'}" for ${priceText}?`
+      `Send a purchase request for "${thread.product_model || "this product"}" at ${priceText}?`
     );
     if (!confirm) return;
+
     setPurchasing(true);
     try {
       const res = await axios.post(
-        `${API_ROOT}/products/listings/${thread.listing_id}/purchase`,
-        { buyerId: userId },
+        `${API_ROOT}/products/marketplace/purchase/propose`,
+        { listingId: thread.listing_id, buyerId: userId },
         { withCredentials: true }
       );
       if (res.data.success) {
-        alert(`Purchase successful! You now own ${thread.product_model || 'this product'}`);
-        setShowReviewForm(true);
-        setThread((prev) => (prev ? { ...prev, listing_status: "sold" } : prev));
+        alert(`Request sent! The seller will review it shortly.`);
+        setThread((prev) => (prev ? { ...prev, listing_status: "reserved" } : prev));
         await load();
       }
     } catch (e: any) {
       const errorMsg =
-        e?.response?.data?.error ||
-        e?.response?.data?.details ||
-        "Failed to complete purchase";
+        e?.response?.data?.error || e?.response?.data?.details || "Failed to send request";
       alert(errorMsg);
     } finally {
       setPurchasing(false);
     }
   };
 
-  const handleDelete = async () => {
-    if (!window.confirm("Are you sure you want to delete this chat? This cannot be undone.")) return;
-    
-    try {
-      const res = await axios.delete(`${API_ROOT}/chats/${threadId}`, { data: { userId }, withCredentials: true });
-      if (res.data.success) {
-        alert("Chat deleted successfully");
-        window.location.href = "/consumer/chats"; // Redirect back to chats list
-      }
-    } catch (e: any) {
-      alert(e?.response?.data?.error || "Failed to delete chat");
-    }
-  };
-
   const handleSubmitReview = async () => {
     if (!thread || reviewComment.trim().length === 0) return;
-    
+
     setSubmittingReview(true);
     try {
       const res = await axios.post(
@@ -149,7 +172,8 @@ export default function ChatThreadPage() {
           author_id: userId,
           rating: reviewRating,
           comment: reviewComment.trim(),
-        }, { withCredentials: true }
+        },
+        { withCredentials: true }
       );
 
       if (res.data.success) {
@@ -170,10 +194,11 @@ export default function ChatThreadPage() {
     if (!threadId || !reportReason) return;
     setReportSubmitting(true);
     try {
-      const res = await axios.post(`${API_ROOT}/chats/${threadId}/report`, {
-        userId,
-        reason: reportReason,
-      }, { withCredentials: true });
+      const res = await axios.post(
+        `${API_ROOT}/chats/${threadId}/report`,
+        { userId, reason: reportReason },
+        { withCredentials: true }
+      );
       if (res.data.success) {
         alert("Report sent to admin");
         setShowReportModal(false);
@@ -185,334 +210,369 @@ export default function ChatThreadPage() {
     }
   };
 
-  return (
-    <div style={{ height: "calc(100vh - 60px)", padding: 24, display: "flex", flexDirection: "column", gap: 16 }}>
-      <div style={{ position: "absolute", top: 18, right: 24, zIndex: 100 }}>
-        <WalletMultiButton />
+  // --- Reusable UI blocks ---
+  const DetailsPanel = thread ? (
+    <div
+      style={{
+        width: isMobile ? "100%" : 340,
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+      }}
+    >
+      <div
+        style={{
+          background: "white",
+          padding: 16,
+          borderRadius: 12,
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+        }}
+      >
+        <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4, fontWeight: 500 }}>
+          Chatting with
+        </div>
+        <div
+          style={{
+            fontSize: 17,
+            fontWeight: 700,
+            color: "#111827",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: "50%",
+              background: "#10b981",
+              display: "inline-block",
+            }}
+          />
+          @{thread.other_username}
+        </div>
       </div>
-      {/* Header with Back and Report buttons */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+
+      <div
+        style={{
+          background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+          padding: 18,
+          borderRadius: 12,
+          boxShadow: "0 4px 12px rgba(102, 126, 234, 0.2)",
+          color: "white",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 11,
+            fontWeight: 600,
+            marginBottom: 12,
+            textTransform: "uppercase",
+            letterSpacing: "1px",
+            opacity: 0.9,
+          }}
+        >
+          About This Listing
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>
+            {thread.product_model || "Unknown Product"}
+          </div>
+          <div style={{ fontSize: 13, opacity: 0.9 }}>
+            Serial: <strong style={{ fontWeight: 600 }}>{thread.serial_no || "N/A"}</strong>
+          </div>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(255,255,255,0.15)",
+            backdropFilter: "blur(10px)",
+            borderRadius: 10,
+            padding: 14,
+            marginBottom: 12,
+          }}
+        >
+          <div style={{ fontSize: 11, marginBottom: 4, opacity: 0.9 }}>Price</div>
+          <div style={{ fontSize: 24, fontWeight: 700 }}>
+            {thread.listing_price && thread.listing_currency
+              ? `${thread.listing_currency} ${thread.listing_price}`
+              : "N/A"}
+          </div>
+        </div>
+
+        {thread.listing_status === "sold" ? (
+          <div
+            style={{
+              background: "rgba(255,255,255,0.25)",
+              borderRadius: 8,
+              padding: "10px 16px",
+              fontSize: 13,
+              fontWeight: 700,
+              textAlign: "center",
+            }}
+          >
+            ✓ Sold
+          </div>
+        ) : (
+          thread.seller_id !== userId && (
+            <button
+              onClick={handlePurchase}
+              disabled={purchasing}
+              style={{
+                background: purchasing ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.95)",
+                color: purchasing ? "rgba(255,255,255,0.7)" : "#667eea",
+                border: "none",
+                borderRadius: 8,
+                padding: "12px 20px",
+                cursor: purchasing ? "not-allowed" : "pointer",
+                fontSize: 14,
+                fontWeight: 700,
+                width: "100%",
+                transition: "all 0.2s",
+                opacity: purchasing ? 0.6 : 1,
+              }}
+            >
+              {purchasing ? "Processing..." : "Buy Now"}
+            </button>
+          )
+        )}
+      </div>
+    </div>
+  ) : null;
+
+  const ChatPanel = (
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        gap: 12,
+        minHeight: 0,
+      }}
+    >
+      <div
+        ref={listRef}
+        style={{
+          flex: 1,
+          background: "#fafbfc",
+          border: "1px solid #e5e7eb",
+          borderRadius: 12,
+          padding: 16,
+          overflowY: "auto",
+          boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)",
+        }}
+      >
+        {messages.map((m) => {
+          const isOwn = m.sender_id === userId;
+          return (
+            <div
+              key={m.message_id}
+              style={{
+                display: "flex",
+                justifyContent: isOwn ? "flex-end" : "flex-start",
+                marginBottom: 12,
+              }}
+            >
+              <div
+                style={{
+                  maxWidth: isMobile ? "92%" : "65%",
+                  padding: "10px 16px",
+                  borderRadius: isOwn ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                  background: isOwn
+                    ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"
+                    : "white",
+                  color: isOwn ? "white" : "#111827",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontSize: 14,
+                  lineHeight: 1.5,
+                  boxShadow: isOwn
+                    ? "0 2px 8px rgba(102, 126, 234, 0.25)"
+                    : "0 1px 3px rgba(0,0,0,0.08)",
+                  border: isOwn ? "none" : "1px solid #e5e7eb",
+                }}
+              >
+                {m.content}
+              </div>
+            </div>
+          );
+        })}
+
+        {messages.length === 0 && (
+          <div style={{ textAlign: "center", color: "#9ca3af", padding: "60px 20px", fontSize: 15 }}>
+            <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>No messages yet</div>
+            <div style={{ fontSize: 13 }}>Start the conversation!</div>
+          </div>
+        )}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 10,
+          flexWrap: isMobile ? "wrap" : "nowrap",
+          background: "white",
+          padding: 12,
+          borderRadius: 12,
+          border: "1px solid #e5e7eb",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+        }}
+      >
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Type your message..."
+          rows={2}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            padding: 12,
+            borderRadius: 10,
+            border: "1px solid #e5e7eb",
+            resize: "none",
+            fontSize: 14,
+            fontFamily: "inherit",
+            outline: "none",
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
+          maxLength={1000}
+        />
+        <button
+          onClick={send}
+          style={{
+            background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+            color: "white",
+            border: "none",
+            borderRadius: 10,
+            padding: "12px 24px",
+            cursor: "pointer",
+            fontWeight: 700,
+            fontSize: 14,
+            width: isMobile ? "100%" : "auto",
+          }}
+        >
+          Send
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        minHeight: "calc(100vh - 60px)",
+        padding: "clamp(12px, 3vw, 24px)",
+        display: "flex",
+        flexDirection: "column",
+        gap: 16,
+      }}
+    >
+      {/* Top bar: Back / Details / Report / Wallet */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10,
+          flexWrap: "wrap",
+        }}
+      >
         <button
           onClick={() => navigate(-1)}
-          title="return to previous"
           style={{
             border: "1px solid #e5e7eb",
             background: "white",
             borderRadius: 10,
             padding: "8px 14px",
             cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 14,
-            fontWeight: 600,
+            fontWeight: 700,
             color: "#374151",
-            transition: "all 0.2s",
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "#f9fafb";
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = "white";
           }}
         >
           ← Back
         </button>
-        {thread && (
-          <button
-            onClick={() => setShowReportModal(true)}
-            style={{
-              border: "1px solid #f87171",
-              background: "#fef2f2",
-              color: "#b91c1c",
-              borderRadius: 10,
-              padding: "8px 16px",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: 14,
-              transition: "all 0.2s",
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "#fee2e2";
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "#fef2f2";
-            }}
-          >
-            Report seller
-          </button>
-        )}
-      </div>
 
-      <div style={{ display: "flex", gap: 16, flex: 1, minHeight: 0 }}>
-        {/* Left: About This Listing - FIXED SIZE */}
-        {thread && (
-          <div style={{ 
-            width: 340,
-            flexShrink: 0,
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}>
-            <div style={{
-              background: "white",
-              padding: 16,
-              borderRadius: 12,
-              border: "1px solid #e5e7eb",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
-            }}>
-              <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 4, fontWeight: 500 }}>Chatting with</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: "#111827", display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: "50%",
-                  background: "#10b981",
-                  display: "inline-block",
-                }}></span>
-                @{thread.other_username}
-              </div>
-            </div>
-
-            <div style={{ 
-              background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", 
-              padding: 18, 
-              borderRadius: 12,
-              boxShadow: "0 4px 12px rgba(102, 126, 234, 0.2)",
-              color: "white",
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 600, marginBottom: 12, textTransform: "uppercase", letterSpacing: "1px", opacity: 0.9 }}>
-                About This Listing
-              </div>
-              <div style={{ marginBottom: 16 }}>
-                <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>
-                  {thread.product_model || "Unknown Product"}
-                </div>
-                <div style={{ fontSize: 13, opacity: 0.9 }}>
-                  Serial: <strong style={{ fontWeight: 600 }}>{thread.serial_no || "N/A"}</strong>
-                </div>
-              </div>
-              <div style={{ 
-                background: "rgba(255,255,255,0.15)", 
-                backdropFilter: "blur(10px)",
-                borderRadius: 10, 
-                padding: 14,
-                marginBottom: 12,
-              }}>
-                <div style={{ fontSize: 11, marginBottom: 4, opacity: 0.9 }}>Price</div>
-                <div style={{ fontSize: 24, fontWeight: 700 }}>
-                  {thread.listing_price && thread.listing_currency ? `${thread.listing_currency} ${thread.listing_price}` : "N/A"}
-                </div>
-              </div>
-              {thread.listing_status === "sold" ? (
-                <div style={{
-                  background: "rgba(255,255,255,0.25)",
-                  borderRadius: 8,
-                  padding: "10px 16px",
-                  fontSize: 13,
-                  fontWeight: 700,
-                  textAlign: "center",
-                }}>
-                  ✓ Sold
-                </div>
-              ) : (
-                thread.seller_id !== userId && (
-                  <button 
-                    onClick={handlePurchase}
-                    disabled={purchasing}
-                    style={{
-                      background: purchasing ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.95)",
-                      color: purchasing ? "rgba(255,255,255,0.7)" : "#667eea",
-                      border: "none",
-                      borderRadius: 8,
-                      padding: "12px 20px",
-                      cursor: purchasing ? "not-allowed" : "pointer",
-                      fontSize: 14,
-                      fontWeight: 700,
-                      width: "100%",
-                      transition: "all 0.2s",
-                      opacity: purchasing ? 0.6 : 1,
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!purchasing) {
-                        (e.currentTarget as HTMLButtonElement).style.background = "white";
-                        (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!purchasing) {
-                        (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.95)";
-                        (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
-                      }
-                    }}
-                  >
-                    {purchasing ? "Processing..." : "Buy Now"}
-                  </button>
-                )
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Right: Messages - FLEXIBLE SCROLLABLE */}
-        <div style={{ 
-          flex: 1, 
-          display: "flex", 
-          flexDirection: "column",
-          gap: 12,
-          minHeight: 0,
-        }}>
-          <div 
-            ref={listRef} 
-            style={{ 
-              flex: 1,
-              background: "#fafbfc", 
-              border: "1px solid #e5e7eb", 
-              borderRadius: 12, 
-              padding: 20, 
-              overflowY: "auto",
-              boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)",
-            }}
-          >
-            {messages.map((m) => {
-              const isOwn = m.sender_id === userId;
-              return (
-                <div key={m.message_id} style={{ 
-                  display: "flex", 
-                  justifyContent: isOwn ? "flex-end" : "flex-start", 
-                  marginBottom: 12,
-                  animation: "fadeIn 0.2s ease-in",
-                }}>
-                  <div style={{
-                    maxWidth: "65%",
-                    padding: "10px 16px",
-                    borderRadius: isOwn ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                    background: isOwn 
-                      ? "linear-gradient(135deg, #667eea 0%, #764ba2 100%)" 
-                      : "white",
-                    color: isOwn ? "white" : "#111827",
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                    fontSize: 14,
-                    lineHeight: 1.5,
-                    boxShadow: isOwn 
-                      ? "0 2px 8px rgba(102, 126, 234, 0.25)"
-                      : "0 1px 3px rgba(0,0,0,0.08)",
-                    border: isOwn ? "none" : "1px solid #e5e7eb",
-                  }}>
-                    {m.content}
-                  </div>
-                </div>
-              );
-            })}
-            {messages.length === 0 && (
-              <div style={{ 
-                textAlign: "center", 
-                color: "#9ca3af", 
-                padding: "60px 20px",
-                fontSize: 15,
-              }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>💬</div>
-                <div style={{ fontWeight: 600, marginBottom: 4 }}>No messages yet</div>
-                <div style={{ fontSize: 13 }}>Start the conversation!</div>
-              </div>
-            )}
-          </div>
-
-          <div style={{ 
-            display: "flex", 
-            gap: 10,
-            background: "white",
-            padding: 12,
-            borderRadius: 12,
-            border: "1px solid #e5e7eb",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-          }}>
-            <textarea 
-              value={text} 
-              onChange={(e) => setText(e.target.value)} 
-              placeholder="Type your message..." 
-              rows={2}
-              style={{ 
-                flex: 1, 
-                padding: 12, 
-                borderRadius: 10, 
-                border: "1px solid #e5e7eb", 
-                resize: "none",
-                fontSize: 14,
-                fontFamily: "inherit",
-                outline: "none",
-                transition: "border-color 0.2s",
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              onFocus={(e) => {
-                (e.currentTarget as HTMLTextAreaElement).style.borderColor = "#667eea";
-              }}
-              onBlur={(e) => {
-                (e.currentTarget as HTMLTextAreaElement).style.borderColor = "#e5e7eb";
-              }}
-              maxLength={1000}
-            />
-            <button 
-              onClick={send} 
-              style={{ 
-                background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-                color: "white", 
-                border: "none", 
-                borderRadius: 10, 
-                padding: "12px 24px", 
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {isMobile && thread && (
+            <button
+              onClick={() => setShowDetails((v) => !v)}
+              style={{
+                border: "1px solid #e5e7eb",
+                background: showDetails ? "#111827" : "white",
+                color: showDetails ? "white" : "#111827",
+                borderRadius: 10,
+                padding: "8px 14px",
                 cursor: "pointer",
-                fontWeight: 600,
-                fontSize: 14,
-                transition: "all 0.2s",
-                boxShadow: "0 2px 8px rgba(102, 126, 234, 0.3)",
-              }}
-              onMouseEnter={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(-1px)";
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 12px rgba(102, 126, 234, 0.4)";
-              }}
-              onMouseLeave={(e) => {
-                (e.currentTarget as HTMLButtonElement).style.transform = "translateY(0)";
-                (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 2px 8px rgba(102, 126, 234, 0.3)";
+                fontWeight: 800,
               }}
             >
-              Send
+              {showDetails ? "Show chat" : "Show details"}
             </button>
-          </div>
+          )}
+
+          {thread && (
+            <button
+              onClick={() => setShowReportModal(true)}
+              style={{
+                border: "1px solid #f87171",
+                background: "#fef2f2",
+                color: "#b91c1c",
+                borderRadius: 10,
+                padding: "8px 16px",
+                cursor: "pointer",
+                fontWeight: 700,
+              }}
+            >
+              Report seller
+            </button>
+          )}
+
+          <WalletMultiButton />
         </div>
       </div>
 
+      {/* Main content */}
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          flex: 1,
+          minHeight: 0,
+          flexDirection: isMobile ? "column" : "row",
+        }}
+      >
+        {isMobile ? (showDetails ? DetailsPanel : ChatPanel) : (
+          <>
+            {DetailsPanel}
+            {ChatPanel}
+          </>
+        )}
+      </div>
+
       {showReviewForm && !hasReviewed && thread?.seller_id !== userId && (
-        <div style={{
-          background: "#f0fdf4",
-          border: "1px solid #86efac",
-          borderRadius: 12,
-          padding: 16,
-          marginTop: 8
-        }}>
-          <h3 style={{ margin: "0 0 12px 0", color: "#166534", fontSize: 14, fontWeight: 600 }}>
+        <div style={{ background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 12, padding: 16 }}>
+          <h3 style={{ margin: "0 0 12px 0", color: "#166534", fontSize: 14, fontWeight: 700 }}>
             Leave a Review for {thread?.product_model}
           </h3>
-          
+
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: "block", fontSize: 12, color: "#6b7280", fontWeight: 600, marginBottom: 6 }}>
+            <label style={{ display: "block", fontSize: 12, color: "#6b7280", fontWeight: 700, marginBottom: 6 }}>
               Rating
             </label>
             <select
               value={reviewRating}
               onChange={(e) => setReviewRating(Number(e.target.value))}
-              style={{
-                width: "100%",
-                padding: 8,
-                borderRadius: 6,
-                border: "1px solid #d1d5db",
-                fontSize: 13,
-              }}
+              style={{ width: "100%", padding: 8, borderRadius: 6, border: "1px solid #d1d5db", fontSize: 13 }}
             >
               <option value={5}>⭐⭐⭐⭐⭐ Excellent</option>
               <option value={4}>⭐⭐⭐⭐ Good</option>
@@ -523,7 +583,7 @@ export default function ChatThreadPage() {
           </div>
 
           <div style={{ marginBottom: 12 }}>
-            <label style={{ display: "block", fontSize: 12, color: "#6b7280", fontWeight: 600, marginBottom: 6 }}>
+            <label style={{ display: "block", fontSize: 12, color: "#6b7280", fontWeight: 700, marginBottom: 6 }}>
               Comment
             </label>
             <textarea
@@ -547,7 +607,7 @@ export default function ChatThreadPage() {
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button
               onClick={handleSubmitReview}
               disabled={submittingReview}
@@ -559,7 +619,7 @@ export default function ChatThreadPage() {
                 padding: "8px 16px",
                 cursor: submittingReview ? "not-allowed" : "pointer",
                 fontSize: 13,
-                fontWeight: 600,
+                fontWeight: 700,
                 opacity: submittingReview ? 0.6 : 1,
               }}
             >
@@ -579,7 +639,7 @@ export default function ChatThreadPage() {
                 padding: "8px 16px",
                 cursor: "pointer",
                 fontSize: 13,
-                fontWeight: 600,
+                fontWeight: 700,
               }}
             >
               Skip
@@ -591,15 +651,16 @@ export default function ChatThreadPage() {
       {err && <p style={{ color: "#b91c1c" }}>{err}</p>}
 
       {showReportModal && (
-        <div style={{
-          position: "fixed",
-          inset: 0,
-          background: "rgba(0,0,0,0.4)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 200,
-        }}
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 200,
+          }}
           onClick={() => !reportSubmitting && setShowReportModal(false)}
         >
           <div

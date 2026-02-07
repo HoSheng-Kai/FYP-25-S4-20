@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate, useParams } from "react-router-dom";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
+import "../../styles/marketplace.css";
 
 type ListingStatus = "available" | "reserved" | "sold";
 
@@ -126,7 +127,7 @@ export default function EditListingPage() {
       }
 
       setOk("Listing updated successfully!");
-      setTimeout(() => navigate("/my-listings"), 700);
+      setTimeout(() => navigate("/consumer/my-listings"), 700);
     } catch (e: any) {
       console.error(e);
       setErr(e?.response?.data?.error || e?.response?.data?.details || "Unable to update listing.");
@@ -137,36 +138,22 @@ export default function EditListingPage() {
 
   if (authLoading) {
     return (
-      <div style={{ padding: 24, maxWidth: 720 }}>
-        <p style={{ color: "#6b7280" }}>Checking session…</p>
+      <div className="marketplace-page">
+        <p className="marketplace-subtitle">Checking session…</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 24, maxWidth: 720 }}>
-      <h1 style={{ margin: 0, fontSize: 24 }}>Edit Listing</h1>
-      <p style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
-        Update the listing information for a product you own.
-      </p>
+    <div className="marketplace-page">
+      <h1 className="marketplace-title">Edit Listing</h1>
+      <p className="marketplace-subtitle">Update the listing information for a product you own.</p>
 
-      {loading && <p style={{ color: "#6b7280" }}>Loading…</p>}
+      {loading && <p className="marketplace-subtitle">Loading…</p>}
       {err && <p style={{ color: "#b91c1c" }}>{err}</p>}
 
       {data && (
-        <form
-          onSubmit={handleSave}
-          style={{
-            marginTop: 16,
-            background: "white",
-            border: "1px solid #e5e7eb",
-            borderRadius: 16,
-            padding: 20,
-            display: "flex",
-            flexDirection: "column",
-            gap: 14,
-          }}
-        >
+        <form onSubmit={handleSave} className="marketplace-panel" style={{ marginTop: 16 }}>
           <div>
             <p style={{ margin: 0, fontSize: 12, color: "#6b7280" }}>Product</p>
             <p style={{ margin: "4px 0 0 0", fontWeight: 700 }}>
@@ -181,30 +168,23 @@ export default function EditListingPage() {
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
                 placeholder="e.g. 199.90"
-                style={{
-                  width: "100%",
-                  marginTop: 6,
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #d1d5db",
-                }}
+                className="marketplace-input"
+                style={{ width: "100%", marginTop: 6 }}
               />
             </div>
 
             <div>
               <label style={{ fontSize: 12, color: "#6b7280" }}>Currency</label>
-              <input
+              <select
                 value={currency}
                 onChange={(e) => setCurrency(e.target.value)}
-                placeholder="e.g. SGD"
-                style={{
-                  width: "100%",
-                  marginTop: 6,
-                  padding: "10px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #d1d5db",
-                }}
-              />
+                className="marketplace-select"
+                style={{ width: "100%", marginTop: 6 }}
+              >
+                <option value="SGD">SGD</option>
+                <option value="USD">USD</option>
+                <option value="EUR">EUR</option>
+              </select>
             </div>
           </div>
 
@@ -213,14 +193,8 @@ export default function EditListingPage() {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as ListingStatus)}
-              style={{
-                width: "100%",
-                marginTop: 6,
-                padding: "10px 12px",
-                borderRadius: 10,
-                border: "1px solid #d1d5db",
-                background: "white",
-              }}
+              className="marketplace-select"
+              style={{ width: "100%", marginTop: 6 }}
             >
               <option value="available">available</option>
               <option value="reserved">reserved</option>
@@ -231,37 +205,11 @@ export default function EditListingPage() {
           {ok && <p style={{ margin: 0, color: "#15803d", fontSize: 13 }}>{ok}</p>}
 
           <div style={{ display: "flex", gap: 10 }}>
-            <button
-              type="button"
-              onClick={() => navigate("/consumer/my-listings")}
-              style={{
-                flex: 1,
-                background: "white",
-                border: "1px solid #e5e7eb",
-                borderRadius: 10,
-                padding: "10px 12px",
-                cursor: "pointer",
-                fontWeight: 600,
-              }}
-            >
+            <button type="button" onClick={() => navigate("/consumer/my-listings")} className="btn btn-ghost">
               Cancel
             </button>
 
-            <button
-              type="submit"
-              disabled={saving}
-              style={{
-                flex: 1,
-                background: "#111827",
-                color: "white",
-                border: "none",
-                borderRadius: 10,
-                padding: "10px 12px",
-                cursor: "pointer",
-                fontWeight: 600,
-                opacity: saving ? 0.7 : 1,
-              }}
-            >
+            <button type="submit" disabled={saving} className="btn btn-primary">
               {saving ? "Saving…" : "Save Changes"}
             </button>
           </div>

@@ -7,12 +7,13 @@ import { getProvider, getProgram } from "../../lib/anchorClient";
 import { deriveTransferPda } from "../../lib/pdas";
 
 type TransferResult = { productId: number; ok: boolean; message: string };
+type SelectedProduct = { productId: number; productName: string | null };
 
 type Props = {
   open: boolean;
   onClose: () => void;
   fromUserId: number;
-  selectedProductIds: number[];
+  selectedProducts: SelectedProduct[];
   title?: string;
   onTransferred?: (results: TransferResult[]) => void;
 };
@@ -21,7 +22,7 @@ type UserOption = {
   user_id: number;
   username: string;
   public_key: string;
-  role?: string;
+  role_id: string;
 };
 
 const USERS_LIST_URL = `${USERS_API_BASE_URL}/list`;
@@ -70,7 +71,7 @@ export default function TransferOwnershipModal({
   open,
   onClose,
   fromUserId,
-  selectedProductIds,
+  selectedProducts = [],
   title = "Ownership Transfer",
   onTransferred,
 }: Props) {
@@ -86,7 +87,7 @@ export default function TransferOwnershipModal({
   const [err, setErr] = useState<string | null>(null);
   const [results, setResults] = useState<TransferResult[] | null>(null);
 
-  const count = selectedProductIds.length;
+  const count = selectedProducts.length;
 
   useEffect(() => {
     if (!open) return;
@@ -106,6 +107,7 @@ export default function TransferOwnershipModal({
     const q = userQuery.toLowerCase();
     return users
       .filter((u) => u.user_id !== fromUserId)
+      .filter((u) => u.role_id !== "admin")
       .filter((u) => u.username.toLowerCase().includes(q))
       .slice(0, 30);
   }, [users, userQuery, fromUserId]);
@@ -170,7 +172,7 @@ export default function TransferOwnershipModal({
 
       const out: TransferResult[] = [];
 
-      for (const productId of selectedProductIds) {
+      for (const { productId } of selectedProducts) {
         try {
           const productPdaStr = await fetchProductPda(productId);
           const productPda = new PublicKey(productPdaStr);
@@ -293,7 +295,6 @@ export default function TransferOwnershipModal({
                     }}
                   >
                     <strong>{u.username}</strong>{" "}
-                    <span style={{ color: "#6b7280" }}>#{u.user_id}</span>
                   </button>
                 ))
               )}
@@ -304,15 +305,18 @@ export default function TransferOwnershipModal({
         <div style={{ marginBottom: 14 }}>
           <div style={label}>Selected Products</div>
           <div style={box}>
-            {selectedProductIds.length === 0 ? (
-              <div style={{ fontSize: 13, color: "#6b7280" }}>No products selected.</div>
-            ) : (
-              selectedProductIds.map((id) => (
-                <div key={id} style={row}>
-                  Product ID: {id}
-                </div>
-              ))
-            )}
+            {selectedProducts.length === 0 ? (
+          <div style={{ fontSize: 13, color: "#6b7280" }}>No products selected.</div>
+        ) : (
+          selectedProducts.map((p) => (
+            <div key={p.productId} style={row}>
+              <div>Product Name: {p.productName}</div>
+              <div style={{ fontSize: 12, color: "#6b7280" }}>
+                Product ID: {p.productId}
+              </div>
+            </div>
+          ))
+        )}
           </div>
         </div>
 
@@ -333,12 +337,20 @@ export default function TransferOwnershipModal({
         )}
 
         <div style={footer}>
-          <button onClick={close} disabled={loading} style={btn}>
-            Cancel
-          </button>
-          <button onClick={() => void handlePropose()} disabled={!canSubmit} style={btnPrimary}>
-            {loading ? "Submitting..." : "Propose Transfer"}
-          </button>
+          {results ? (
+            <button onClick={close} disabled={loading} style={btnPrimary}>
+              Close
+            </button>
+          ) : (
+            <>
+              <button onClick={close} disabled={loading} style={btn}>
+                Cancel
+              </button>
+              <button onClick={() => void handlePropose()} disabled={!canSubmit} style={btnPrimary}>
+                {loading ? "Submitting..." : "Propose Transfer"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>

@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
 import MyListingCard from "../../components/marketplace/MyListingCard";
 import EditListingModal from "../../components/marketplace/EditListingModal";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
+import "../../styles/marketplace.css";
 
 export type ListingStatus = "available" | "reserved" | "sold";
 
@@ -39,53 +40,53 @@ export default function MyListingsPage() {
     setBusyListingIds((prev) => ({ ...prev, [listingId]: v }));
   };
 
-  useEffect(() => {
-    const load = async () => {
-      if (authLoading) return;
+  const loadListings = useCallback(async () => {
+    if (authLoading) return;
 
-      setLoading(true);
-      setErr(null);
+    setLoading(true);
+    setErr(null);
 
-      if (!userId) {
-        setLoading(false);
-        setErr("You are not logged in. Please login again.");
+    if (!userId) {
+      setLoading(false);
+      setErr("You are not logged in. Please login again.");
+      setItems([]);
+      return;
+    }
+
+    try {
+      const res = await axios.get<{
+        success: boolean;
+        data?: MyListing[];
+        error?: string;
+      }>(`${API_ROOT}/products/my-listings`, {
+        params: { userId },
+        withCredentials: true,
+      });
+
+      if (!res.data.success || !res.data.data) {
         setItems([]);
         return;
       }
 
-      try {
-        const res = await axios.get<{
-          success: boolean;
-          data?: MyListing[];
-          error?: string;
-        }>(`${API_ROOT}/products/my-listings`, {
-          params: { userId },
-          withCredentials: true,
-        });
-
-        if (!res.data.success || !res.data.data) {
-          setItems([]);
-          return;
-        }
-
-        setItems(res.data.data);
-      } catch (e: any) {
-        if (e?.response?.status === 404) {
-          setItems([]);
-        } else {
-          setErr(
-            e?.response?.data?.error ||
-              e?.response?.data?.details ||
-              "Unable to load your listings (endpoint may not exist yet)."
-          );
-        }
-      } finally {
-        setLoading(false);
+      setItems(res.data.data);
+    } catch (e: any) {
+      if (e?.response?.status === 404) {
+        setItems([]);
+      } else {
+        setErr(
+          e?.response?.data?.error ||
+            e?.response?.data?.details ||
+            "Unable to load your listings (endpoint may not exist yet)."
+        );
       }
-    };
-
-    void load();
+    } finally {
+      setLoading(false);
+    }
   }, [authLoading, userId]);
+
+  useEffect(() => {
+    void loadListings();
+  }, [loadListings]);
 
   const handleDeleteListing = async (listingId: number) => {
     if (!userId) {
@@ -180,61 +181,35 @@ export default function MyListingsPage() {
 
   if (authLoading) {
     return (
-      <div style={{ padding: 24 }}>
-        <p style={{ color: "#6b7280" }}>Checking session…</p>
+      <div className="marketplace-page">
+        <p className="marketplace-subtitle">Checking session…</p>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 24 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          marginBottom: 16,
-        }}
-      >
+    <div className="marketplace-page">
+      <div className="marketplace-header" style={{ marginBottom: 16 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 24 }}>My Listings</h1>
-          <p style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
-            Manage listings that you created.
-          </p>
+          <h1 className="marketplace-title">My Listings</h1>
+          <p className="marketplace-subtitle">Manage listings that you created.</p>
         </div>
 
         <button
           onClick={() => navigate("/consumer/create-listing")}
-          style={{
-            background: "#0066cc",
-            color: "white",
-            border: "none",
-            padding: "10px 20px",
-            borderRadius: 8,
-            cursor: "pointer",
-            fontSize: 15,
-            fontWeight: 600,
-          }}
+          className="btn btn-primary"
         >
           + Create Listing
         </button>
       </div>
 
-      {loading && <p style={{ color: "#6b7280" }}>Loading…</p>}
+      {loading && <p className="marketplace-subtitle">Loading…</p>}
       {err && <p style={{ color: "#b91c1c" }}>{err}</p>}
 
       {!loading && !err && items.length === 0 && (
-        <div
-          style={{
-            marginTop: 16,
-            background: "white",
-            border: "1px solid #e5e7eb",
-            borderRadius: 16,
-            padding: 20,
-          }}
-        >
+        <div className="marketplace-empty" style={{ marginTop: 16 }}>
           <h3 style={{ marginTop: 0, marginBottom: 6 }}>No listings yet</h3>
-          <p style={{ margin: 0, color: "#6b7280", fontSize: 13 }}>
+          <p style={{ margin: 0, fontSize: 13 }}>
             You currently have no active listings to manage. Once you list a product, it will appear
             here with controls to update availability or delete the listing.
           </p>
@@ -242,14 +217,7 @@ export default function MyListingsPage() {
       )}
 
       {items.length > 0 && (
-        <div
-          style={{
-            marginTop: 16,
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
-            gap: 16,
-          }}
-        >
+        <div className="marketplace-grid" style={{ marginTop: 16 }}>
           {items.map((x) => (
             <MyListingCard
               key={x.listing_id}
@@ -271,6 +239,7 @@ export default function MyListingsPage() {
           onSave={handleSaveEdit}
         />
       )}
+
     </div>
   );
 }

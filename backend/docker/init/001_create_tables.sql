@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS product (
   category TEXT,
   manufacture_date TIMESTAMPTZ,
   description TEXT,
-  registered_on TIMESTAMP DEFAULT NOW(),
+  registered_on TIMESTAMPTZ,
 
   product_pda TEXT,
   tx_hash TEXT,
@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS blockchain_node (
 
   product_id INT NOT NULL REFERENCES product(product_id) ON DELETE CASCADE,
   block_slot BIGINT NOT NULL,
-  created_on TIMESTAMP DEFAULT NOW(),
+  created_on TIMESTAMPTZ DEFAULT NOW(),
 
   event tx_event NOT NULL DEFAULT 'TRANSFER'
 );
@@ -458,6 +458,94 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_product_stage
 ON fyp_25_s4_20.product(stage);
+
+
+-- ===========================
+-- Product Purchase Request
+-- ===========================
+
+-- 1) Status enum
+DO $$ BEGIN
+  CREATE TYPE fyp_25_s4_20.purchase_request_status AS ENUM
+    ('pending_seller','rejected','accepted_waiting_payment','paid_pending_transfer','completed','cancelled');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
+-- 2) Table
+CREATE TABLE IF NOT EXISTS fyp_25_s4_20.purchase_request (
+  request_id SERIAL PRIMARY KEY,
+
+  product_id INT NOT NULL
+    REFERENCES fyp_25_s4_20.product(product_id)
+    ON DELETE CASCADE,
+
+  listing_id INT
+    REFERENCES fyp_25_s4_20.product_listing(listing_id)
+    ON DELETE SET NULL,
+
+  seller_id INT NOT NULL
+    REFERENCES fyp_25_s4_20.users(user_id)
+    ON DELETE CASCADE,
+
+  buyer_id INT NOT NULL
+    REFERENCES fyp_25_s4_20.users(user_id)
+    ON DELETE CASCADE,
+
+  offered_price NUMERIC(10,2) NOT NULL,
+  offered_currency fyp_25_s4_20.currency NOT NULL,
+
+  status fyp_25_s4_20.purchase_request_status NOT NULL DEFAULT 'pending_seller',
+
+  -- buyer payment tx
+  payment_tx_hash TEXT,
+
+  -- NEW: ownership transfer tx (used during finalize)
+  transfer_tx_hash TEXT,
+
+  -- NEW: transfer request PDA + product PDA (to avoid mismatched derivations)
+  transfer_pda TEXT,
+  product_pda TEXT,
+
+  created_on TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_on TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- 3) Add column safely if table already existed (idempotent)
+ALTER TABLE fyp_25_s4_20.purchase_request
+ADD COLUMN IF NOT EXISTS transfer_tx_hash TEXT;
+
+ALTER TABLE fyp_25_s4_20.purchase_request
+ADD COLUMN IF NOT EXISTS transfer_pda TEXT;
+
+ALTER TABLE fyp_25_s4_20.purchase_request
+ADD COLUMN IF NOT EXISTS product_pda TEXT;
+
+-- 4) One active request per product (your original rule)
+CREATE UNIQUE INDEX IF NOT EXISTS ux_purchase_request_one_active_per_product
+ON fyp_25_s4_20.purchase_request (product_id)
+WHERE status IN ('pending_seller','accepted_waiting_payment','paid_pending_transfer');
+
+-- 5) Helpful indexes for UI queries
+CREATE INDEX IF NOT EXISTS idx_purchase_request_buyer_created
+ON fyp_25_s4_20.purchase_request (buyer_id, created_on DESC);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_request_seller_created
+ON fyp_25_s4_20.purchase_request (seller_id, created_on DESC);
+
+CREATE INDEX IF NOT EXISTS idx_purchase_request_status_created
+ON fyp_25_s4_20.purchase_request (status, created_on DESC);
+
+-- 6) Auto-update updated_on on UPDATE
+-- (requires your set_updated_on() function to exist; you already created it earlier)
+DROP TRIGGER IF EXISTS trg_purchase_request_updated ON fyp_25_s4_20.purchase_request;
+
+CREATE TRIGGER trg_purchase_request_updated
+BEFORE UPDATE ON fyp_25_s4_20.purchase_request
+FOR EACH ROW
+EXECUTE FUNCTION fyp_25_s4_20.set_updated_on();
+
+
+
 
 
 

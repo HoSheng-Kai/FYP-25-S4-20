@@ -6,6 +6,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
+import ReactDOM from "react-dom";
 
 type BackendProduct = {
   product_id: number;
@@ -70,21 +71,76 @@ export default function DistributorProductsPage() {
 
   const GET_BY_USER_URL = `${API_ROOT}/distributors/products-by-user`;
 
+  // ACTIONS MENU (⋯)
   const [openMenuForId, setOpenMenuForId] = useState<number | null>(null);
+  const [menuPos, setMenuPos] = useState<{
+    id: number;
+    top: number;
+    left: number;
+    placement: "down" | "up";
+  } | null>(null);
+
+  const MENU_WIDTH = 220;     // adjust if your menu is wider
+  const MENU_HEIGHT = 70;    // adjust if your menu is taller (manufacturer is taller)
+
+  const openMenu = (id: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+
+    const scrollX = window.scrollX || window.pageXOffset;
+    const scrollY = window.scrollY || window.pageYOffset;
+
+    // default open DOWN
+    const downTop = r.bottom + scrollY + 6;
+
+    // open UP candidate
+    const upTop = r.top + scrollY - MENU_HEIGHT - 6;
+
+    const spaceBelow = window.innerHeight - r.bottom;
+    const spaceAbove = r.top;
+
+    const shouldFlipUp = spaceBelow < MENU_HEIGHT && spaceAbove > MENU_HEIGHT;
+
+    // align right edge of menu with button
+    const leftRaw = r.right + scrollX - MENU_WIDTH;
+
+    const left = Math.min(
+      scrollX + window.innerWidth - MENU_WIDTH - 12,
+      Math.max(scrollX + 12, leftRaw)
+    );
+
+    setOpenMenuForId(id);
+    setMenuPos({
+      id,
+      top: shouldFlipUp ? upTop : downTop,
+      left,
+      placement: shouldFlipUp ? "up" : "down",
+    });
+  };
+
+  const closeMenu = () => {
+    setOpenMenuForId(null);
+    setMenuPos(null);
+  };
 
   useEffect(() => {
     const onDocMouseDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
       if (!t) return;
+
+      // click inside row menu button container
       if (t.closest?.("[data-actions-menu-root='true']")) return;
-      setOpenMenuForId(null);
+
+      // click inside portal menu itself
+      if (t.closest?.("[data-actions-menu-portal='true']")) return;
+
+      closeMenu();
     };
 
     const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenMenuForId(null);
+      if (e.key === "Escape") closeMenu();
     };
 
-    const onScrollOrResize = () => setOpenMenuForId(null);
+    const onScrollOrResize = () => closeMenu();
 
     document.addEventListener("mousedown", onDocMouseDown);
     document.addEventListener("keydown", onEsc);
@@ -97,6 +153,7 @@ export default function DistributorProductsPage() {
       window.removeEventListener("scroll", onScrollOrResize, true);
       window.removeEventListener("resize", onScrollOrResize);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const isOnChainConfirmed = (p: ProductRow) => {
@@ -158,8 +215,6 @@ export default function DistributorProductsPage() {
       return new Set(eligibleIds);
     });
   };
-
-  const clearSelected = () => setSelectedIds(new Set());
 
   const loadProducts = async () => {
     try {
@@ -234,7 +289,7 @@ export default function DistributorProductsPage() {
   if (loading) return <p style={{ padding: 20 }}>Loading products...</p>;
 
   return (
-    <div style={{ padding: "40px" }}>
+  <div className="mp-page" style={{ padding: 40, boxSizing: "border-box" }}>
       {/* Header + filter pills */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 16, flexWrap: "wrap" }}>
         <h1 style={{ margin: 0 }}>My Products</h1>
@@ -252,7 +307,17 @@ export default function DistributorProductsPage() {
 
       <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>Select products to transfer ownership</h2>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10, alignItems: "center" }}>
+      <div
+        className="mp-actions-row"
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          marginBottom: 12,
+          gap: 10,
+          alignItems: "center",
+          flexWrap: "wrap",
+        }}
+      >
         <WalletMultiButton />
 
         <button
@@ -293,7 +358,8 @@ export default function DistributorProductsPage() {
         </div>
       )}
 
-      <table style={{ width: "100%", borderCollapse: "collapse", background: "white", borderRadius: "10px", overflow: "visible" }}>
+      <div className="table-scroll">
+        <table style={{ width: "100%", borderCollapse: "collapse", background: "white", borderRadius: "10px", overflow: "visible" }}>
         <thead style={{ background: "#e9ecef" }}>
           <tr>
             <th style={{ ...th, width: 46 }}>
@@ -359,7 +425,14 @@ export default function DistributorProductsPage() {
                   <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
                     <button
                       type="button"
-                      onClick={() => setOpenMenuForId((prev) => (prev === p.productId ? null : p.productId))}
+                      onClick={(e) => {
+                        const same = openMenuForId === p.productId;
+                        if (same) {
+                          closeMenu();
+                          return;
+                        }
+                        openMenu(p.productId, e.currentTarget);
+                      }}
                       style={kebabBtn}
                       aria-label="Open actions"
                       title="Actions"
@@ -367,20 +440,45 @@ export default function DistributorProductsPage() {
                       ⋯
                     </button>
 
-                    {openMenuForId === p.productId && (
-                      <div style={menuCard} role="menu" aria-label="Row actions">
-                        <button type="button" style={menuItem} onClick={() => go(() => navigate(`/products/${p.productId}/details`))} role="menuitem">
-                          View details
-                        </button>
-                      </div>
-                    )}
+                    {openMenuForId === p.productId &&
+                      menuPos?.id === p.productId &&
+                      ReactDOM.createPortal(
+                        <div
+                          data-actions-menu-portal="true"
+                          style={{
+                            ...menuCard,
+                            position: "absolute",
+                            top: menuPos.top,
+                            left: menuPos.left,
+                            right: "auto",
+                            // optional: nicer feel when flipped up/down
+                            transformOrigin: menuPos.placement === "up" ? "bottom right" : "top right",
+                          }}
+                          role="menu"
+                          aria-label="Row actions"
+                        >
+                          <button
+                            type="button"
+                            style={menuItem}
+                            onClick={() => {
+                              navigate(`/products/${p.productId}/details`);
+                              closeMenu();
+                            }}
+                            role="menuitem"
+                          >
+                            View details
+                          </button>
+                        </div>,
+                        document.body
+                      )}
                   </div>
                 </td>
               </tr>
             );
           })}
         </tbody>
-      </table>
+        </table>
+      </div>
 
       {products.length === 0 && <p style={{ marginTop: 20, opacity: 0.6 }}>No products found for this filter.</p>}
 
@@ -388,14 +486,12 @@ export default function DistributorProductsPage() {
         open={transferOpen}
         onClose={() => setTransferOpen(false)}
         fromUserId={distributorId}
-        selectedProductIds={selectedEligibleProducts.map((p) => p.productId)}
+        selectedProducts={selectedEligibleProducts}
         title="Ownership Transfer"
         onTransferred={async (results) => {
           const anyFail = results.some((r) => !r.ok);
           if (!anyFail) {
             await loadProducts();
-            clearSelected();
-            setTransferOpen(false);
           }
         }}
       />

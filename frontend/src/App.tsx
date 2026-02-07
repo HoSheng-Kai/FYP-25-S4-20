@@ -13,6 +13,7 @@ import ConsumerLayout from "./components/layout/ConsumerLayout";
 import ManufacturerLayout from "./components/layout/ManufacturerLayout";
 import DistributorLayout from "./components/layout/DistributorLayout";
 import RetailerLayout from "./components/layout/RetailerLayout";
+import AdminLayout from "./components/layout/AdminLayout";
 
 // Dashboards
 import AdminDashboardPage from "./pages/admin/AdminDashboardPage";
@@ -34,6 +35,7 @@ import TransactionHistory from "./components/products/TransactionHistory";
 import MyProductsPage from "./pages/consumer/MyProductsPage";
 import UserReviewsPage from "./pages/consumer/UserReviewsPage";
 import ConsumerTransferOwnershipPage from "./pages/consumer/ConsumerTransferOwnershipPage";
+import PurchaseRequestsPage from "./pages/consumer/PurchaseRequestsPage";
 
 // Manufacturer pages
 import ManufacturerProductsPage from "./pages/manufacturer/ManufacturerProductsPage";
@@ -92,12 +94,13 @@ export default function App() {
       <Route element={<RequireAuth />}>
         {/* Admin */}
         <Route element={<RequireRole allow={["admin"]} />}>
-          <Route path="/admin" element={<AdminDashboardPage />} />
-          <Route path="/admin/users" element={<AdminUsersPage />} />
-          <Route path="/admin/listings" element={<AdminListingsPage />} />
-          <Route path="/admin/register" element={<AdminRegistrationPage />} />
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminDashboardPage />} />
+            <Route path="/admin/users" element={<AdminUsersPage />} />
+            <Route path="/admin/listings" element={<AdminListingsPage />} />
+            <Route path="/admin/register" element={<AdminRegistrationPage />} />
+          </Route>
         </Route>
-
         {/* Manufacturer */}
         <Route element={<RequireRole allow={["manufacturer"]} />}>
           <Route path="/manufacturer" element={<ManufacturerLayout />}>
@@ -139,6 +142,7 @@ export default function App() {
             <Route index element={<ConsumerDashboardPage />} />
             <Route path="scan-qr" element={<QrInput />} />
             <Route path="my-products" element={<MyProductsPage />} />
+            <Route path="purchase-requests" element={<PurchaseRequestsPage />} />
             <Route path="product/:productId" element={<SharedProductDetailsPage />} />
             <Route path="marketplace" element={<MarketplacePage />} />
             <Route path="chats" element={<ChatsPage />} />

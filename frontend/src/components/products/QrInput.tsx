@@ -456,7 +456,10 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
   };
 
   return (
-    <div style={{ maxWidth: 1100, margin: "0 auto" }}>
+    <div
+      className="qr-page"
+      style={{ maxWidth: 1100, margin: "0 auto", padding: "16px", boxSizing: "border-box", overflowX: "hidden" }}
+    >
       <h2 style={{ marginBottom: 8 }}>Scan or Enter Product Code</h2>
       <p style={{ marginBottom: 24, color: "#6b7280" }}>
         Use your camera or upload an image to scan the QR code. You can also
@@ -464,6 +467,7 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
       </p>
 
       <div
+        className="qr-grid"
         style={{
           display: "grid",
           gridTemplateColumns: "2fr 3fr",
@@ -575,6 +579,8 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
               onChange={(e) => setProductCode(e.target.value)}
               style={{
                 width: "100%",
+                maxWidth: "100%",
+                boxSizing: "border-box",
                 padding: "10px 12px",
                 borderRadius: 10,
                 border: "1px solid #d1d5db",
@@ -631,6 +637,7 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
               </p>
 
               <div
+                className="qr-result-grid"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1.6fr 1.4fr",
@@ -693,7 +700,7 @@ const QrInput: React.FC<QrInputProps> = ({ onSerialChange }) => {
         </section>
       </div>
 
-      <div style={{ marginTop: 28 }}>
+      <div className="table-scroll" style={{ marginTop: 28 }}>
         <TransactionHistory serial={serialForHistory} />
       </div>
 

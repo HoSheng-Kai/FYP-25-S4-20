@@ -1,4 +1,3 @@
-// src/pages/manufacturer/ManufacturerProductsPage.tsx
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { API_ROOT, PRODUCTS_API_BASE_URL } from "../../config/api";
@@ -7,6 +6,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import TransferOwnershipModal from "../../components/transfers/TransferOwnershipModal";
 import { useAuth } from "../../auth/AuthContext";
+import ReactDOM from "react-dom";
 
 /** =========================
  * Backend response for "products-by-user"
@@ -43,7 +43,6 @@ type ProductRow = {
   productName: string | null;
   lifecycleStatus: "active" | "transferred";
   blockchainStatus: string; // pending / confirmed
-  registeredOn: string;
   price: string | null;
   currency: string | null;
   listingStatus: string | null;
@@ -124,23 +123,71 @@ export default function ManufacturerProductsPage() {
   // ACTIONS MENU (⋯)
   // ======================
   const [openMenuForId, setOpenMenuForId] = useState<number | null>(null);
+  const [menuPos, setMenuPos] = useState<{
+    id: number;
+    top: number;
+    left: number;
+    placement: "top" | "bottom";
+  } | null>(null);
+
+  const openMenu = (id: number, el: HTMLElement) => {
+    const r = el.getBoundingClientRect();
+
+    const menuWidth = 200;
+
+    // Estimate menu height (enough for your items).
+    // If you change menu items a lot, bump this to 320.
+    const menuHeight = 260;
+
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+
+    // X: align right edge with button but clamp inside viewport
+    const left = Math.min(
+      viewportW - menuWidth - 12,
+      Math.max(12, r.right - menuWidth)
+    );
+
+    const spaceBelow = viewportH - r.bottom;
+    const spaceAbove = r.top;
+
+    // Y: prefer below; if not enough space, flip above
+    let top = r.bottom + 6;
+    let placement: "bottom" | "top" = "bottom";
+
+    if (spaceBelow < menuHeight && spaceAbove > spaceBelow) {
+      placement = "top";
+      top = Math.max(12, r.top - menuHeight - 6);
+    }
+
+    setOpenMenuForId(id);
+    setMenuPos({ id, top, left, placement });
+  };
+
+  const closeMenu = () => {
+    setOpenMenuForId(null);
+    setMenuPos(null);
+  };
 
   useEffect(() => {
     const onDocMouseDown = (e: MouseEvent) => {
       const t = e.target as HTMLElement | null;
       if (!t) return;
 
-      // click inside menu => don't close
+      // click inside row menu button container
       if (t.closest?.("[data-actions-menu-root='true']")) return;
 
-      setOpenMenuForId(null);
+      // click inside portal menu itself
+      if (t.closest?.("[data-actions-menu-portal='true']")) return;
+
+      closeMenu();
     };
 
     const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpenMenuForId(null);
+      if (e.key === "Escape") closeMenu();
     };
 
-    const onScrollOrResize = () => setOpenMenuForId(null);
+    const onScrollOrResize = () => closeMenu();
 
     document.addEventListener("mousedown", onDocMouseDown);
     document.addEventListener("keydown", onEsc);
@@ -153,6 +200,7 @@ export default function ManufacturerProductsPage() {
       window.removeEventListener("scroll", onScrollOrResize, true);
       window.removeEventListener("resize", onScrollOrResize);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ================
@@ -209,11 +257,6 @@ export default function ManufacturerProductsPage() {
     return p.relationship === "manufacturer";
   };
 
-  const safeDate = (iso: string) => {
-    if (!iso) return "—";
-    const d = new Date(iso);
-    return Number.isNaN(d.getTime()) ? "—" : d.toLocaleDateString();
-  };
 
   // filtered list for the table
   const products = useMemo(() => {
@@ -279,8 +322,6 @@ export default function ManufacturerProductsPage() {
       return new Set(eligibleIds);
     });
   };
-
-  const clearSelected = () => setSelectedIds(new Set());
 
   // ----------------------
   // LOAD PRODUCTS
@@ -407,7 +448,7 @@ export default function ManufacturerProductsPage() {
   // EDIT MODAL (restored)
   // ----------------------
   const openEditModal = async (productId: number) => {
-    setOpenMenuForId(null);
+    closeMenu();
 
     const row = products.find((x) => x.productId === productId);
 
@@ -540,7 +581,7 @@ export default function ManufacturerProductsPage() {
   if (loading) return <p style={{ padding: 20 }}>Loading products...</p>;
 
   return (
-    <div style={{ padding: "40px" }}>
+    <div className="mp-page" style={{ padding: 40, boxSizing: "border-box" }}>
       {/* Header row + filter pills */}
       <div
         style={{
@@ -573,7 +614,7 @@ export default function ManufacturerProductsPage() {
       <h2 style={{ margin: 1, fontWeight: 300, color: "#6b7280" }}>Select products to transfer ownership</h2>
 
       {/* Transfer button row */}
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10, alignItems: "center" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 12, gap: 10, alignItems: "center",flexWrap: "wrap" }}>
         {/* Wallet connect lives here now */}
         <WalletMultiButton />
 
@@ -635,6 +676,7 @@ export default function ManufacturerProductsPage() {
         </div>
       )}
 
+      <div className="table-scroll">
       <table
         style={{
           width: "100%",
@@ -659,7 +701,6 @@ export default function ManufacturerProductsPage() {
             <th style={th}>Product ID</th>
             <th style={th}>Product Name</th>
             <th style={th}>Category</th>
-            <th style={th}>Owned Since</th>
             <th style={th}>Status</th>
             <th style={th}>Actions</th>
           </tr>
@@ -676,7 +717,7 @@ export default function ManufacturerProductsPage() {
 
             const go = (fn: () => void) => {
               fn();
-              setOpenMenuForId(null);
+              closeMenu();
             };
 
             return (
@@ -701,7 +742,6 @@ export default function ManufacturerProductsPage() {
                 <td style={td}>{p.productId}</td>
                 <td style={td}>{p.productName || "—"}</td>
                 <td style={td}>{p.category || "—"}</td>
-                <td style={td}>{safeDate(p.registeredOn)}</td>
 
                 <td style={td}>
                   {/* Ownership */}
@@ -713,14 +753,17 @@ export default function ManufacturerProductsPage() {
                       fontSize: 12,
                       background: p.lifecycleStatus === "active" ? "#dcfce7" : "#fee2e2",
                       color: p.lifecycleStatus === "active" ? "#166534" : "#991b1b",
+                      whiteSpace: "nowrap",
+                      display: "inline-flex",
+                      alignItems: "center",
                     }}
                     title={
                       p.lifecycleStatus === "active"
                         ? "You currently own this product"
-                        : "You have transferred this product"
+                        : "You currently don't own this product"
                     }
                   >
-                    {p.lifecycleStatus === "active" ? "owned" : "transferred"}
+                    {p.lifecycleStatus === "active" ? "owned" : "not owned"}
                   </span>
 
                   {/* Stage pill */}
@@ -733,8 +776,11 @@ export default function ManufacturerProductsPage() {
                         fontSize: 12,
                         background: "#f3f4f6",
                         color: "#111827",
+                        whiteSpace: "nowrap",
+                        display: "inline-flex",
+                        alignItems: "center",
                       }}
-                      title="DB Stage"
+                      title="Product Stage"
                     >
                       {p.stage}
                     </span>
@@ -746,7 +792,14 @@ export default function ManufacturerProductsPage() {
                   <div data-actions-menu-root="true" style={{ position: "relative", display: "inline-block" }}>
                     <button
                       type="button"
-                      onClick={() => setOpenMenuForId((prev) => (prev === p.productId ? null : p.productId))}
+                      onClick={(e) => {
+                        const same = openMenuForId === p.productId;
+                        if (same) {
+                          closeMenu();
+                          return;
+                        }
+                        openMenu(p.productId, e.currentTarget);
+                      }}
                       style={kebabBtn}
                       aria-label="Open actions"
                       title="Actions"
@@ -754,74 +807,94 @@ export default function ManufacturerProductsPage() {
                       ⋯
                     </button>
 
-                    {isOpen && (
-                      <div style={menuCard} role="menu" aria-label="Row actions">
-                        <button
-                          type="button"
-                          style={menuItem}
-                          onClick={() => go(() => navigate(`/products/${p.productId}/details`))}
-                          role="menuitem"
+                    {isOpen &&
+                      menuPos?.id === p.productId &&
+                      ReactDOM.createPortal(
+                        <div
+                          data-actions-menu-portal="true"
+                          style={{
+                            ...menuCard,
+                            position: "fixed",
+                            top: menuPos.top,
+                            left: menuPos.left,
+                            right: "auto",
+                            maxHeight: "calc(100vh - 24px)",
+                            overflowY: "auto",
+                          }}
+                          role="menu"
+                          aria-label="Row actions"
                         >
-                          View details
-                        </button>
+                          <button
+                            type="button"
+                            style={menuItem}
+                            onClick={() => go(() => navigate(`/products/${p.productId}/details`))}
+                            role="menuitem"
+                          >
+                            View details
+                          </button>
 
-                        <button
-                          type="button"
-                          style={locked ? menuItemDisabled : menuItem}
-                          onClick={() => (locked ? undefined : go(() => void openEditModal(p.productId)))}
-                          disabled={locked}
-                          role="menuitem"
-                          title={locked ? "On-chain products cannot be edited" : "Edit product"}
-                        >
-                          Edit
-                        </button>
+                          <button
+                            type="button"
+                            style={locked ? menuItemDisabled : menuItem}
+                            onClick={() => (locked ? undefined : go(() => void openEditModal(p.productId)))}
+                            disabled={locked}
+                            role="menuitem"
+                            title={locked ? "On-chain products cannot be edited" : "Edit product"}
+                          >
+                            Edit
+                          </button>
 
-                        <div style={menuDivider} />
+                          <div style={menuDivider} />
 
-                        <button
-                          type="button"
-                          style={lockDraftEligible ? menuItem : menuItemDisabled}
-                          onClick={() => (lockDraftEligible ? go(() => void handleLockDraft(p.productId)) : undefined)}
-                          disabled={!lockDraftEligible}
-                          role="menuitem"
-                          title={
-                            lockDraftEligible
-                              ? "Confirm (lock) this draft so it can be registered on-chain"
-                              : "Draft already locked or on-chain"
-                          }
-                        >
-                          Lock draft (confirm)
-                        </button>
+                          <button
+                            type="button"
+                            style={lockDraftEligible ? menuItem : menuItemDisabled}
+                            onClick={() => (lockDraftEligible ? go(() => void handleLockDraft(p.productId)) : undefined)}
+                            disabled={!lockDraftEligible}
+                            role="menuitem"
+                            title={
+                              lockDraftEligible
+                                ? "Confirm (lock) this draft so it can be registered on-chain"
+                                : "Draft already locked or on-chain"
+                            }
+                          >
+                            Lock draft (confirm)
+                          </button>
 
-                        <button
-                          type="button"
-                          style={registerEligible ? menuItem : menuItemDisabled}
-                          onClick={() =>
-                            registerEligible
-                              ? go(() => navigate(`/manufacturer/register?productId=${p.productId}&stage=${encodeURIComponent(p.stage ?? "")}`))
-                              : undefined
-                          }
-                          disabled={!registerEligible}
-                          role="menuitem"
-                          title={registerEligible ? "Send to blockchain" : "Only confirmed drafts can be registered"}
-                        >
-                          Send to blockchain
-                        </button>
+                          <button
+                            type="button"
+                            style={registerEligible ? menuItem : menuItemDisabled}
+                            onClick={() =>
+                              registerEligible
+                                ? go(() =>
+                                    navigate(
+                                      `/manufacturer/register?productId=${p.productId}&stage=${encodeURIComponent(p.stage ?? "")}`
+                                    )
+                                  )
+                                : undefined
+                            }
+                            disabled={!registerEligible}
+                            role="menuitem"
+                            title={registerEligible ? "Send to blockchain" : "Only confirmed drafts can be registered"}
+                          >
+                            Send to blockchain
+                          </button>
 
-                        <div style={menuDivider} />
+                          <div style={menuDivider} />
 
-                        <button
-                          type="button"
-                          style={locked ? menuItemDisabledDanger : menuItemDanger}
-                          onClick={() => (locked ? undefined : go(() => void handleDelete(p.productId)))}
-                          disabled={locked}
-                          role="menuitem"
-                          title={locked ? "On-chain products cannot be deleted" : "Delete draft"}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    )}
+                          <button
+                            type="button"
+                            style={locked ? menuItemDisabledDanger : menuItemDanger}
+                            onClick={() => (locked ? undefined : go(() => void handleDelete(p.productId)))}
+                            disabled={locked}
+                            role="menuitem"
+                            title={locked ? "On-chain products cannot be deleted" : "Delete draft"}
+                          >
+                            Delete
+                          </button>
+                        </div>,
+                        document.body
+                      )}
                   </div>
                 </td>
               </tr>
@@ -829,6 +902,7 @@ export default function ManufacturerProductsPage() {
           })}
         </tbody>
       </table>
+      </div>
 
       {products.length === 0 && <p style={{ marginTop: 20, opacity: 0.6 }}>No products found for this filter.</p>}
 
@@ -839,14 +913,12 @@ export default function ManufacturerProductsPage() {
         open={transferOpen}
         onClose={() => setTransferOpen(false)}
         fromUserId={manufacturerId}
-        selectedProductIds={selectedEligibleProducts.map((p) => p.productId)}
+        selectedProducts={selectedEligibleProducts}
         title="Ownership Transfer"
         onTransferred={async (results) => {
           const anyFail = results.some((r) => !r.ok);
           if (!anyFail) {
             await loadProducts();
-            clearSelected();
-            setTransferOpen(false);
           }
         }}
       />
@@ -1092,16 +1164,13 @@ const kebabBtn: React.CSSProperties = {
 };
 
 const menuCard: React.CSSProperties = {
-  position: "absolute",
-  top: "calc(100% + 6px)",
-  right: 0,
   minWidth: 200,
   background: "white",
   border: "1px solid #e5e7eb",
   borderRadius: 12,
   boxShadow: "0 10px 20px rgba(0,0,0,0.08)",
   padding: 6,
-  zIndex: 9999,
+  zIndex: 99999,
 };
 
 const menuItem: React.CSSProperties = {

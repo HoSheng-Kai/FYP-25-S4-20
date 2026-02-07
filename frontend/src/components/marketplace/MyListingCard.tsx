@@ -1,7 +1,6 @@
-// frontend/src/components/marketplace/MyListingCard.tsx
-
-import React, { useMemo } from "react";
+import { useMemo } from "react";
 import type { MyListing, ListingStatus } from "../../pages/marketplace/MyListingsPage";
+import "../../styles/marketplace.css";
 
 type Props = {
   listing: MyListing;
@@ -37,19 +36,18 @@ export default function MyListingCard({
     return map[listing.status];
   }, [listing.status]);
 
+  const statusClass =
+    listing.status === "available"
+      ? "pill pill-success"
+      : listing.status === "reserved"
+      ? "pill pill-warning"
+      : "pill pill-neutral";
+
   return (
-    <div
-      style={{
-        background: "white",
-        border: "1px solid #e5e7eb",
-        borderRadius: 16,
-        padding: 16,
-        opacity: isBusy ? 0.75 : 1,
-      }}
-    >
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+    <div className="marketplace-card" style={{ opacity: isBusy ? 0.75 : 1 }}>
+      <div className="marketplace-card-header">
         <div>
-          <h3 style={{ margin: 0, fontSize: 15 }}>
+          <h3 className="marketplace-card-title">
             {listing.model ?? "Unknown Product"}
           </h3>
           <p style={{ margin: "6px 0 0 0", fontSize: 12, color: "#6b7280" }}>
@@ -57,20 +55,7 @@ export default function MyListingCard({
           </p>
         </div>
 
-        <span
-          style={{
-            fontSize: 11,
-            padding: "4px 10px",
-            borderRadius: 999,
-            background: statusPill.bg,
-            color: statusPill.text,
-            height: "fit-content",
-            whiteSpace: "nowrap",
-            fontWeight: 700,
-          }}
-        >
-          {listing.status}
-        </span>
+        <span className={statusClass}>{listing.status}</span>
       </div>
 
       <div style={{ marginTop: 12 }}>
@@ -82,30 +67,15 @@ export default function MyListingCard({
         </p>
       </div>
 
-      {/* US-019: Update Availability */}
       <div style={{ marginTop: 14 }}>
-        <p style={{ margin: "0 0 6px 0", fontSize: 12, color: "#6b7280" }}>
-          Availability
-        </p>
+        <p style={{ margin: "0 0 6px 0", fontSize: 12, color: "#6b7280" }}>Availability</p>
 
         <select
           value={listing.status}
           disabled={isBusy}
-          onChange={(e) =>
-            onUpdateAvailability(
-              listing.listing_id,
-              e.target.value as ListingStatus
-            )
-          }
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            borderRadius: 10,
-            border: "1px solid #d1d5db",
-            fontSize: 13,
-            background: isBusy ? "#f3f4f6" : "white",
-            cursor: isBusy ? "not-allowed" : "pointer",
-          }}
+          onChange={(e) => onUpdateAvailability(listing.listing_id, e.target.value as ListingStatus)}
+          className="marketplace-select"
+          style={{ width: "100%" }}
         >
           <option value="available">available</option>
           <option value="reserved">reserved</option>
@@ -119,44 +89,18 @@ export default function MyListingCard({
         )}
       </div>
 
-      {/* Edit and Delete Actions */}
-      <div
-        style={{
-          marginTop: 14,
-          display: "flex",
-          gap: 10,
-          justifyContent: "flex-end",
-        }}
-      >
+      <div style={{ marginTop: 14, display: "flex", gap: 10, justifyContent: "flex-end" }}>
         <button
           disabled={isBusy}
           onClick={() => onEdit(listing.listing_id)}
-          style={{
-            background: isBusy ? "#93c5fd" : "#0066cc",
-            color: "white",
-            border: "none",
-            borderRadius: 10,
-            padding: "9px 12px",
-            cursor: isBusy ? "not-allowed" : "pointer",
-            fontSize: 13,
-            fontWeight: 700,
-          }}
+          className="btn btn-primary"
         >
           Edit
         </button>
         <button
           disabled={isBusy}
           onClick={() => onDelete(listing.listing_id)}
-          style={{
-            background: isBusy ? "#fca5a5" : "#ef4444",
-            color: "white",
-            border: "none",
-            borderRadius: 10,
-            padding: "9px 12px",
-            cursor: isBusy ? "not-allowed" : "pointer",
-            fontSize: 13,
-            fontWeight: 700,
-          }}
+          className="btn btn-danger"
         >
           Delete
         </button>

@@ -1,0 +1,72 @@
+@media (max-width: 520px) {
+  .notifPanel {
+    padding: 16px !important;
+  }
+
+  .notifHeader {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .notifHeaderControls {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  .notifWallet .wallet-adapter-button {
+    width: 100% !important;
+    justify-content: center !important;
+    display: flex !important;
+  }
+
+  /* Card: content first, actions below */
+  .notifCardTop {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .notifCardActions {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+
+  /* Let buttons wrap and share space */
+  .notifCardActions button {
+    flex: 1 1 140px;
+    white-space: normal !important;
+    max-width: 100% !important;
+  }
+    /* Mobile: wallet on its own row, everything else below */
+  .notifHeaderControls {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    gap: 10px !important;
+  }
+
+  /* Force wallet section to take full row */
+  .notifWallet {
+    width: 100% !important;
+  }
+
+  .notifWallet .wallet-adapter-button {
+    width: 100% !important;
+    justify-content: center !important;
+    display: flex !important;
+    white-space: nowrap !important;
+  }
+
+  /* Put the rest of the buttons under wallet */
+  .notifHeaderControls > div:not(.notifWallet) {
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .notifHeaderControls > button {
+    width: 100% !important;
+  }
+}
+

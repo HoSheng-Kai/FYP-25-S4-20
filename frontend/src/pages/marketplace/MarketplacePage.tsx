@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState, useCallback } from "react";
 import axios from "axios";
 import ListingCard from "../../components/marketplace/ListingCard";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+// import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { API_ROOT } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
+import "../../styles/marketplace.css";
 
 export type MarketplaceListing = {
   listingId: number;
@@ -76,21 +77,17 @@ const MarketplacePage: React.FC = () => {
   }, [fetchMarketplace]);
 
   const handlePurchaseSuccess = () => {
-    // Reload the marketplace to remove purchased items
     void fetchMarketplace();
   };
 
-  // Filter out user's own listings AFTER auth resolves
   const visibleItems = useMemo(() => {
-    if (authLoading) return items; // while checking session, just show all
-    if (!userId) return items; // not logged in, no filtering needed
-
+    if (authLoading) return items;
+    if (!userId) return items;
     return items.filter((item) => Number(item.seller.userId) !== userId);
   }, [items, authLoading, userId]);
 
   const filteredItems = useMemo(() => {
     let result = visibleItems.filter((item) => {
-      // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         const matchesSearch =
@@ -101,7 +98,6 @@ const MarketplacePage: React.FC = () => {
         if (!matchesSearch) return false;
       }
 
-      // Price filter
       if (minPrice || maxPrice) {
         const itemPrice = parseFloat(item.price || "0") || 0;
         if (minPrice && itemPrice < parseFloat(minPrice)) return false;
@@ -111,7 +107,6 @@ const MarketplacePage: React.FC = () => {
       return true;
     });
 
-    // Sorting
     result = result.sort((a, b) => {
       switch (sortBy) {
         case "latest":
@@ -131,32 +126,28 @@ const MarketplacePage: React.FC = () => {
   }, [visibleItems, searchQuery, minPrice, maxPrice, sortBy]);
 
   return (
-    <div style={{ padding: 24, maxWidth: "100%", overflow: "hidden", position: "relative" }}>
-      <div style={{ position: "fixed", top: 18, right: 32, zIndex: 2000 }}>
+    <div className="marketplace-page">
+      {/* <div className="marketplace-wallet">
         <WalletMultiButton />
+      </div> */}
+
+      <div className="marketplace-header">
+        <div>
+          <h1 className="marketplace-title">Consumer Marketplace</h1>
+          <p className="marketplace-subtitle">
+            Browse blockchain-registered products listed for sale.
+          </p>
+        </div>
       </div>
 
-      <h1 style={{ margin: 0, fontSize: 24 }}>Consumer Marketplace</h1>
-      <p style={{ marginTop: 6, color: "#6b7280", fontSize: 13 }}>
-        Browse blockchain-registered products listed for sale.
-      </p>
-
-      {/* Search and Filter Section */}
-      <div style={{ marginTop: 20, display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+      <div className="marketplace-filters">
         <input
           type="text"
           placeholder="Search by product name, serial number, or seller..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          style={{
-            flex: 1,
-            minWidth: 200,
-            padding: "10px 12px",
-            fontSize: 13,
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            fontFamily: "inherit",
-          }}
+          className="marketplace-input"
+          style={{ flex: 1, minWidth: 220 }}
         />
 
         <input
@@ -164,14 +155,8 @@ const MarketplacePage: React.FC = () => {
           placeholder="Min Price"
           value={minPrice}
           onChange={(e) => setMinPrice(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            fontSize: 13,
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            fontFamily: "inherit",
-            width: 120,
-          }}
+          className="marketplace-input"
+          style={{ width: 120 }}
         />
 
         <input
@@ -179,27 +164,14 @@ const MarketplacePage: React.FC = () => {
           placeholder="Max Price"
           value={maxPrice}
           onChange={(e) => setMaxPrice(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            fontSize: 13,
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            fontFamily: "inherit",
-            width: 120,
-          }}
+          className="marketplace-input"
+          style={{ width: 120 }}
         />
 
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
-          style={{
-            padding: "10px 12px",
-            fontSize: 13,
-            border: "1px solid #d1d5db",
-            borderRadius: 6,
-            fontFamily: "inherit",
-            cursor: "pointer",
-          }}
+          className="marketplace-select"
         >
           <option value="latest">Latest Posted</option>
           <option value="oldest">Oldest Posted</option>
@@ -214,49 +186,36 @@ const MarketplacePage: React.FC = () => {
               setMinPrice("");
               setMaxPrice("");
             }}
-            style={{
-              padding: "10px 14px",
-              fontSize: 13,
-              background: "#e5e7eb",
-              border: "none",
-              borderRadius: 6,
-              cursor: "pointer",
-              fontWeight: 500,
-            }}
+            className="btn btn-ghost"
           >
             Clear Filters
           </button>
         )}
       </div>
 
-      {loading && <p style={{ color: "#6b7280", marginTop: 16 }}>Loading…</p>}
+      {loading && <p className="marketplace-subtitle">Loading…</p>}
       {err && <p style={{ color: "#b91c1c", marginTop: 16 }}>{err}</p>}
 
       {!loading && !err && filteredItems.length > 0 && (
-        <p style={{ marginTop: 16, color: "#6b7280", fontSize: 13 }}>
+        <p className="marketplace-subtitle" style={{ marginTop: 16 }}>
           Showing {filteredItems.length} item{filteredItems.length !== 1 ? "s" : ""}
         </p>
       )}
 
-      <div
-        style={{
-          marginTop: 16,
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))",
-          gap: 20,
-        }}
-      >
+      <div className="marketplace-grid">
         {filteredItems.map((x) => (
           <ListingCard key={x.listingId} listing={x} onPurchaseSuccess={handlePurchaseSuccess} />
         ))}
       </div>
 
       {!loading && !err && visibleItems.length === 0 && (
-        <p style={{ marginTop: 12, color: "#6b7280" }}>No available listings right now.</p>
+        <p className="marketplace-subtitle" style={{ marginTop: 12 }}>
+          No available listings right now.
+        </p>
       )}
 
       {!loading && !err && visibleItems.length > 0 && filteredItems.length === 0 && (
-        <p style={{ marginTop: 12, color: "#6b7280" }}>
+        <p className="marketplace-subtitle" style={{ marginTop: 12 }}>
           No items match your filters. Try adjusting your search.
         </p>
       )}

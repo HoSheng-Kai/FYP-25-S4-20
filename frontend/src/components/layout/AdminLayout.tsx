@@ -14,7 +14,7 @@ const activeStyle: React.CSSProperties = {
   background: "rgba(255,255,255,0.12)",
 };
 
-export default function RetailerLayout() {
+export default function AdminLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const navigate = useNavigate();
   const { auth, logout } = useAuth();
@@ -44,10 +44,10 @@ export default function RetailerLayout() {
         >
           ☰
         </button>
-        <div className="mobile-title">Retailer</div>
+        <div className="mobile-title">Admin</div>
       </div>
 
-      {/* Backdrop */}
+      {/* Backdrop (mobile only) */}
       {sidebarOpen && (
         <div
           className="sidebar-backdrop"
@@ -69,10 +69,11 @@ export default function RetailerLayout() {
           background: "#0d1b2a",
           color: "white",
           padding: 20,
-          height: "100vh",
-          boxSizing: "border-box",
           display: "flex",
           flexDirection: "column",
+          height: "100vh",
+          boxSizing: "border-box",
+          position: "relative",
         }}
       >
         {/* Mobile close button */}
@@ -85,7 +86,6 @@ export default function RetailerLayout() {
           ✕
         </button>
 
-        {/* User Info */}
         <div
           style={{
             background: "rgba(255,255,255,0.1)",
@@ -112,7 +112,7 @@ export default function RetailerLayout() {
           </div>
         </div>
 
-        <h2 style={{ marginBottom: 30 }}>Retailer</h2>
+        <h2 style={{ marginBottom: 30 }}>Admin</h2>
 
         <nav className="app-nav">
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 10 }}>
@@ -126,48 +126,37 @@ export default function RetailerLayout() {
                 Dashboard
               </NavLink>
             </li>
-
             <li>
               <NavLink
-                to="scan-qr"
+                to="users"
                 onClick={closeSidebar}
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
-                Scan QR
+                User Management
               </NavLink>
             </li>
-
             <li>
               <NavLink
-                to="products"
+                to="listings"
                 onClick={closeSidebar}
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
-                My Products
+                Product Listings
               </NavLink>
             </li>
-
             <li>
               <NavLink
-                to="reviews"
+                to="register"
                 onClick={closeSidebar}
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
-                Reviews
+                Register Company
               </NavLink>
             </li>
           </ul>
         </nav>
 
         <div style={{ marginTop: "auto", paddingTop: 16 }}>
-          <NavLink
-            to="settings"
-            onClick={closeSidebar}
-            style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-          >
-            ⚙ Settings
-          </NavLink>
-
           <button
             onClick={() => void handleLogout()}
             style={{
@@ -193,7 +182,7 @@ export default function RetailerLayout() {
         }}
         style={{
           flexGrow: 1,
-          background: "#f5f7fb",
+          background: "#f9fafb",
           padding: 40,
           overflowY: "auto",
           boxSizing: "border-box",
