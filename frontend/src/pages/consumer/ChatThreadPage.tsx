@@ -501,7 +501,6 @@ export default function ChatThreadPage() {
         >
           ← Back
         </button>
-
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           {isMobile && thread && (
             <button

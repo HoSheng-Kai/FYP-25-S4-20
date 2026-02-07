@@ -102,6 +102,40 @@ export default function PurchaseRequestsPage() {
   }, [auth.loading, userId, loadAll]);
 
   useEffect(() => {
+    if (auth.loading) return;
+    if (!userId) return;
+
+    const markPurchaseNotifsRead = async () => {
+      try {
+        const res = await axios.get<{ success: boolean; data?: any[] }>(
+          `${NOTIFICATIONS_API_BASE_URL}`,
+          { params: { userId, onlyUnread: true }, withCredentials: true }
+        );
+
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const purchaseNotifs = res.data.data.filter(
+            (n) => typeof n.title === "string" && n.title.toLowerCase().includes("purchase")
+          );
+
+          await Promise.all(
+            purchaseNotifs.map((n) =>
+              axios.put(
+                `${NOTIFICATIONS_API_BASE_URL}/${n.notificationId}/read`,
+                {},
+                { params: { userId }, withCredentials: true }
+              )
+            )
+          );
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    void markPurchaseNotifsRead();
+  }, [auth.loading, userId]);
+
+  useEffect(() => {
     if (auth.loading || !auth.user) return;
 
     (async () => {
