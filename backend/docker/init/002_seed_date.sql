@@ -114,7 +114,7 @@ VALUES
     ('chaing_con_2','vault:v1:luITjxwaWJmIWAZ4wqIQQhpM1/Vye5xIsjbVT/qAD00h0uz6','vault:v1:+TEepokRgl8aJQiM7nXe1uBnfGrPz312khfxJ8PBdwf0sa1p1k79AL/zsXa779LWgPo=','consumer',
    NULL, TRUE, FALSE),
 
-    ('chaing_con_2','vault:v1:luITjxwaWJmIWAZ4wqIQQhpM1/Vye5xIsjbVT/qAD00h0uz6','vault:v1:+TEepokRgl8aJQiM7nXe1uBnfGrPz312khfxJ8PBdwf0sa1p1k79AL/zsXa779LWgPo=','manufacturer',
+    ('chaing_manu_2','vault:v1:luITjxwaWJmIWAZ4wqIQQhpM1/Vye5xIsjbVT/qAD00h0uz6','vault:v1:+TEepokRgl8aJQiM7nXe1uBnfGrPz312khfxJ8PBdwf0sa1p1k79AL/zsXa779LWgPo=','manufacturer',
    NULL, TRUE, FALSE);
 
 -- ===========================
