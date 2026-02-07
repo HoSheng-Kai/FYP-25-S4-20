@@ -15,7 +15,7 @@ export class NotificationController {
     res.setHeader("Connection", "keep-alive");
 
     // CORS for SSE + cookies, CHANGE DURING DEPLOYMENT
-    res.setHeader("Access-Control-Allow-Origin", "http://localhost:5173");
+    res.setHeader("Access-Control-Allow-Origin", "https://fyp-25-s4-20-frontend.onrender.com");
     res.setHeader("Access-Control-Allow-Credentials", "true");
 
     // Optional (nginx); harmless elsewhere
