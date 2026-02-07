@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import axios from "axios";
-import { API_ROOT } from "../../config/api";
+import { API_ROOT, NOTIFICATIONS_API_BASE_URL } from "../../config/api";
 import { useAuth } from "../../auth/AuthContext";
 
 const linkBaseStyle: React.CSSProperties = {
@@ -24,6 +24,7 @@ export default function ConsumerLayout() {
 
   const [showCreateListing, setShowCreateListing] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [hasPurchaseNotif, setHasPurchaseNotif] = useState(false);
 
   const closeSidebar = () => setSidebarOpen(false);
 
@@ -61,6 +62,56 @@ export default function ConsumerLayout() {
     return () => {
       alive = false;
       window.clearInterval(id);
+    };
+  }, [auth.loading, auth.user?.userId]);
+
+  // Load unread notifications for purchase requests (poll + SSE)
+  useEffect(() => {
+    if (auth.loading) return;
+    if (!auth.user) return;
+
+    const userId = auth.user.userId;
+    let alive = true;
+    let es: EventSource | null = null;
+
+    const loadUnread = async () => {
+      try {
+        const res = await axios.get<{ success: boolean; data?: any[] }>(
+          `${NOTIFICATIONS_API_BASE_URL}`,
+          { params: { userId, onlyUnread: true }, withCredentials: true }
+        );
+
+        if (!alive) return;
+
+        if (res.data?.success && Array.isArray(res.data.data)) {
+          const hasPurchase = res.data.data.some((n) =>
+            typeof n.title === "string" && n.title.toLowerCase().includes("purchase")
+          );
+          setHasPurchaseNotif(hasPurchase);
+        } else {
+          setHasPurchaseNotif(false);
+        }
+      } catch {
+        if (alive) setHasPurchaseNotif(false);
+      }
+    };
+
+    loadUnread();
+    const id = window.setInterval(loadUnread, 15000);
+
+    try {
+      es = new EventSource(`${NOTIFICATIONS_API_BASE_URL}/stream`, { withCredentials: true } as any);
+      es.addEventListener("notification", () => {
+        void loadUnread();
+      });
+    } catch {
+      // ignore SSE setup errors
+    }
+
+    return () => {
+      alive = false;
+      window.clearInterval(id);
+      if (es) es.close();
     };
   }, [auth.loading, auth.user?.userId]);
 
@@ -206,7 +257,20 @@ export default function ConsumerLayout() {
                 onClick={closeSidebar}
                 style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
               >
-                Purchase Requests
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  Purchase Requests
+                  {hasPurchaseNotif && (
+                    <span
+                      style={{
+                        width: 10,
+                        height: 10,
+                        borderRadius: "50%",
+                        background: "#ef4444",
+                        display: "inline-block",
+                      }}
+                    />
+                  )}
+                </span>
               </NavLink>
             </li>
 
@@ -276,16 +340,6 @@ export default function ConsumerLayout() {
                   </NavLink>
                 )}
               </div>
-            </li>
-
-            <li>
-              <NavLink
-                to="transfer-ownership"
-                onClick={closeSidebar}
-                style={({ isActive }) => ({ ...linkBaseStyle, ...(isActive ? activeStyle : {}) })}
-              >
-                Transfer Ownership
-              </NavLink>
             </li>
 
             <li>
