@@ -892,7 +892,7 @@ class ProductController {
         return;
       }
 
-      const apiBase = process.env.API_BASE_URL || "http://localhost:3000";
+      const apiBase = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
 
       const updated = await ProductUpdate.updateProductWithQr({
         productId,
@@ -1195,7 +1195,7 @@ class ProductController {
       //   return;
       // }
 
-      const apiBase = process.env.API_BASE_URL || "http://localhost:3000";
+      const apiBase = process.env.PUBLIC_BASE_URL || "http://localhost:3000";
 
       res.json({
         success: true,
