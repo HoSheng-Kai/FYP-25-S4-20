@@ -150,7 +150,10 @@ export default function ConsumerTransferOwnershipPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         fromUserId={userId}
-        selectedProductIds={selectedProductIds}
+        selectedProducts={selectedProductIds.map((id) => {
+          const product = products.find((p) => p.productId === id);
+          return { productId: id, productName: product?.model ?? product?.serialNo ?? null };
+        })}
         title="Ownership Transfer"
         onTransferred={(results) => {
           setModalOpen(false);
