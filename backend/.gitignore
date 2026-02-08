@@ -1,6 +1,9 @@
 docker/postgres-data/
 docker/postgres-data/*
 
+docker/vault-data/
+docker/vault-data/*
+
 node_modules/
 
 test-ledger/
