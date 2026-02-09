@@ -107,7 +107,7 @@ VALUES
   ('jiya_consumer','vault:v1:qIH/IA7gUCuqTI0csVtjVFyjMt8ztRojZ0iDzWvlVckgA76K','vault:v1:NGOQyyiPtJwsHFHiMpXPXmnJDaWSX6ladMkj1mcF5WtdpXjCwMIby5AhmDlstMi0eNk=','consumer',
    'GKYR1iVV9prf7XmuC149TdtLKpgzDPbFmjLbqyWE5ZTb', TRUE, FALSE),
 
--- hk test accounts (one per role)
+-- hk test accounts
   ('chaing_con_1','vault:v1:luITjxwaWJmIWAZ4wqIQQhpM1/Vye5xIsjbVT/qAD00h0uz6','vault:v1:+TEepokRgl8aJQiM7nXe1uBnfGrPz312khfxJ8PBdwf0sa1p1k79AL/zsXa779LWgPo=','consumer',
    NULL, TRUE, FALSE),
 
@@ -115,7 +115,20 @@ VALUES
    NULL, TRUE, FALSE),
 
     ('chaing_manu_2','vault:v1:luITjxwaWJmIWAZ4wqIQQhpM1/Vye5xIsjbVT/qAD00h0uz6','vault:v1:+TEepokRgl8aJQiM7nXe1uBnfGrPz312khfxJ8PBdwf0sa1p1k79AL/zsXa779LWgPo=','manufacturer',
-   NULL, TRUE, FALSE);
+   NULL, TRUE, FALSE),
+
+-- sk accounts
+  ('sk_manu','vault:v1:5Eq7OuBfTPKtHJ3qidvl53BPHReKUQImrMq+4xDfXXZYeDqb','vault:v1:8OVTFnfAWXyfacSSIvq/shz8dlHYtHE00p4O79p+Rc5nhqD/FOlIrx1fr2TYjCCljvL1','manufacturer',
+   '6wbxyuYSP3oYXVwu5A47HMpngWW5QYKwSBKVuaLvbh7W', TRUE, FALSE),
+
+  ('sk_dis','vault:v1:5Eq7OuBfTPKtHJ3qidvl53BPHReKUQImrMq+4xDfXXZYeDqb','vault:v1:8OVTFnfAWXyfacSSIvq/shz8dlHYtHE00p4O79p+Rc5nhqD/FOlIrx1fr2TYjCCljvL1','distributor',
+   'EnrG2U6BFamr9fC6KuV3tmJHy7nPXvHo8BcUXBrFQ7RN', TRUE, FALSE),
+
+  ('sk_ret','vault:v1:5Eq7OuBfTPKtHJ3qidvl53BPHReKUQImrMq+4xDfXXZYeDqb','vault:v1:8OVTFnfAWXyfacSSIvq/shz8dlHYtHE00p4O79p+Rc5nhqD/FOlIrx1fr2TYjCCljvL1','retailer',
+   'EnrG2U6BFamr9fC6KuV3tmJHy7nPXvHo8BcUXBrFQ7RN', TRUE, FALSE),
+
+  ('sk_con','vault:v1:5Eq7OuBfTPKtHJ3qidvl53BPHReKUQImrMq+4xDfXXZYeDqb','vault:v1:8OVTFnfAWXyfacSSIvq/shz8dlHYtHE00p4O79p+Rc5nhqD/FOlIrx1fr2TYjCCljvL1','consumer',
+   'GKYR1iVV9prf7XmuC149TdtLKpgzDPbFmjLbqyWE5ZTb', TRUE, FALSE);
 
 -- ===========================
 -- Insert Products
@@ -249,6 +262,33 @@ VALUES (
         '2024-03-10',
         'Test product for end-tracking feature - owned by global_distributor',
         '2024-03-10 10:00:00',
+        NULL,
+        NULL
+    ),
+    -- sk_accounts
+    (
+        24,
+        'SK-ROLEX-001',
+        NULL,
+        'Rolex Submariner',
+        'BATCH-SK-001',
+        'Luxury Watch',
+        '2024-03-15',
+        'Premium diving watch with ceramic bezel and automatic movement',
+        '2024-03-15 09:00:00',
+        NULL,
+        NULL
+    ),
+    (
+        24,
+        'SK-ROLEX-002',
+        NULL,
+        'Rolex Daytona',
+        'BATCH-SK-002',
+        'Luxury Watch',
+        '2024-03-16',
+        'Iconic chronograph watch for testing transfers',
+        '2024-03-16 10:30:00',
         NULL,
         NULL
     );
@@ -676,6 +716,21 @@ VALUES (
         4,
         'Product is okay, but expected better quality for the price. Still wearable.',
         '2024-03-10 11:45:00'
+    ),
+    -- sk_accounts
+    (
+        24,
+        27,
+        5,
+        'Excellent manufacturer! The Rolex Submariner is authentic and exactly as described. Highly recommended.',
+        '2024-03-20 10:00:00'
+    ),
+    (
+        24,
+        27,
+        5,
+        'Fast and reliable service from sk_manu. Will definitely purchase again.',
+        '2024-03-22 14:30:00'
     );
 
 -- ===========================
