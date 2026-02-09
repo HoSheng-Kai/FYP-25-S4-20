@@ -271,27 +271,40 @@ VALUES (
     -- sk_accounts
     (
         24,
-        'SK-ROLEX-001',
+        'SK-LV-001',
         NULL,
-        'Rolex Submariner',
+        'Louis Vuitton Speedy 25',
         'BATCH-SK-001',
-        'Luxury Watch',
+        'Luxury Bag',
         '2024-03-15',
-        'Premium diving watch with ceramic bezel and automatic movement',
+        'Iconic monogram canvas handbag with leather handles',
         '2024-03-15 09:00:00',
         NULL,
         NULL
     ),
     (
         24,
-        'SK-ROLEX-002',
+        'SK-HERMES-001',
         NULL,
-        'Rolex Daytona',
+        'Hermes Birkin 30',
         'BATCH-SK-002',
-        'Luxury Watch',
+        'Luxury Bag',
         '2024-03-16',
-        'Iconic chronograph watch for testing transfers',
+        'Handcrafted leather bag with signature lock closure',
         '2024-03-16 10:30:00',
+        NULL,
+        NULL
+    ),
+    (
+        24,
+        'SK-CARTIER-001',
+        NULL,
+        'Cartier Santos Watch',
+        'BATCH-SK-003',
+        'Luxury Watch',
+        '2024-03-17',
+        'Classic square-faced watch with Roman numerals',
+        '2024-03-17 14:00:00',
         NULL,
         NULL
     );
@@ -725,14 +738,14 @@ VALUES (
         24,
         27,
         5,
-        'Excellent manufacturer! The Rolex Submariner is authentic and exactly as described. Highly recommended.',
+        'Excellent manufacturer! The Louis Vuitton bag is authentic and exactly as described. Highly recommended.',
         '2024-03-20 10:00:00'
     ),
     (
         24,
         27,
         5,
-        'Fast and reliable service from sk_manu. Will definitely purchase again.',
+        'Fast and reliable service from sk_manu. The Hermes Birkin is stunning. Will definitely purchase again.',
         '2024-03-22 14:30:00'
     );
 
