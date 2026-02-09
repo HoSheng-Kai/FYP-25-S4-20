@@ -128,7 +128,10 @@ VALUES
    'EnrG2U6BFamr9fC6KuV3tmJHy7nPXvHo8BcUXBrFQ7RN', TRUE, FALSE),
 
   ('sk_con','vault:v1:5Eq7OuBfTPKtHJ3qidvl53BPHReKUQImrMq+4xDfXXZYeDqb','vault:v1:8OVTFnfAWXyfacSSIvq/shz8dlHYtHE00p4O79p+Rc5nhqD/FOlIrx1fr2TYjCCljvL1','consumer',
-   'GKYR1iVV9prf7XmuC149TdtLKpgzDPbFmjLbqyWE5ZTb', TRUE, FALSE);
+   'GKYR1iVV9prf7XmuC149TdtLKpgzDPbFmjLbqyWE5ZTb', TRUE, FALSE),
+
+  ('sk_con2','vault:v1:5Eq7OuBfTPKtHJ3qidvl53BPHReKUQImrMq+4xDfXXZYeDqb','vault:v1:8OVTFnfAWXyfacSSIvq/shz8dlHYtHE00p4O79p+Rc5nhqD/FOlIrx1fr2TYjCCljvL1','consumer',
+   'DEw8mcSbBbW6M8R7mGcuGqVbqBw97QJ4BCC7edDPmRuv', TRUE, FALSE);
 
 -- ===========================
 -- Insert Products
