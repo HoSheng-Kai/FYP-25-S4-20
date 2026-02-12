@@ -52,7 +52,6 @@ import DistributorProductsPage from "./pages/distributor/DistributorProductsPage
 
 // Retailer
 import RetailerProductsPage from "./pages/retailer/RetailerProductsPage";
-import RetailerReviewsPage from "./pages/retailer/RetailerReviewsPage";
 
 // Shared
 import SharedProductDetailsPage from "./pages/shared/ProductDetailsPage";
@@ -131,7 +130,6 @@ export default function App() {
             <Route path="scan-qr" element={<QrInput />} />
             <Route path="products" element={<RetailerProductsPage />} />
             <Route path="product/:productId" element={<SharedProductDetailsPage />} />
-            <Route path="reviews" element={<RetailerReviewsPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Route>
